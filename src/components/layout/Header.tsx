@@ -72,7 +72,7 @@ export const Header = () => {
           {/* Title */}
           <div className="min-w-0 flex-1">
             <h1 className="text-base sm:text-lg font-semibold text-foreground truncate">
-              <span className="lg:hidden">Confeitaria Pro</span>
+              <span className="lg:hidden">Cataloguei</span>
               <span className="hidden lg:block">Bem-vindo ao seu sistema</span>
             </h1>
           </div>
