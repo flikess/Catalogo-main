@@ -1,0 +1,14 @@
+# Netlify redirects file
+# Redireciona todas as rotas para index.html para suportar React Router
+/*    /index.html   200
+
+# Regras específicas para arquivos estáticos (opcional)
+/static/*  /static/:splat  200
+/assets/*  /assets/:splat  200
+
+# Regras para API calls (se houver)
+/api/*  https://your-api-domain.com/api/:splat  200
+
+# Redirecionamento para HTTPS (opcional)
+http://confeitariapro.com/*  https://confeitariapro.com/:splat  301!
+http://www.confeitariapro.com/*  https://confeitariapro.com/:splat  301!
