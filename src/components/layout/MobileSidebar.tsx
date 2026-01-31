@@ -68,7 +68,7 @@ export const MobileSidebar = () => {
               <span className="text-primary-foreground font-bold text-sm">CP</span>
             </div>
             <div>
-              <h2 className="font-semibold text-sm">Confeitaria Pro</h2>
+              <h2 className="font-semibold text-sm">Cataloguei</h2>
               <p className="text-xs text-muted-foreground">Sistema de Gestão</p>
             </div>
           </div>
