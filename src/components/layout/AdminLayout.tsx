@@ -43,7 +43,7 @@ export const AdminLayout = ({ children }: AdminLayoutProps) => {
               </div>
               <div>
                 <h1 className="text-xl font-bold text-gray-900">Admin Panel</h1>
-                <p className="text-xs text-gray-500">Confeitaria Pro</p>
+                <p className="text-xs text-gray-500">Cataloguei</p>
               </div>
             </div>
 
