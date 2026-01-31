@@ -264,7 +264,7 @@ const CatalogoPublico = () => {
       return itemText
     }).join('\n')
 
-    return `Olá, *${bakerySettings.bakery_name || 'Confeitaria'}*!
+    return `Olá, *${bakerySettings.bakery_name || 'Loja'}*!
 
 Gostaria de solicitar um orçamento com os seguintes itens:
 
@@ -305,7 +305,7 @@ Obrigado!
           <AlertTriangle className="w-16 h-16 text-red-500 mx-auto mb-4" />
           <h1 className="text-2xl font-bold text-gray-900 mb-2">{error}</h1>
           <p className="text-gray-600 mb-6">
-            Verifique o link ou entre em contato com a confeitaria.
+            Verifique o link ou entre em contato com a Loja.
           </p>
           <Button onClick={() => navigate('/')}>
             <ArrowLeft className="w-4 h-4 mr-2" />
@@ -334,7 +334,7 @@ Obrigado!
             )}
             
             <h1 className="text-4xl font-bold text-gray-900 mb-4">
-              {bakerySettings.bakery_name || 'Confeitaria'}
+              {bakerySettings.bakery_name || 'Loja'}
             </h1>
 {bakerySettings.presentation_message && (
   <p className="text-lg text-gray-600 italic mb-6 max-w-2xl mx-auto">
@@ -707,7 +707,7 @@ Obrigado!
       {/* Footer */}
       <footer className="bg-white border-t mt-16">
         <div className="max-w-6xl mx-auto px-4 py-8 text-center text-gray-500">
-          <p>© {new Date().getFullYear()} {bakerySettings.bakery_name || 'Confeitaria'}. Todos os direitos reservados.</p>
+          <p>© {new Date().getFullYear()} {bakerySettings.bakery_name || 'Loja'}. Todos os direitos reservados.</p>
           <p className="mt-2 text-sm">Catálogo online - Entre em contato para fazer seu pedido!</p>
         </div>
       </footer>

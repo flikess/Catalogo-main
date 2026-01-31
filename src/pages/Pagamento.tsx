@@ -77,7 +77,7 @@ const Pagamento = () => {
             🚫 Assinatura Expirada
           </h1>
           <p className="text-gray-600">
-            Sua assinatura está vencida. Renove agora para continuar usando o Confeitaria Pro.
+            Sua assinatura está vencida. Renove agora para continuar usando o Cataloguei.
           </p>
         </div>
 
@@ -225,7 +225,7 @@ const Pagamento = () => {
               </h3>
               <p className="text-sm text-blue-800">
                 Seu acesso será restaurado automaticamente e você poderá continuar 
-                gerenciando sua confeitaria sem interrupções.
+                gerenciando sua Loja sem interrupções.
               </p>
             </div>
           </CardContent>
@@ -245,7 +245,7 @@ const Pagamento = () => {
 
         {/* Footer */}
         <div className="text-center text-xs text-gray-500">
-          <p>Confeitaria Pro - Sistema de Gestão Completo</p>
+          <p>Cataloguei - Sistema de Gestão Completo</p>
           <p>Dúvidas? Entre em contato conosco</p>
         </div>
       </div>

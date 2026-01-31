@@ -60,10 +60,10 @@ const Login = () => {
         <div className="text-center">
           <div className="flex items-center justify-center gap-2 mb-4">
             <div className="w-10 h-10 bg-gradient-to-r from-pink-500 to-purple-600 rounded-lg flex items-center justify-center">
-              <span className="text-white font-bold">CP</span>
+              <span className="text-white font-bold">C</span>
             </div>
             <span className="text-2xl font-bold bg-gradient-to-r from-pink-600 to-purple-600 bg-clip-text text-transparent">
-              Confeitaria Pro
+              Cataloguei
             </span>
           </div>
           <h2 className="text-3xl font-extrabold text-gray-900">

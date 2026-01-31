@@ -165,7 +165,7 @@ const Catalogos = () => {
 
   const shareWhatsApp = () => {
     const url = generateCatalogUrl()
-    const message = `🧁 Confira nosso catálogo de produtos!\n\n${bakerySettings.bakery_name || 'Nossa Confeitaria'}\n\n${url}`
+    const message = `🧁 Confira nosso catálogo de produtos!\n\n${bakerySettings.bakery_name || 'Nossa Loja'}\n\n${url}`
     const encodedMessage = encodeURIComponent(message)
     const whatsappUrl = `https://wa.me/?text=${encodedMessage}`
     window.open(whatsappUrl, '_blank')

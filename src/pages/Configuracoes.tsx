@@ -69,7 +69,7 @@ const Configuracoes = () => {
       }
     } catch (error) {
       console.error('Error fetching bakery settings:', error)
-      showError('Erro ao carregar dados da confeitaria')
+      showError('Erro ao carregar dados da Loja')
     }
   }
 
@@ -185,7 +185,7 @@ const Configuracoes = () => {
 
       if (error) throw error
 
-      showSuccess('Configurações da confeitaria salvas com sucesso!')
+      showSuccess('Configurações da Loja salvas com sucesso!')
       setLogoFile(null)
       fetchBakerySettings()
     } catch (error: any) {
@@ -238,7 +238,7 @@ const Configuracoes = () => {
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="bakery" className="flex items-center gap-2">
               <Store className="w-4 h-4" />
-              Confeitaria
+              Loja
             </TabsTrigger>
             <TabsTrigger value="profile" className="flex items-center gap-2">
               <User className="w-4 h-4" />
@@ -251,13 +251,13 @@ const Configuracoes = () => {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Store className="w-5 h-5" />
-                  Dados da Confeitaria
+                  Dados da Loja
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-6">
                 {/* Logo */}
                 <div className="space-y-4">
-                  <h3 className="text-lg font-medium">Logo da Confeitaria</h3>
+                  <h3 className="text-lg font-medium">Logo da Loja</h3>
                   <div className="flex items-center gap-6">
                     <Avatar className="w-24 h-24">
                       <AvatarImage src={logoPreview || undefined} alt="Logo" />
@@ -305,12 +305,12 @@ const Configuracoes = () => {
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label htmlFor="bakery_name">Nome da Confeitaria</Label>
+                      <Label htmlFor="bakery_name">Nome da Loja</Label>
                       <Input
                         id="bakery_name"
                         value={bakerySettings.bakery_name || ''}
                         onChange={(e) => setBakerySettings({ ...bakerySettings, bakery_name: e.target.value })}
-                        placeholder="Nome da sua confeitaria"
+                        placeholder="Nome da sua Loja"
                       />
                     </div>
 
@@ -367,7 +367,7 @@ const Configuracoes = () => {
                         type="email"
                         value={bakerySettings.email || ''}
                         onChange={(e) => setBakerySettings({ ...bakerySettings, email: e.target.value })}
-                        placeholder="contato@confeitaria.com"
+                        placeholder="contato@Loja.com"
                       />
                     </div>
 
@@ -450,7 +450,7 @@ const Configuracoes = () => {
                   disabled={loading}
                   className="w-full"
                 >
-                  {loading ? 'Salvando...' : 'Salvar Configurações da Confeitaria'}
+                  {loading ? 'Salvando...' : 'Salvar Configurações da Loja'}
                 </Button>
               </CardContent>
             </Card>

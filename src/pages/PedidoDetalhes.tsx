@@ -269,7 +269,7 @@ const PedidoDetalhes = () => {
   const discount = subtotal * (order.discount_percentage / 100)
   const total = subtotal - discount + order.delivery_fee
 
-  return `🧁 *${bakerySettings.bakery_name || 'Confeitaria'}*
+  return `🧁 *${bakerySettings.bakery_name || 'Loja'}*
 
 📦 *Resumo do Pedido #${order.id.slice(0, 8)}*
 👤 Cliente: ${order.client_name}
@@ -582,7 +582,7 @@ ${bakerySettings.pix_key ? `🔑 Chave Pix para pagamento: ${bakerySettings.pix_
           {/* Bakery Info */}
           <Card>
             <CardHeader>
-              <CardTitle>Dados da Confeitaria</CardTitle>
+              <CardTitle>Dados da Loja</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
               {bakerySettings.bakery_name && (

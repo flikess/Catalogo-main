@@ -472,7 +472,7 @@ const Profile = () => {
                           ⚠️ Sua assinatura expira em breve!
                         </h4>
                         <p className="text-sm text-yellow-800">
-                          Para continuar aproveitando todos os recursos do Confeitaria Pro, 
+                          Para continuar aproveitando todos os recursos do Cataloguei, 
                           renove sua assinatura antes do vencimento.
                         </p>
                       </div>

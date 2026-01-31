@@ -67,7 +67,7 @@ const FinalizarPedido = () => {
       })
       .join('%0A')
 
-    return `Olá, *${bakerySettings.bakery_name || 'Confeitaria'}*!%0A%0A` +
+    return `Olá, *${bakerySettings.bakery_name || 'Loja'}*!%0A%0A` +
       `Estou finalizando um pedido com os seguintes itens:%0A` +
       `*Itens selecionados:*%0A${itemsText}%0A%0A` +
       `💰 *Total estimado:* ${formatPrice(cartTotal)}%0A%0A` +
@@ -90,7 +90,7 @@ const FinalizarPedido = () => {
 
     const userId = bakerySettings?.id
     if (!userId) {
-      toast.error('Erro ao identificar a confeitaria.')
+      toast.error('Erro ao identificar a Loja.')
       return
     }
 
@@ -156,9 +156,9 @@ const FinalizarPedido = () => {
       if (erroItens) throw erroItens
 
       // Abrir WhatsApp
-      const telefoneConfeitaria = bakerySettings.phone?.replace(/\D/g, '')
-      const link = telefoneConfeitaria
-        ? `https://wa.me/55${telefoneConfeitaria}?text=${generateWhatsAppMessage()}`
+      const telefoneLoja = bakerySettings.phone?.replace(/\D/g, '')
+      const link = telefoneLoja
+        ? `https://wa.me/55${telefoneLoja}?text=${generateWhatsAppMessage()}`
         : `https://wa.me/?text=${generateWhatsAppMessage()}`
 
       toast.success('Pedido enviado com sucesso! Redirecionando...', {
@@ -179,7 +179,7 @@ const FinalizarPedido = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 py-8">
-      {/* Header da confeitaria */}
+      {/* Header da Loja */}
       <div className="max-w-6xl mx-auto px-4 mb-10 text-center">
         {bakerySettings.logo_url && (
           <img
@@ -189,7 +189,7 @@ const FinalizarPedido = () => {
             onError={(e) => { e.currentTarget.style.display = 'none' }}
           />
         )}
-        <h1 className="text-3xl font-bold">{bakerySettings.bakery_name || 'Confeitaria'}</h1>
+        <h1 className="text-3xl font-bold">{bakerySettings.bakery_name || 'Loja'}</h1>
         <div className="mt-2 flex justify-center gap-6 flex-wrap text-gray-600 text-sm">
           {bakerySettings.phone && (
             <span className="flex items-center gap-1"><Phone className="w-4 h-4" />{bakerySettings.phone}</span>
