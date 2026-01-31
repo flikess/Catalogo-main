@@ -39,13 +39,14 @@ export const Sidebar = () => {
 <div className="w-64 bg-white shadow-lg h-screen fixed left-0 top-0 z-40">
   <div className="p-6 border-b">
  <div className="flex items-center gap-2 justify-center">
-  
+ 
     <img
       src="/logo.png"
       alt="Logo"
       className="w-full h-full object-cover"
     />
 
+</div>
   </div>
 
       
