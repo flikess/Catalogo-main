@@ -39,17 +39,13 @@ export const Sidebar = () => {
 <div className="w-64 bg-white shadow-lg h-screen fixed left-0 top-0 z-40">
   <div className="p-6 border-b">
  <div className="flex items-center gap-2 justify-center">
-  <div className="w-8 h-8 bg-gradient-to-r from-pink-500 to-purple-600 rounded-lg flex items-center justify-center overflow-hidden">
+  <div>
     <img
       src="/logo.png"
       alt="Logo"
       className="w-full h-full object-cover"
     />
-  </div>
-  <span className="text-xl font-bold bg-gradient-to-r from-pink-600 to-purple-600 bg-clip-text text-transparent">
-   Cataloguei
-  </span>
-</div>
+
   </div>
 
       
