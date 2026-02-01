@@ -708,6 +708,50 @@ const CatalogoPublico = () => {
       className="relative ml-auto w-full max-w-sm h-full bg-white shadow-xl flex flex-col"
       onClick={(e) => e.stopPropagation()}
     >
+      <div
+  className="w-full h-6 flex justify-center cursor-pointer shrink-0"
+  onMouseDown={(e) => {
+    const startX = e.clientX
+
+    const onMove = (ev: MouseEvent) => {
+      if (startX - ev.clientX < -80) {
+        setIsCartOpen(false)
+        cleanup()
+      }
+    }
+
+    const onUp = () => cleanup()
+
+    const cleanup = () => {
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+    }
+
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+  }}
+  onTouchStart={(e) => {
+    const startX = e.touches[0].clientX
+
+    const onMove = (ev: TouchEvent) => {
+      if (startX - ev.touches[0].clientX < -80) {
+        setIsCartOpen(false)
+        cleanup()
+      }
+    }
+
+    const cleanup = () => {
+      window.removeEventListener('touchmove', onMove)
+      window.removeEventListener('touchend', cleanup)
+    }
+
+    window.addEventListener('touchmove', onMove)
+    window.addEventListener('touchend', cleanup)
+  }}
+>
+  <div className="w-12 h-1.5 rounded-full bg-gray-300 mt-2" />
+</div>
+
 
             <div className="p-4 border-b flex items-center justify-between">
               <h3 className="font-bold text-lg">
@@ -723,7 +767,7 @@ const CatalogoPublico = () => {
               </Button>
             </div>
 
-            <div className="p-4 space-y-4">
+            <div className="p-4 space-y-4 flex-1 overflow-y-auto">
 
               {cart.length === 0 && (
                 <p className="text-sm text-gray-500 text-center">
