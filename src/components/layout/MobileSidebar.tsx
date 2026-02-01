@@ -65,7 +65,7 @@ export const MobileSidebar = () => {
         <div className="flex items-center justify-between p-4 border-b bg-primary/5">
           <div className="flex items-center gap-2">
             <img
-      src="/logo.png"
+      src="/logomob.png"
       alt="Logo"
       className="w-full h-full object-cover"
     />
