@@ -639,22 +639,31 @@ const CatalogoPublico = () => {
     <Minus className="w-4 h-4" />
   </Button>
 
-  <input
-    type="number"
-    min={1}
-    inputMode="numeric"
-    value={quantity}
-    onChange={(e) => {
-      const v = parseInt(e.target.value)
+<input
+  type="number"
+  min={1}
+  inputMode="numeric"
+  value={quantity === 0 ? '' : quantity}
+  onFocus={() => {
+    if (quantity === 1) setQuantity(0)
+  }}
+  onChange={(e) => {
+    const v = e.target.value
 
-      if (isNaN(v) || v < 1) {
-        setQuantity(1)
-      } else {
-        setQuantity(v)
-      }
-    }}
-    className="w-20 h-9 text-center border rounded-md text-sm"
-  />
+    if (v === '') {
+      setQuantity(0)
+      return
+    }
+
+    const n = Number(v)
+    if (!isNaN(n)) setQuantity(n)
+  }}
+  onBlur={() => {
+    if (!quantity || quantity < 1) setQuantity(1)
+  }}
+  className="w-20 h-9 text-center border rounded-md text-sm"
+/>
+
 
   <Button
     size="icon"
