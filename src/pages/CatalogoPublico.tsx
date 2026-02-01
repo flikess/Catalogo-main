@@ -555,11 +555,11 @@ const CatalogoPublico = () => {
 
             <div className="relative">
               {viewingProduct.image_url && (
-  <div className="relative w-full max-h-[70vh] overflow-hidden bg-black">
+  <div className="relative w-full max-h-[60vh] overflow-hidden bg-black">
     <img
       src={viewingProduct.image_url}
       alt={viewingProduct.name}
-      className="w-full h-auto max-h-[70vh] object-contain mx-auto"
+      className="w-full h-auto max-h-[60vh] object-contain mx-auto"
     />
   </div>
 )}
