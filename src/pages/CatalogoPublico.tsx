@@ -697,206 +697,193 @@ const CatalogoPublico = () => {
       {/* Carrinho */}
       {isCartOpen && (
   <div
-    className="fixed inset-0 z-50 flex"
+    className="fixed inset-0 z-50"
     onClick={() => setIsCartOpen(false)}
   >
     {/* overlay */}
     <div className="absolute inset-0 bg-black/40" />
 
-    {/* drawer */}
+    {/* container responsivo */}
     <div
-     className="absolute right-0 top-0 h-full w-full sm:max-w-sm bg-white shadow-xl flex flex-col"
+      className="
+        fixed
+        bottom-0
+        left-0
+        right-0
+        h-[92vh]
+        bg-white
+        rounded-t-2xl
+        shadow-2xl
+        flex
+        flex-col
+        sm:top-0
+        sm:bottom-auto
+        sm:left-auto
+        sm:right-0
+        sm:h-full
+        sm:w-full
+        sm:max-w-sm
+        sm:rounded-none
+      "
       onClick={(e) => e.stopPropagation()}
     >
-      <div
-  className="w-full h-6 flex justify-center cursor-pointer shrink-0"
-  onMouseDown={(e) => {
-    const startX = e.clientX
 
-    const onMove = (ev: MouseEvent) => {
-      if (startX - ev.clientX < -80) {
-        setIsCartOpen(false)
-        cleanup()
-      }
-    }
+      {/* handle */}
+      <div className="w-full py-2 flex justify-center sm:hidden">
+        <div className="w-10 h-1.5 bg-gray-300 rounded-full" />
+      </div>
 
-    const onUp = () => cleanup()
+      {/* header */}
+      <div className="px-4 pb-3 border-b flex items-center justify-between">
+        <h3 className="font-semibold text-base">
+          Seu orçamento
+        </h3>
 
-    const cleanup = () => {
-      window.removeEventListener('mousemove', onMove)
-      window.removeEventListener('mouseup', onUp)
-    }
+        <Button
+          size="icon"
+          variant="ghost"
+          onClick={() => setIsCartOpen(false)}
+        >
+          <X className="w-4 h-4" />
+        </Button>
+      </div>
 
-    window.addEventListener('mousemove', onMove)
-    window.addEventListener('mouseup', onUp)
-  }}
-  onTouchStart={(e) => {
-    const startX = e.touches[0].clientX
+      {/* lista */}
+      <div className="p-4 space-y-4 flex-1 overflow-y-auto">
 
-    const onMove = (ev: TouchEvent) => {
-      if (startX - ev.touches[0].clientX < -80) {
-        setIsCartOpen(false)
-        cleanup()
-      }
-    }
+        {cart.length === 0 && (
+          <p className="text-sm text-gray-500 text-center">
+            Seu orçamento está vazio.
+          </p>
+        )}
 
-    const cleanup = () => {
-      window.removeEventListener('touchmove', onMove)
-      window.removeEventListener('touchend', cleanup)
-    }
+        {cart.map((item, index) => {
 
-    window.addEventListener('touchmove', onMove)
-    window.addEventListener('touchend', cleanup)
-  }}
->
-  <div className="w-12 h-1.5 rounded-full bg-gray-300 mt-2" />
-</div>
+          const addsTotal =
+            item.selectedAdditionais?.reduce((s, a) => s + a.price, 0) || 0
 
+          return (
+            <div
+              key={index}
+              className="rounded-xl border p-3 space-y-2 bg-white"
+            >
+              <div className="flex justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="font-medium text-sm truncate">
+                    {item.name}
+                  </p>
 
-            <div className="p-4 border-b flex items-center justify-between">
-              <h3 className="font-bold text-lg">
-                Seu orçamento
-              </h3>
+                  {item.selectedAdditionais?.length > 0 && (
+                    <p className="text-xs text-gray-500 truncate">
+                      {item.selectedAdditionais.map(a => a.name).join(', ')}
+                    </p>
+                  )}
+                </div>
 
-              <Button
-                size="icon"
-                variant="ghost"
-                onClick={() => setIsCartOpen(false)}
-              >
-                <X className="w-4 h-4" />
-              </Button>
-            </div>
-
-            <div className="p-4 space-y-4 flex-1 overflow-y-auto">
-
-              {cart.length === 0 && (
-                <p className="text-sm text-gray-500 text-center">
-                  Seu orçamento está vazio.
-                </p>
-              )}
-
-              {cart.map((item, index) => {
-
-                const addsTotal =
-                  item.selectedAdditionais?.reduce((s, a) => s + a.price, 0) || 0
-
-                return (
-                  <div
-                    key={index}
-                    className="border rounded p-3 space-y-2"
-                  >
-                    <div className="flex justify-between gap-2">
-                      <div>
-                        <p className="font-semibold text-sm">
-                          {item.name}
-                        </p>
-
-                        {item.selectedAdditionais?.length > 0 && (
-                          <div className="text-xs text-gray-500">
-                            {item.selectedAdditionais.map(a => a.name).join(', ')}
-                          </div>
-                        )}
-                      </div>
-
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        onClick={() => removeFromCart(item.id)}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </div>
-
-                    <div className="flex items-center justify-between">
-
-                <div className="flex items-center gap-2">
-  <Button
-    size="icon"
-    variant="outline"
-    onClick={() =>
-      updateQuantity(item.id, Math.max(1, item.quantity - 1))
-    }
-  >
-    <Minus className="w-4 h-4" />
-  </Button>
-
-  <input
-    type="number"
-    min={1}
-    inputMode="numeric"
-    value={item.quantity}
-    onChange={(e) => {
-      const v = parseInt(e.target.value)
-
-      if (!v || v < 1) {
-        updateQuantity(item.id, 1)
-      } else {
-        updateQuantity(item.id, v)
-      }
-    }}
-    className="w-14 h-8 text-center border rounded-md text-xs"
-  />
-
-  <Button
-    size="icon"
-    variant="outline"
-    onClick={() =>
-      updateQuantity(item.id, item.quantity + 1)
-    }
-  >
-    <Plus className="w-4 h-4" />
-  </Button>
-</div>
-
-
-                      <span className="font-semibold text-sm">
-                        {formatPrice((item.price + addsTotal) * item.quantity)}
-                      </span>
-
-                    </div>
-                  </div>
-                )
-              })}
-
-            </div>
-
-            <div className="p-4 border-t space-y-3">
-
-              <div className="flex justify-between font-bold">
-                <span>Total</span>
-                <span>{formatPrice(cartTotal)}</span>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  onClick={() => removeFromCart(item.id)}
+                >
+                  <Trash2 className="w-4 h-4" />
+                </Button>
               </div>
 
-              <Button
-                className="w-full bg-green-600 hover:bg-green-700"
-                onClick={() => {
-                  const text = cart.map(item => {
-                    const adds =
-                      item.selectedAdditionais?.length
-                        ? ` (Adicionais: ${item.selectedAdditionais.map(a => a.name).join(', ')})`
-                        : ''
+              <div className="flex items-center justify-between">
 
-                    return `- ${item.quantity}x ${item.name}${adds} — ${formatPrice(
-                      item.price +
-                        (item.selectedAdditionais?.reduce((s, a) => s + a.price, 0) || 0)
-                    )}`
-                  }).join('\n')
+                {/* quantidade editável */}
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="icon"
+                    variant="outline"
+                    className="h-7 w-7"
+                    onClick={() =>
+                      updateQuantity(item.id, Math.max(1, item.quantity - 1))
+                    }
+                  >
+                    <Minus className="w-3 h-3" />
+                  </Button>
 
-                  const message = `Olá! Gostaria de fazer um orçamento:\n\n${text}\n\nTotal: ${formatPrice(cartTotal)}`
+                  <input
+                    type="number"
+                    min={1}
+                    inputMode="numeric"
+                    value={item.quantity}
+                    onChange={(e) => {
+                      const v = parseInt(e.target.value)
 
-                  const phone = bakerySettings.phone?.replace(/\D/g, '')
-                  const url = `https://wa.me/55${phone}?text=${encodeURIComponent(message)}`
-                  window.open(url, '_blank')
-                }}
-              >
-                <MessageCircle className="w-4 h-4 mr-2" />
-                Enviar pelo WhatsApp
-              </Button>
+                      if (!v || v < 1) {
+                        updateQuantity(item.id, 1)
+                      } else {
+                        updateQuantity(item.id, v)
+                      }
+                    }}
+                    className="w-12 h-7 text-center border rounded-md text-xs"
+                  />
 
+                  <Button
+                    size="icon"
+                    variant="outline"
+                    className="h-7 w-7"
+                    onClick={() =>
+                      updateQuantity(item.id, item.quantity + 1)
+                    }
+                  >
+                    <Plus className="w-3 h-3" />
+                  </Button>
+                </div>
+
+                <span className="text-sm font-semibold">
+                  {formatPrice((item.price + addsTotal) * item.quantity)}
+                </span>
+
+              </div>
             </div>
-          </div>
+          )
+        })}
+
+      </div>
+
+      {/* footer */}
+      <div className="p-4 border-t space-y-3">
+
+        <div className="flex justify-between font-semibold text-sm">
+          <span>Total</span>
+          <span>{formatPrice(cartTotal)}</span>
         </div>
-      )}
+
+        <Button
+          className="w-full bg-green-600 hover:bg-green-700"
+          onClick={() => {
+            const text = cart.map(item => {
+              const adds =
+                item.selectedAdditionais?.length
+                  ? ` (Adicionais: ${item.selectedAdditionais.map(a => a.name).join(', ')})`
+                  : ''
+
+              return `- ${item.quantity}x ${item.name}${adds} — ${formatPrice(
+                item.price +
+                  (item.selectedAdditionais?.reduce((s, a) => s + a.price, 0) || 0)
+              )}`
+            }).join('\n')
+
+            const message = `Olá! Gostaria de fazer um orçamento:\n\n${text}\n\nTotal: ${formatPrice(cartTotal)}`
+
+            const phone = bakerySettings.phone?.replace(/\D/g, '')
+            const url = `https://wa.me/55${phone}?text=${encodeURIComponent(message)}`
+            window.open(url, '_blank')
+          }}
+        >
+          <MessageCircle className="w-4 h-4 mr-2" />
+          Enviar pelo WhatsApp
+        </Button>
+
+      </div>
+
+    </div>
+  </div>
+)}
+
 
       {/* Footer */}
       <footer className="mt-10 py-6 text-center text-xs text-gray-400">
