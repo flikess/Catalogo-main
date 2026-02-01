@@ -696,8 +696,18 @@ const CatalogoPublico = () => {
 
       {/* Carrinho */}
       {isCartOpen && (
-        <div className="fixed inset-0 z-50 bg-black/50 flex items-end sm:items-center justify-center">
-          <div className="bg-white w-full sm:max-w-lg rounded-t-xl sm:rounded-xl max-h-[90vh] overflow-y-auto">
+  <div
+    className="fixed inset-0 z-50 flex"
+    onClick={() => setIsCartOpen(false)}
+  >
+    {/* overlay */}
+    <div className="absolute inset-0 bg-black/40" />
+
+    {/* drawer */}
+    <div
+      className="relative ml-auto w-full max-w-sm h-full bg-white shadow-xl flex flex-col"
+      onClick={(e) => e.stopPropagation()}
+    >
 
             <div className="p-4 border-b flex items-center justify-between">
               <h3 className="font-bold text-lg">
