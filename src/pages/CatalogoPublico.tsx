@@ -705,7 +705,7 @@ const CatalogoPublico = () => {
 
     {/* drawer */}
     <div
-      className="relative ml-auto w-full max-w-sm h-full bg-white shadow-xl flex flex-col"
+     className="absolute right-0 top-0 h-full w-full sm:max-w-sm bg-white shadow-xl flex flex-col"
       onClick={(e) => e.stopPropagation()}
     >
       <div
