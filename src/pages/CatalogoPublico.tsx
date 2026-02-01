@@ -755,27 +755,45 @@ const CatalogoPublico = () => {
 
                     <div className="flex items-center justify-between">
 
-                      <div className="flex items-center gap-2">
-                        <Button
-                          size="icon"
-                          variant="outline"
-                          onClick={() => updateQuantity(item.id, item.quantity - 1)}
-                        >
-                          <Minus className="w-4 h-4" />
-                        </Button>
+                <div className="flex items-center gap-2">
+  <Button
+    size="icon"
+    variant="outline"
+    onClick={() =>
+      updateQuantity(item.id, Math.max(1, item.quantity - 1))
+    }
+  >
+    <Minus className="w-4 h-4" />
+  </Button>
 
-                        <span className="text-sm font-semibold">
-                          {item.quantity}
-                        </span>
+  <input
+    type="number"
+    min={1}
+    inputMode="numeric"
+    value={item.quantity}
+    onChange={(e) => {
+      const v = parseInt(e.target.value)
 
-                        <Button
-                          size="icon"
-                          variant="outline"
-                          onClick={() => updateQuantity(item.id, item.quantity + 1)}
-                        >
-                          <Plus className="w-4 h-4" />
-                        </Button>
-                      </div>
+      if (!v || v < 1) {
+        updateQuantity(item.id, 1)
+      } else {
+        updateQuantity(item.id, v)
+      }
+    }}
+    className="w-14 h-8 text-center border rounded-md text-xs"
+  />
+
+  <Button
+    size="icon"
+    variant="outline"
+    onClick={() =>
+      updateQuantity(item.id, item.quantity + 1)
+    }
+  >
+    <Plus className="w-4 h-4" />
+  </Button>
+</div>
+
 
                       <span className="font-semibold text-sm">
                         {formatPrice((item.price + addsTotal) * item.quantity)}
