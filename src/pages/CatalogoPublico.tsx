@@ -555,7 +555,7 @@ const CatalogoPublico = () => {
 
             <div className="relative">
               {viewingProduct.image_url && (
-  <div className="relative w-full max-h-[70vh] overflow-hidden bg-black">
+  <div className="relative w-full max-h-[45vh] overflow-hidden bg-black">
     <img
       src={viewingProduct.image_url}
       alt={viewingProduct.name}
