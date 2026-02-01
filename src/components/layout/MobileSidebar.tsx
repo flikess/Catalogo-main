@@ -64,16 +64,14 @@ export const MobileSidebar = () => {
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b bg-primary/5">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-              <span className="text-primary-foreground font-bold text-sm">CP</span>
-            </div>
-            <div>
-              <h2 className="font-semibold text-sm">Cataloguei</h2>
-              <p className="text-xs text-muted-foreground">Sistema de Gestão</p>
-            </div>
+            <img
+      src="/logo.png"
+      alt="Logo"
+      className="w-full h-full object-cover"
+    />
           </div>
         </div>
-        
+     
         {/* Navigation */}
         <nav className="flex-1 py-4">
           <div className="space-y-1 px-2">
