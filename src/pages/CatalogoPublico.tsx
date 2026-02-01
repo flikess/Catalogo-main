@@ -320,7 +320,7 @@ Obrigado!
     <div className="min-h-screen bg-gray-50 pb-24">
       {/* Header do Catálogo */}
       <div className="bg-white shadow-sm">
-        <div className="max-w-6xl mx-auto px-4 py-8">
+        <div className="max-w-6xl mx-auto px-4 py-4">
           <div className="text-center">
             {bakerySettings.logo_url && (
               <div className="mb-6">
@@ -333,16 +333,16 @@ Obrigado!
               </div>
             )}
             
-            <h1 className="text-4xl font-bold text-gray-900 mb-4">
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">
               {bakerySettings.bakery_name || 'Loja'}
             </h1>
 {bakerySettings.presentation_message && (
-  <p className="text-lg text-gray-600 italic mb-6 max-w-2xl mx-auto">
+<p className="text-sm text-gray-600 italic mb-3 max-w-2xl mx-auto">
     {`"${bakerySettings.presentation_message}"`}
   </p>
 )}
             
-            <div className="flex flex-wrap justify-center gap-6 text-gray-600 mb-6">
+<div className="flex flex-wrap justify-center gap-3 text-gray-600 mb-3 text-sm">
               {bakerySettings.phone && (
                 <div className="flex items-center gap-2">
                   <Phone className="w-4 h-4" />
@@ -380,7 +380,7 @@ Obrigado!
       </div>
 
       {/* Filtro de Categorias por Dropdown */}
-      <div className="sticky top-0 bg-white/80 backdrop-blur-sm z-40 py-4 border-b">
+<div className="sticky top-0 bg-white/80 backdrop-blur-sm z-40 py-2 border-b">
         <div className="max-w-6xl mx-auto px-4 flex justify-center">
           <Select onValueChange={handleCategorySelect}>
             <SelectTrigger className="w-[280px]">
@@ -398,7 +398,7 @@ Obrigado!
       </div>
 
       {/* Grid de Produtos */}
-      <div className="max-w-6xl mx-auto px-4 py-8">
+<div className="max-w-6xl mx-auto px-4 py-4">
         {categories.length === 0 ? (
           <div className="text-center py-16">
             <div className="text-gray-400 mb-4">
@@ -417,12 +417,12 @@ Obrigado!
               key={category.id} 
               id={category.id}
               ref={el => categoryRefs.current[category.id] = el}
-              className="mb-12 pt-16 -mt-16"
+              className="mb-6 pt-8 -mt-8"
             >
-              <h2 className="text-2xl font-bold text-gray-900 mb-6 border-b pb-2">
+              <h2 className="text-xl font-semibold text-gray-900 mb-3 border-b pb-1">
                 {category.nome}
               </h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                 {category.products.map((product) => (
                   <Card key={product.id} className="overflow-hidden hover:shadow-lg transition-shadow flex flex-col">
                     <div className="aspect-square relative bg-gray-100">
@@ -442,7 +442,7 @@ Obrigado!
                       </div>
                     </div>
                     
-                    <CardContent className="p-4 flex flex-col flex-grow">
+                    <CardContent className="p-3 flex flex-col flex-grow">
                       <h3 className="font-semibold text-lg text-gray-900 mb-2 line-clamp-2">
                         {product.name}
                       </h3>
@@ -495,7 +495,7 @@ Obrigado!
                 </Button>
               </div>
               
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* Carrossel de imagens */}
                 <div>
                   {viewingProduct.image_url ? (
@@ -512,7 +512,7 @@ Obrigado!
                 </div>
                 
                 {/* Detalhes do produto */}
-                <div className="space-y-4">
+               <div className="space-y-3">
                   <div>
                     <h4 className="font-semibold text-lg">Descrição</h4>
                     <p className="text-gray-600">
@@ -705,8 +705,9 @@ Obrigado!
       )}
 
       {/* Footer */}
-      <footer className="bg-white border-t mt-16">
-        <div className="max-w-6xl mx-auto px-4 py-8 text-center text-gray-500">
+      <footer className="bg-white border-t mt-8">
+
+        <div className="max-w-6xl mx-auto px-4 py-4 text-center text-gray-500 text-sm">
           <p>© {new Date().getFullYear()} {bakerySettings.bakery_name || 'Loja'}. Todos os direitos reservados.</p>
           <p className="mt-2 text-sm">Catálogo online - Entre em contato para fazer seu pedido!</p>
         </div>
