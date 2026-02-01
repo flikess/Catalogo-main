@@ -628,40 +628,39 @@ const CatalogoPublico = () => {
                   </div>
                 </div>
               )}
+<div className="flex items-center gap-3">
 
-              <div className="flex items-center gap-3">
+  <Button
+    size="icon"
+    variant="outline"
+    onClick={() => setQuantity(q => Math.max(1, q - 1))}
+  >
+    <Minus className="w-4 h-4" />
+  </Button>
 
-                <Button
-                  size="icon"
-                  variant="outline"
-                  onClick={() => setQuantity(q => Math.max(1, q - 1))}
-                >
-                  <Minus className="w-4 h-4" />
-                </Button>
+  <input
+    type="number"
+    inputMode="numeric"
+    min={1}
+    value={quantity}
+    onChange={(e) => {
+      const v = parseInt(e.target.value)
+      if (isNaN(v)) return
+      setQuantity(Math.max(1, v))
+    }}
+    className="w-20 h-9 text-center border rounded-md text-sm"
+  />
 
-                <span className="font-semibold">
-                  {quantity}
-                </span>
+  <Button
+    size="icon"
+    variant="outline"
+    onClick={() => setQuantity(q => q + 1)}
+  >
+    <Plus className="w-4 h-4" />
+  </Button>
 
-                <Button
-                  size="icon"
-                  variant="outline"
-                  onClick={() => setQuantity(q => q + 1)}
-                >
-                  <Plus className="w-4 h-4" />
-                </Button>
+</div>
 
-              </div>
-
-              <Button
-                className="w-full"
-                onClick={addToCartWithAdditionais}
-              >
-                <ShoppingCart className="w-4 h-4 mr-2" />
-                Adicionar ao orçamento
-              </Button>
-
-            </div>
           </div>
         </div>
       )}
