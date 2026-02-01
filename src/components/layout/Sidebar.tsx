@@ -40,8 +40,8 @@ export const Sidebar = () => {
   <div className="p-6 border-b">
  <div className="flex items-center gap-2 justify-center">
  
-    <img
-      src="/logo.png"
+ <img
+      src="/logomob.png"
       alt="Logo"
       className="w-full h-full object-cover"
     />
