@@ -555,12 +555,14 @@ const CatalogoPublico = () => {
 
             <div className="relative">
               {viewingProduct.image_url && (
-                <img
-                  src={viewingProduct.image_url}
-                  alt={viewingProduct.name}
-                  className="w-full h-48 object-cover rounded-t-xl sm:rounded-t-xl"
-                />
-              )}
+  <div className="relative w-full max-h-[70vh] overflow-hidden bg-black">
+    <img
+      src={viewingProduct.image_url}
+      alt={viewingProduct.name}
+      className="w-full h-auto max-h-[70vh] object-contain mx-auto"
+    />
+  </div>
+)}
 
               <Button
                 size="icon"
