@@ -324,9 +324,9 @@ const CatalogoPublico = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 pb-24">
-    {/* Header */}
+{/* Header */}
 <div
-  className="relative"
+  className={`relative ${!bakerySettings.banner_url ? 'bg-white shadow-sm' : ''}`}
   style={
     bakerySettings.banner_url
       ? {
@@ -337,11 +337,17 @@ const CatalogoPublico = () => {
       : undefined
   }
 >
-  {/* overlay para leitura */}
-  <div className="absolute inset-0 bg-black/40" />
+  {/* overlay só quando tiver banner */}
+  {bakerySettings.banner_url && (
+    <div className="absolute inset-0 bg-black/40" />
+  )}
 
   <div className="relative">
-    <div className="max-w-6xl mx-auto px-4 py-8 text-center text-white">
+    <div
+      className={`max-w-6xl mx-auto px-4 py-8 text-center
+        ${bakerySettings.banner_url ? 'text-white' : 'text-gray-900'}
+      `}
+    >
 
       {bakerySettings.logo_url && (
         <div className="mb-4 flex justify-center">
@@ -361,12 +367,20 @@ const CatalogoPublico = () => {
       </h1>
 
       {bakerySettings.presentation_message && (
-        <p className="text-sm italic opacity-90 max-w-2xl mx-auto mb-3">
+        <p
+          className={`text-sm italic max-w-2xl mx-auto mb-3
+            ${bakerySettings.banner_url ? 'opacity-90' : 'text-gray-600'}
+          `}
+        >
           {bakerySettings.presentation_message}
         </p>
       )}
 
-      <div className="flex flex-wrap justify-center gap-3 text-sm opacity-95">
+      <div
+        className={`flex flex-wrap justify-center gap-3 text-sm
+          ${bakerySettings.banner_url ? 'opacity-95' : 'text-gray-600'}
+        `}
+      >
         {bakerySettings.phone && (
           <div className="flex items-center gap-1">
             <Phone className="w-4 h-4" />
@@ -403,6 +417,7 @@ const CatalogoPublico = () => {
     </div>
   </div>
 </div>
+
 
 
       {/* Filtro + modo de visualização */}
