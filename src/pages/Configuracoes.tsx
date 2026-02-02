@@ -654,7 +654,49 @@ const Configuracoes = () => {
             </Card>
           </TabsContent>
 
-          {/* Perfil continua igual */}
+          <TabsContent value="profile">
+  <Card>
+    <CardHeader>
+      <CardTitle className="flex items-center gap-2">
+        <User className="w-5 h-5" />
+        Meu perfil
+      </CardTitle>
+    </CardHeader>
+
+    <CardContent className="space-y-6">
+
+      <div className="space-y-2">
+        <Label>Nome completo</Label>
+        <Input
+          value={profileData.full_name}
+          onChange={(e) =>
+            setProfileData(prev => ({
+              ...prev,
+              full_name: e.target.value
+            }))
+          }
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label>Email</Label>
+        <Input
+          value={profileData.email}
+          disabled
+        />
+      </div>
+
+      <Button
+        onClick={handleSaveProfile}
+        disabled={loading}
+      >
+        {loading ? 'Salvando...' : 'Salvar perfil'}
+      </Button>
+
+    </CardContent>
+  </Card>
+</TabsContent>
+
 
         </Tabs>
       </div>
