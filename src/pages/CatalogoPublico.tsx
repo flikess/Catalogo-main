@@ -325,98 +325,84 @@ const CatalogoPublico = () => {
   return (
     <div className="min-h-screen bg-gray-50 pb-24">
 {/* Header */}
-<div
-  className={`relative ${!bakerySettings.banner_url ? 'bg-white shadow-sm' : ''}`}
-  style={
-    bakerySettings.banner_url
-      ? {
-          backgroundImage: `url(${bakerySettings.banner_url})`,
-          backgroundSize: 'cover',
-          backgroundPosition: 'center'
-        }
-      : undefined
-  }
->
-  {/* overlay só quando tiver banner */}
-  {bakerySettings.banner_url && (
-    <div className="absolute inset-0 bg-black/40" />
+{/* Banner responsivo */}
+<div className="relative w-full">
+  {/* Imagem do banner */}
+  {bakerySettings.banner_url ? (
+    <div className="relative w-full h-[200px] sm:h-[400px] md:h-[500px] overflow-hidden">
+      <img
+        src={bakerySettings.banner_url}
+        alt="Banner"
+        className="w-full h-full object-cover object-center"
+      />
+      {/* overlay */}
+      <div className="absolute inset-0 bg-black/40" />
+    </div>
+  ) : (
+    <div className="w-full h-[200px] sm:h-[400px] md:h-[500px] bg-white shadow-sm" />
   )}
 
-  <div className="relative">
-    <div
-      className={`max-w-6xl mx-auto px-4 py-8 text-center
-        ${bakerySettings.banner_url ? 'text-white' : 'text-gray-900'}
-      `}
-    >
+  {/* Conteúdo do banner */}
+  <div className="absolute inset-0 flex flex-col items-center justify-center px-4 text-center">
+    {bakerySettings.logo_url && (
+      <div className="mb-2">
+        <img
+          src={bakerySettings.logo_url}
+          alt="Logo"
+          className="w-20 h-20 sm:w-28 sm:h-28 object-cover rounded-full border-4 border-white shadow-lg bg-white"
+          onError={e => {
+            e.currentTarget.style.display = 'none'
+          }}
+        />
+      </div>
+    )}
 
-      {bakerySettings.logo_url && (
-        <div className="mb-4 flex justify-center">
-          <img
-            src={bakerySettings.logo_url}
-            alt="Logo"
-            className="w-28 h-28 object-cover rounded-full border-4 border-white shadow-lg bg-white"
-            onError={e => {
-              e.currentTarget.style.display = 'none'
-            }}
-          />
+    <h1 className="text-2xl sm:text-3xl font-bold text-white">
+      {bakerySettings.bakery_name || 'Loja'}
+    </h1>
+
+    {bakerySettings.presentation_message && (
+      <p className="text-xs sm:text-sm italic text-white/90 mt-1 max-w-xl">
+        {bakerySettings.presentation_message}
+      </p>
+    )}
+
+    <div className="flex flex-wrap justify-center gap-3 text-xs sm:text-sm mt-3 text-white/95">
+      {bakerySettings.phone && (
+        <div className="flex items-center gap-1">
+          <Phone className="w-3 h-3 sm:w-4 sm:h-4" />
+          <span>{bakerySettings.phone}</span>
         </div>
       )}
-
-      <h1 className="text-3xl font-bold mb-2">
-        {bakerySettings.bakery_name || 'Loja'}
-      </h1>
-
-      {bakerySettings.presentation_message && (
-        <p
-          className={`text-sm italic max-w-2xl mx-auto mb-3
-            ${bakerySettings.banner_url ? 'opacity-90' : 'text-gray-600'}
-          `}
-        >
-          {bakerySettings.presentation_message}
-        </p>
+      {bakerySettings.email && (
+        <div className="flex items-center gap-1">
+          <Mail className="w-3 h-3 sm:w-4 sm:h-4" />
+          <span>{bakerySettings.email}</span>
+        </div>
       )}
+      {getFullAddress() && (
+        <div className="flex items-center gap-1">
+          <MapPin className="w-3 h-3 sm:w-4 sm:h-4" />
+          <span>{getFullAddress()}</span>
+        </div>
+      )}
+    </div>
 
-      <div
-        className={`flex flex-wrap justify-center gap-3 text-sm
-          ${bakerySettings.banner_url ? 'opacity-95' : 'text-gray-600'}
-        `}
-      >
-        {bakerySettings.phone && (
-          <div className="flex items-center gap-1">
-            <Phone className="w-4 h-4" />
-            <span>{bakerySettings.phone}</span>
-          </div>
-        )}
-
-        {bakerySettings.email && (
-          <div className="flex items-center gap-1">
-            <Mail className="w-4 h-4" />
-            <span>{bakerySettings.email}</span>
-          </div>
-        )}
-
-        {getFullAddress() && (
-          <div className="flex items-center gap-1">
-            <MapPin className="w-4 h-4" />
-            <span>{getFullAddress()}</span>
-          </div>
-        )}
-      </div>
-
-      <div className="mt-4">
+    {bakerySettings.phone && (
+      <div className="mt-3">
         <Button
           onClick={handleWhatsApp}
           size="sm"
-          className="bg-green-600 hover:bg-green-700"
+          className="bg-green-600 hover:bg-green-700 text-white"
         >
           <MessageCircle className="w-4 h-4 mr-2" />
           Fale comigo
         </Button>
       </div>
-
-    </div>
+    )}
   </div>
 </div>
+
 
 
 
