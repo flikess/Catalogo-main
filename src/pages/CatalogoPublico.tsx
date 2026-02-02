@@ -240,16 +240,14 @@ const CatalogoPublico = () => {
   }
 
   const updateQuantity = (productId: string, newQuantity: number) => {
-    setCart(prevCart => {
-      if (newQuantity <= 0) {
-        return prevCart.filter(item => item.id !== productId)
-      }
-
-      return prevCart.map(item =>
-        item.id === productId ? { ...item, quantity: newQuantity } : item
-      )
-    })
-  }
+  setCart(prevCart =>
+    prevCart.map(item =>
+      item.id === productId
+        ? { ...item, quantity: newQuantity }
+        : item
+    )
+  )
+}
 
   const removeFromCart = (productId: string) => {
     setCart(prevCart => prevCart.filter(item => item.id !== productId))
@@ -813,22 +811,37 @@ const CatalogoPublico = () => {
                     <Minus className="w-3 h-3" />
                   </Button>
 
-                  <input
-                    type="number"
-                    min={1}
-                    inputMode="numeric"
-                    value={item.quantity}
-                    onChange={(e) => {
-                      const v = parseInt(e.target.value)
+                <input
+  type="number"
+  min={1}
+  inputMode="numeric"
+  value={item.quantity === 0 ? '' : item.quantity}
+  onFocus={() => {
+    if (item.quantity === 1) {
+      updateQuantity(item.id, 0)
+    }
+  }}
+  onChange={(e) => {
+    const v = e.target.value
 
-                      if (!v || v < 1) {
-                        updateQuantity(item.id, 1)
-                      } else {
-                        updateQuantity(item.id, v)
-                      }
-                    }}
-                    className="w-12 h-7 text-center border rounded-md text-xs"
-                  />
+    if (v === '') {
+      updateQuantity(item.id, 0)
+      return
+    }
+
+    const n = Number(v)
+    if (!isNaN(n)) {
+      updateQuantity(item.id, n)
+    }
+  }}
+  onBlur={() => {
+    if (!item.quantity || item.quantity < 1) {
+      updateQuantity(item.id, 1)
+    }
+  }}
+  className="w-12 h-7 text-center border rounded-md text-xs"
+/>
+
 
                   <Button
                     size="icon"
