@@ -325,48 +325,61 @@ const CatalogoPublico = () => {
   return (
     <div className="min-h-screen bg-gray-50 pb-24">
 {/* Header */}
-{/* Banner responsivo */}
+{/* Banner Responsivo */}
 <div className="relative w-full">
-  {/* Imagem do banner */}
-  {bakerySettings.banner_url ? (
-    <div className="relative w-full h-[200px] sm:h-[400px] md:h-[500px] overflow-hidden">
+
+  {/* Banner Desktop */}
+  {bakerySettings.banner_url_desktop && (
+    <div className="hidden sm:block relative w-full h-[400px] md:h-[500px] overflow-hidden">
       <img
-        src={bakerySettings.banner_url}
-        alt="Banner"
+        src={bakerySettings.banner_url_desktop}
+        alt="Banner Desktop"
         className="w-full h-full object-cover object-center"
       />
-      {/* overlay */}
       <div className="absolute inset-0 bg-black/40" />
     </div>
-  ) : (
-    <div className="w-full h-[200px] sm:h-[400px] md:h-[500px] bg-white shadow-sm" />
   )}
 
-  {/* Conteúdo do banner */}
+  {/* Banner Mobile */}
+  {bakerySettings.banner_url_mobile && (
+    <div className="block sm:hidden relative w-full h-[250px] overflow-hidden">
+      <img
+        src={bakerySettings.banner_url_mobile}
+        alt="Banner Mobile"
+        className="w-full h-full object-cover object-center"
+      />
+      <div className="absolute inset-0 bg-black/40" />
+    </div>
+  )}
+
+  {/* Conteúdo do Banner */}
   <div className="absolute inset-0 flex flex-col items-center justify-center px-4 text-center">
+    
+    {/* Logo */}
     {bakerySettings.logo_url && (
       <div className="mb-2">
         <img
           src={bakerySettings.logo_url}
           alt="Logo"
           className="w-20 h-20 sm:w-28 sm:h-28 object-cover rounded-full border-4 border-white shadow-lg bg-white"
-          onError={e => {
-            e.currentTarget.style.display = 'none'
-          }}
+          onError={e => { e.currentTarget.style.display = 'none' }}
         />
       </div>
     )}
 
+    {/* Nome da Padaria */}
     <h1 className="text-2xl sm:text-3xl font-bold text-white">
       {bakerySettings.bakery_name || 'Loja'}
     </h1>
 
+    {/* Mensagem de Apresentação */}
     {bakerySettings.presentation_message && (
       <p className="text-xs sm:text-sm italic text-white/90 mt-1 max-w-xl">
         {bakerySettings.presentation_message}
       </p>
     )}
 
+    {/* Contatos */}
     <div className="flex flex-wrap justify-center gap-3 text-xs sm:text-sm mt-3 text-white/95">
       {bakerySettings.phone && (
         <div className="flex items-center gap-1">
@@ -388,6 +401,7 @@ const CatalogoPublico = () => {
       )}
     </div>
 
+    {/* Botão WhatsApp */}
     {bakerySettings.phone && (
       <div className="mt-3">
         <Button
@@ -400,8 +414,10 @@ const CatalogoPublico = () => {
         </Button>
       </div>
     )}
+
   </div>
 </div>
+
 
 
 
