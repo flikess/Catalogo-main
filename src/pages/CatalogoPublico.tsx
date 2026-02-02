@@ -330,7 +330,7 @@ const CatalogoPublico = () => {
 
   {(bakerySettings.banner_url || bakerySettings.banner_mobile_url) ? (
 
-    <div className="relative w-full h-[280px] sm:h-[400px] md:h-[500px] overflow-hidden">
+    <div className="relative w-full h-[300px] sm:h-[400px] md:h-[500px] overflow-hidden">
 
       <picture>
         {/* desktop */}
