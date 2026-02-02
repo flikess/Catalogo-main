@@ -514,10 +514,134 @@ const Configuracoes = () => {
 
                 <Separator />
 
-                {/* Informações básicas / contato / endereço */}
-                {/* (mantive exatamente igual ao seu código original) */}
+                <Separator />
 
-                {/* ... */}
+<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+  <div className="space-y-2">
+    <Label>Nome da loja</Label>
+    <Input
+      value={bakerySettings.bakery_name || ''}
+      onChange={(e) =>
+        setBakerySettings(prev => ({ ...prev, bakery_name: e.target.value }))
+      }
+    />
+  </div>
+
+  <div className="space-y-2">
+    <Label>Email da loja</Label>
+    <Input
+      value={bakerySettings.email || ''}
+      onChange={(e) =>
+        setBakerySettings(prev => ({ ...prev, email: e.target.value }))
+      }
+    />
+  </div>
+
+  <div className="space-y-2">
+    <Label>CPF / CNPJ</Label>
+    <Input
+      value={bakerySettings.cpf_cnpj || ''}
+      onChange={(e) =>
+        setBakerySettings(prev => ({ ...prev, cpf_cnpj: e.target.value }))
+      }
+    />
+  </div>
+
+  <div className="space-y-2">
+    <Label>Telefone / WhatsApp</Label>
+    <Input
+      value={bakerySettings.phone || ''}
+      onChange={(e) =>
+        setBakerySettings(prev => ({ ...prev, phone: e.target.value }))
+      }
+    />
+  </div>
+
+</div>
+
+<Separator />
+
+<div className="space-y-4">
+
+  <div className="space-y-2">
+    <Label>Chave PIX</Label>
+    <Input
+      value={bakerySettings.pix_key || ''}
+      onChange={(e) =>
+        setBakerySettings(prev => ({ ...prev, pix_key: e.target.value }))
+      }
+    />
+  </div>
+
+  <div className="space-y-2">
+    <Label>Mensagem de apresentação</Label>
+    <Input
+      value={bakerySettings.presentation_message || ''}
+      onChange={(e) =>
+        setBakerySettings(prev => ({ ...prev, presentation_message: e.target.value }))
+      }
+    />
+  </div>
+
+</div>
+
+<Separator />
+
+<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+  <div className="space-y-2">
+    <Label>Estado</Label>
+    <Input
+      value={bakerySettings.address_state || ''}
+      onChange={(e) =>
+        setBakerySettings(prev => ({ ...prev, address_state: e.target.value }))
+      }
+    />
+  </div>
+
+  <div className="space-y-2">
+    <Label>Cidade</Label>
+    <Input
+      value={bakerySettings.address_city || ''}
+      onChange={(e) =>
+        setBakerySettings(prev => ({ ...prev, address_city: e.target.value }))
+      }
+    />
+  </div>
+
+  <div className="space-y-2">
+    <Label>Bairro</Label>
+    <Input
+      value={bakerySettings.address_neighborhood || ''}
+      onChange={(e) =>
+        setBakerySettings(prev => ({ ...prev, address_neighborhood: e.target.value }))
+      }
+    />
+  </div>
+
+  <div className="space-y-2">
+    <Label>Rua</Label>
+    <Input
+      value={bakerySettings.address_street || ''}
+      onChange={(e) =>
+        setBakerySettings(prev => ({ ...prev, address_street: e.target.value }))
+      }
+    />
+  </div>
+
+  <div className="space-y-2">
+    <Label>Número</Label>
+    <Input
+      value={bakerySettings.address_number || ''}
+      onChange={(e) =>
+        setBakerySettings(prev => ({ ...prev, address_number: e.target.value }))
+      }
+    />
+  </div>
+
+</div>
+
 
                 <Button
                   className="w-full"
