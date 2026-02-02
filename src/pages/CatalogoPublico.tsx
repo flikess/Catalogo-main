@@ -60,6 +60,7 @@ interface BakerySettings {
   address_state?: string
   logo_url?: string
   banner_url?: string
+  banner_mobile_url?: string
   presentation_message?: string
 }
 
@@ -325,36 +326,60 @@ const CatalogoPublico = () => {
   return (
     <div className="min-h-screen bg-gray-50 pb-24">
 {/* Header */}
-<div
-  className={`relative ${!bakerySettings.banner_url ? 'bg-white shadow-sm' : ''}`}
-  style={
-    bakerySettings.banner_url
-      ? {
-          backgroundImage: `url(${bakerySettings.banner_url})`,
-          backgroundSize: 'cover',
-          backgroundPosition: 'center'
-        }
-      : undefined
-  }
->
-  {/* overlay só quando tiver banner */}
-  {bakerySettings.banner_url && (
-    <div className="absolute inset-0 bg-black/40" />
+<div className="relative">
+
+  {(bakerySettings.banner_url || bakerySettings.banner_mobile_url) ? (
+
+    <div className="relative w-full h-[220px] sm:h-[360px] md:h-[420px] overflow-hidden">
+
+      <picture>
+        {/* desktop */}
+        {bakerySettings.banner_url && (
+          <source
+            media="(min-width: 640px)"
+            srcSet={bakerySettings.banner_url}
+          />
+        )}
+
+        {/* mobile (fallback) */}
+        <img
+          src={
+            bakerySettings.banner_mobile_url ||
+            bakerySettings.banner_url ||
+            ''
+          }
+          alt="Banner"
+          className="w-full h-full object-cover"
+          style={{ objectPosition: 'center' }}
+        />
+      </picture>
+
+      {/* overlay */}
+      <div className="absolute inset-0 bg-black/40" />
+
+    </div>
+
+  ) : (
+    <div className="w-full h-[220px] sm:h-[360px] md:h-[420px] bg-white shadow-sm" />
   )}
 
-  <div className="relative">
+  {/* Conteúdo */}
+  <div className="absolute inset-0 flex items-center justify-center">
+
     <div
-      className={`max-w-6xl mx-auto px-4 py-8 text-center
-        ${bakerySettings.banner_url ? 'text-white' : 'text-gray-900'}
+      className={`max-w-6xl mx-auto px-4 text-center
+        ${(bakerySettings.banner_url || bakerySettings.banner_mobile_url)
+          ? 'text-white'
+          : 'text-gray-900'}
       `}
     >
 
       {bakerySettings.logo_url && (
-        <div className="mb-4 flex justify-center">
+        <div className="mb-3 flex justify-center">
           <img
             src={bakerySettings.logo_url}
             alt="Logo"
-            className="w-28 h-28 object-cover rounded-full border-4 border-white shadow-lg bg-white"
+            className="w-20 h-20 sm:w-28 sm:h-28 object-cover rounded-full border-4 border-white shadow-lg bg-white"
             onError={e => {
               e.currentTarget.style.display = 'none'
             }}
@@ -362,14 +387,16 @@ const CatalogoPublico = () => {
         </div>
       )}
 
-      <h1 className="text-3xl font-bold mb-2">
+      <h1 className="text-2xl sm:text-3xl font-bold mb-1">
         {bakerySettings.bakery_name || 'Loja'}
       </h1>
 
       {bakerySettings.presentation_message && (
         <p
-          className={`text-sm italic max-w-2xl mx-auto mb-3
-            ${bakerySettings.banner_url ? 'opacity-90' : 'text-gray-600'}
+          className={`text-xs sm:text-sm italic max-w-2xl mx-auto mb-3
+            ${(bakerySettings.banner_url || bakerySettings.banner_mobile_url)
+              ? 'opacity-90'
+              : 'text-gray-600'}
           `}
         >
           {bakerySettings.presentation_message}
@@ -377,33 +404,35 @@ const CatalogoPublico = () => {
       )}
 
       <div
-        className={`flex flex-wrap justify-center gap-3 text-sm
-          ${bakerySettings.banner_url ? 'opacity-95' : 'text-gray-600'}
+        className={`flex flex-wrap justify-center gap-3 text-xs sm:text-sm
+          ${(bakerySettings.banner_url || bakerySettings.banner_mobile_url)
+            ? 'opacity-95'
+            : 'text-gray-600'}
         `}
       >
         {bakerySettings.phone && (
           <div className="flex items-center gap-1">
-            <Phone className="w-4 h-4" />
+            <Phone className="w-3 h-3 sm:w-4 sm:h-4" />
             <span>{bakerySettings.phone}</span>
           </div>
         )}
 
         {bakerySettings.email && (
           <div className="flex items-center gap-1">
-            <Mail className="w-4 h-4" />
+            <Mail className="w-3 h-3 sm:w-4 sm:h-4" />
             <span>{bakerySettings.email}</span>
           </div>
         )}
 
         {getFullAddress() && (
           <div className="flex items-center gap-1">
-            <MapPin className="w-4 h-4" />
+            <MapPin className="w-3 h-3 sm:w-4 sm:h-4" />
             <span>{getFullAddress()}</span>
           </div>
         )}
       </div>
 
-      <div className="mt-4">
+      <div className="mt-3">
         <Button
           onClick={handleWhatsApp}
           size="sm"
@@ -415,8 +444,10 @@ const CatalogoPublico = () => {
       </div>
 
     </div>
+
   </div>
 </div>
+
 
 
 
