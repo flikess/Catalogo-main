@@ -364,7 +364,7 @@ const CatalogoPublico = () => {
   )}
 
 {/* Conteúdo */}
-<div className="absolute inset-0 flex items-center justify-start sm:justify-center pt-4 sm:pt-0">
+<div className="absolute inset-0 flex items-center justify-start sm:justify-center pt-4 sm:pt-6">
 
     <div
       className={`max-w-6xl mx-auto px-4 text-center
