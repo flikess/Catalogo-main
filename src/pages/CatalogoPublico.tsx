@@ -59,6 +59,7 @@ interface BakerySettings {
   address_city?: string
   address_state?: string
   logo_url?: string
+  banner_url?: string
   presentation_message?: string
 }
 
@@ -323,69 +324,86 @@ const CatalogoPublico = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 pb-24">
-      {/* Header */}
-      <div className="bg-white shadow-sm">
-        <div className="max-w-6xl mx-auto px-4 py-4">
-          <div className="text-center">
-            {bakerySettings.logo_url && (
-              <div className="mb-6">
-                <img
-                  src={bakerySettings.logo_url}
-                  alt="Logo"
-                  className="w-36 h-36 object-cover rounded-full mx-auto shadow-lg"
-                  onError={e => {
-                    e.currentTarget.style.display = 'none'
-                  }}
-                />
-              </div>
-            )}
+    {/* Header */}
+<div
+  className="relative"
+  style={
+    bakerySettings.banner_url
+      ? {
+          backgroundImage: `url(${bakerySettings.banner_url})`,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center'
+        }
+      : undefined
+  }
+>
+  {/* overlay para leitura */}
+  <div className="absolute inset-0 bg-black/40" />
 
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">
-              {bakerySettings.bakery_name || 'Loja'}
-            </h1>
+  <div className="relative">
+    <div className="max-w-6xl mx-auto px-4 py-8 text-center text-white">
 
-            {bakerySettings.presentation_message && (
-              <p className="text-sm text-gray-600 italic mb-3 max-w-2xl mx-auto">
-                {`"${bakerySettings.presentation_message}"`}
-              </p>
-            )}
-
-            <div className="flex flex-wrap justify-center gap-3 text-gray-600 mb-3 text-sm">
-              {bakerySettings.phone && (
-                <div className="flex items-center gap-2">
-                  <Phone className="w-4 h-4" />
-                  <span>{bakerySettings.phone}</span>
-                </div>
-              )}
-
-              {bakerySettings.email && (
-                <div className="flex items-center gap-2">
-                  <Mail className="w-4 h-4" />
-                  <span>{bakerySettings.email}</span>
-                </div>
-              )}
-
-              {getFullAddress() && (
-                <div className="flex items-center gap-2">
-                  <MapPin className="w-4 h-4" />
-                  <span>{getFullAddress()}</span>
-                </div>
-              )}
-            </div>
-
-            <div className="flex flex-wrap justify-center gap-4">
-              <Button
-                onClick={handleWhatsApp}
-                size="sm"
-                className="bg-green-600 hover:bg-green-700"
-              >
-                <MessageCircle className="w-4 h-4 mr-2" />
-                Fale comigo
-              </Button>
-            </div>
-          </div>
+      {bakerySettings.logo_url && (
+        <div className="mb-4 flex justify-center">
+          <img
+            src={bakerySettings.logo_url}
+            alt="Logo"
+            className="w-28 h-28 object-cover rounded-full border-4 border-white shadow-lg bg-white"
+            onError={e => {
+              e.currentTarget.style.display = 'none'
+            }}
+          />
         </div>
+      )}
+
+      <h1 className="text-3xl font-bold mb-2">
+        {bakerySettings.bakery_name || 'Loja'}
+      </h1>
+
+      {bakerySettings.presentation_message && (
+        <p className="text-sm italic opacity-90 max-w-2xl mx-auto mb-3">
+          {bakerySettings.presentation_message}
+        </p>
+      )}
+
+      <div className="flex flex-wrap justify-center gap-3 text-sm opacity-95">
+        {bakerySettings.phone && (
+          <div className="flex items-center gap-1">
+            <Phone className="w-4 h-4" />
+            <span>{bakerySettings.phone}</span>
+          </div>
+        )}
+
+        {bakerySettings.email && (
+          <div className="flex items-center gap-1">
+            <Mail className="w-4 h-4" />
+            <span>{bakerySettings.email}</span>
+          </div>
+        )}
+
+        {getFullAddress() && (
+          <div className="flex items-center gap-1">
+            <MapPin className="w-4 h-4" />
+            <span>{getFullAddress()}</span>
+          </div>
+        )}
       </div>
+
+      <div className="mt-4">
+        <Button
+          onClick={handleWhatsApp}
+          size="sm"
+          className="bg-green-600 hover:bg-green-700"
+        >
+          <MessageCircle className="w-4 h-4 mr-2" />
+          Fale comigo
+        </Button>
+      </div>
+
+    </div>
+  </div>
+</div>
+
 
       {/* Filtro + modo de visualização */}
       <div className="sticky top-0 bg-white/80 backdrop-blur-sm z-40 py-2 border-b">
