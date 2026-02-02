@@ -363,8 +363,8 @@ const CatalogoPublico = () => {
     <div className="w-full h-[220px] sm:h-[360px] md:h-[420px] bg-white shadow-sm" />
   )}
 
-  {/* Conteúdo */}
-  <div className="absolute inset-0 flex items-center justify-center">
+{/* Conteúdo */}
+<div className="absolute inset-0 flex items-center justify-start sm:justify-center pt-4 sm:pt-0">
 
     <div
       className={`max-w-6xl mx-auto px-4 text-center
