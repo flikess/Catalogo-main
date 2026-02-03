@@ -19,7 +19,8 @@ import {
   Eye,
   X,
   LayoutGrid,
-  List
+  List,
+  Star
 } from 'lucide-react'
 import { supabase } from '@/integrations/supabase/client'
 import { showSuccess } from '@/utils/toast'
@@ -41,6 +42,7 @@ interface Product {
     nome: string
   }
   adicionais?: Additional[]
+  is_featured?: boolean
 }
 
 interface Category {
@@ -76,6 +78,7 @@ const CatalogoPublico = () => {
   const navigate = useNavigate()
 
   const [categories, setCategories] = useState<Category[]>([])
+  const [featuredProducts, setFeaturedProducts] = useState<Product[]>([])
   const [bakerySettings, setBakerySettings] = useState<BakerySettings>({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -140,7 +143,7 @@ const CatalogoPublico = () => {
       const { data: productsData, error: productsError } = await supabase
         .from('products')
         .select(`
-          id, name, description, price, image_url, categoria_id, adicionais,
+          id, name, description, price, image_url, categoria_id, adicionais, is_featured,
           categorias_produtos (
             nome
           )
@@ -151,22 +154,27 @@ const CatalogoPublico = () => {
 
       if (productsError) throw productsError
 
+      const featured = (productsData || []).filter(p => p.is_featured)
+      setFeaturedProducts(featured)
+
       const groupedProducts: { [key: string]: Category } = {}
 
-      productsData?.forEach(product => {
-        const categoryName = product.categorias_produtos?.nome || 'Outros'
-        const categoryId = product.categoria_id || 'outros'
+      productsData
+        ?.filter(p => !p.is_featured)
+        .forEach(product => {
+          const categoryName = product.categorias_produtos?.nome || 'Outros'
+          const categoryId = product.categoria_id || 'outros'
 
-        if (!groupedProducts[categoryId]) {
-          groupedProducts[categoryId] = {
-            id: categoryId,
-            nome: categoryName,
-            products: []
+          if (!groupedProducts[categoryId]) {
+            groupedProducts[categoryId] = {
+              id: categoryId,
+              nome: categoryName,
+              products: []
+            }
           }
-        }
 
-        groupedProducts[categoryId].products.push(product)
-      })
+          groupedProducts[categoryId].products.push(product)
+        })
 
       setCategories(Object.values(groupedProducts))
     } catch (err) {
@@ -242,14 +250,14 @@ const CatalogoPublico = () => {
   }
 
   const updateQuantity = (productId: string, newQuantity: number) => {
-  setCart(prevCart =>
-    prevCart.map(item =>
-      item.id === productId
-        ? { ...item, quantity: newQuantity }
-        : item
+    setCart(prevCart =>
+      prevCart.map(item =>
+        item.id === productId
+          ? { ...item, quantity: newQuantity }
+          : item
+      )
     )
-  )
-}
+  }
 
   const removeFromCart = (productId: string) => {
     setCart(prevCart => prevCart.filter(item => item.id !== productId))
@@ -325,6 +333,7 @@ const CatalogoPublico = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 pb-24">
+ 
 {/* Header */}
 <div className="relative">
 
@@ -489,8 +498,115 @@ const CatalogoPublico = () => {
           </div>
         </div>
       </div>
-            {/* Lista de categorias e produtos */}
+
+      {/* Lista de categorias e produtos */}
       <div className="max-w-6xl mx-auto px-4 py-6 space-y-10">
+
+        {featuredProducts.length > 0 && (
+          <div className="space-y-4">
+            <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+              <Star className="w-5 h-5 text-yellow-500" />
+              Produtos em destaque
+            </h2>
+
+            {viewMode === 'grid' ? (
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                {featuredProducts.map(product => (
+                  <Card
+                    key={product.id}
+                    className="cursor-pointer hover:shadow-lg transition-shadow border-yellow-300"
+                    onClick={() => openProductModal(product)}
+                  >
+                    <CardContent className="p-3 flex flex-col h-full">
+                      <div className="relative mb-2">
+                        {product.image_url ? (
+                          <img
+                            src={product.image_url}
+                            alt={product.name}
+                            className="w-full h-32 object-cover rounded"
+                          />
+                        ) : (
+                          <div className="w-full h-32 bg-gray-100 rounded flex items-center justify-center">
+                            <ImageIcon className="w-8 h-8 text-gray-400" />
+                          </div>
+                        )}
+                      </div>
+
+                      <h3 className="font-semibold text-sm mb-1">
+                        {product.name}
+                      </h3>
+
+                      {product.description && (
+                        <p className="text-xs text-gray-500 line-clamp-2 mb-2">
+                          {product.description}
+                        </p>
+                      )}
+
+                      <div className="mt-auto flex items-center justify-between">
+                        <span className="font-bold text-blue-600">
+                          {formatPrice(product.price)}
+                        </span>
+
+                        <Button size="icon" variant="ghost">
+                          <Eye className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {featuredProducts.map(product => (
+                  <Card
+                    key={product.id}
+                    className="cursor-pointer hover:shadow-md transition-shadow border-yellow-300"
+                    onClick={() => openProductModal(product)}
+                  >
+                    <CardContent className="p-3 flex gap-3">
+                      <div className="w-20 h-20 shrink-0">
+                        {product.image_url ? (
+                          <img
+                            src={product.image_url}
+                            alt={product.name}
+                            className="w-full h-full object-cover rounded"
+                          />
+                        ) : (
+                          <div className="w-full h-full bg-gray-100 rounded flex items-center justify-center">
+                            <ImageIcon className="w-6 h-6 text-gray-400" />
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-semibold text-sm">
+                          {product.name}
+                        </h3>
+
+                        {product.description && (
+                          <p className="text-xs text-gray-500 line-clamp-2">
+                            {product.description}
+                          </p>
+                        )}
+
+                        <div className="flex items-center justify-between mt-2">
+                          <span className="font-bold text-blue-600">
+                            {formatPrice(product.price)}
+                          </span>
+
+                          <Button size="sm" variant="ghost">
+                            <Eye className="w-4 h-4 mr-1" />
+                            Ver
+                          </Button>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {categories.map(category => (
           <div
@@ -517,9 +633,6 @@ const CatalogoPublico = () => {
                             src={product.image_url}
                             alt={product.name}
                             className="w-full h-32 object-cover rounded"
-                            onError={e => {
-                              e.currentTarget.style.display = 'none'
-                            }}
                           />
                         ) : (
                           <div className="w-full h-32 bg-gray-100 rounded flex items-center justify-center">
@@ -566,9 +679,6 @@ const CatalogoPublico = () => {
                             src={product.image_url}
                             alt={product.name}
                             className="w-full h-full object-cover rounded"
-                            onError={e => {
-                              e.currentTarget.style.display = 'none'
-                            }}
                           />
                         ) : (
                           <div className="w-full h-full bg-gray-100 rounded flex items-center justify-center">
