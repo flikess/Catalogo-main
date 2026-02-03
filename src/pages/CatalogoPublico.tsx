@@ -44,7 +44,7 @@ interface Product {
   adicionais?: Additional[]
   is_featured?: boolean
     sizes?: {
-    label: string
+    name: string
     price: number
  }[]
 }
@@ -74,7 +74,7 @@ interface CartItem extends Product {
   quantity: number
   selectedAdditionais: Additional[]
   selectedSize?: {
-    label: string
+    name: string
     price: number
   } | null
 }
@@ -99,7 +99,7 @@ const CatalogoPublico = () => {
   const [selectedAdditionais, setSelectedAdditionais] = useState<Record<string, boolean>>({})
   const [quantity, setQuantity] = useState(1)
   const [selectedSize, setSelectedSize] = useState<{
-  label: string
+  name: string
   price: number
 } | null>(null)
 
@@ -251,11 +251,11 @@ if (hasSizes(viewingProduct)) {
 }
 
     setCart(prevCart => {
-      const itemKey = `${viewingProduct.id}-${selectedSize?.label || 'nosize'}-${JSON.stringify(selectedAdds)}`
+      const itemKey = `${viewingProduct.id}-${selectedSize?.name || 'nosize'}-${JSON.stringify(selectedAdds)}`
 
       const existingIndex = prevCart.findIndex(
         item =>
-          `${item.id}-${item.selectedSize?.label || 'nosize'}-${JSON.stringify(item.selectedAdditionais)}` === itemKey
+          `${item.id}-${item.selectedSize?.name || 'nosize'}-${JSON.stringify(item.selectedAdditionais)}` === itemKey
       )
 
       if (existingIndex >= 0) {
@@ -831,19 +831,19 @@ if (hasSizes(viewingProduct)) {
     flex flex-col items-center justify-center
     transition
     ${
-      selectedSize?.label === s.label
+      selectedSize?.name === s.name
         ? 'border-blue-600 bg-blue-600 text-white ring-2 ring-blue-300'
         : 'border-gray-300 bg-white hover:bg-gray-50'
     }
   `}
 >
   <div className="text-sm font-semibold">
-    {s.label || 'Tamanho'}
+    {s.name || 'Tamanho'}
   </div>
 
   <div
     className={`text-xs ${
-      selectedSize?.label === s.label
+      selectedSize?.name === s.name
         ? 'text-white/90'
         : 'text-gray-500'
     }`}
@@ -868,7 +868,7 @@ if (hasSizes(viewingProduct)) {
                       const key = add.id || add.name
 
                       return (
-                        <label
+                        <name
                           key={key}
                           className="flex items-center justify-between border rounded p-2 cursor-pointer"
                         >
@@ -887,7 +887,7 @@ if (hasSizes(viewingProduct)) {
                           <span className="text-sm font-medium">
                             + {formatPrice(add.price)}
                           </span>
-                        </label>
+                        </name>
                       )
                     })}
                   </div>
@@ -1054,7 +1054,7 @@ if (hasSizes(viewingProduct)) {
     {item.name}
     {item.selectedSize && (
       <span className="text-xs text-gray-500">
-        {' '}({item.selectedSize.label})
+        {' '}({item.selectedSize.name})
       </span>
     )}
   </p>
