@@ -43,6 +43,10 @@ interface Product {
   }
   adicionais?: Additional[]
   is_featured?: boolean
+    sizes?: {
+    label: string
+    price: number
+ }[]
 }
 
 interface Category {
@@ -69,7 +73,12 @@ interface BakerySettings {
 interface CartItem extends Product {
   quantity: number
   selectedAdditionais: Additional[]
+  selectedSize?: {
+    label: string
+    price: number
+  } | null
 }
+
 
 type ViewMode = 'grid' | 'list'
 
@@ -89,10 +98,22 @@ const CatalogoPublico = () => {
   const [viewingProduct, setViewingProduct] = useState<Product | null>(null)
   const [selectedAdditionais, setSelectedAdditionais] = useState<Record<string, boolean>>({})
   const [quantity, setQuantity] = useState(1)
+  const [selectedSize, setSelectedSize] = useState<{
+  label: string
+  price: number
+} | null>(null)
 
   const [viewMode, setViewMode] = useState<ViewMode>('grid')
 
   const categoryRefs = useRef<Record<string, HTMLDivElement | null>>({})
+  const hasSizes = (p?: Product | null) =>
+  Array.isArray(p?.sizes) && p.sizes.length > 0
+
+const getBasePrice = (p: Product) => {
+  if (hasSizes(p)) return null
+  return p.price
+}
+
 
   useEffect(() => {
     if (userId) {
@@ -143,11 +164,11 @@ const CatalogoPublico = () => {
       const { data: productsData, error: productsError } = await supabase
         .from('products')
         .select(`
-          id, name, description, price, image_url, categoria_id, adicionais, is_featured,
-          categorias_produtos (
-            nome
-          )
-        `)
+  id, name, description, price, image_url, categoria_id, adicionais, is_featured, sizes,
+  categorias_produtos (
+    nome
+  )
+`)
         .eq('user_id', userId)
         .eq('show_in_catalog', true)
         .order('name')
@@ -193,10 +214,11 @@ const CatalogoPublico = () => {
   }
 
   const openProductModal = (product: Product) => {
-    setViewingProduct(product)
-    setSelectedAdditionais({})
-    setQuantity(1)
-  }
+  setViewingProduct(product)
+  setSelectedAdditionais({})
+  setQuantity(1)
+  setSelectedSize(null)
+}
 
   const closeProductModal = () => {
     setViewingProduct(null)
@@ -217,12 +239,23 @@ const CatalogoPublico = () => {
         selectedAdditionais[add.id || add.name]
       ) || []
 
+      let finalPrice = viewingProduct.price!
+
+if (hasSizes(viewingProduct)) {
+  if (!selectedSize) {
+    alert('Selecione um tamanho.')
+    return
+  }
+
+  finalPrice = selectedSize.price
+}
+
     setCart(prevCart => {
-      const itemKey = `${viewingProduct.id}-${JSON.stringify(selectedAdds)}`
+      const itemKey = `${viewingProduct.id}-${selectedSize?.label || 'nosize'}-${JSON.stringify(selectedAdds)}`
 
       const existingIndex = prevCart.findIndex(
         item =>
-          `${item.id}-${JSON.stringify(item.selectedAdditionais)}` === itemKey
+          `${item.id}-${item.selectedSize?.label || 'nosize'}-${JSON.stringify(item.selectedAdditionais)}` === itemKey
       )
 
       if (existingIndex >= 0) {
@@ -234,14 +267,18 @@ const CatalogoPublico = () => {
         return newCart
       }
 
-      return [
-        ...prevCart,
-        {
-          ...viewingProduct,
-          quantity,
-          selectedAdditionais: selectedAdds
-        }
-      ]
+    return [
+  ...prevCart,
+ {
+  ...viewingProduct,
+  price: finalPrice,
+  selectedSize,
+  quantity,
+  selectedAdditionais: selectedAdds
+}
+
+]
+
     })
 
     showSuccess(`${viewingProduct.name} adicionado ao orçamento!`)
@@ -264,11 +301,16 @@ const CatalogoPublico = () => {
   }
 
   const cartTotal = cart.reduce((sum, item) => {
-    const additionaisTotal =
-      item.selectedAdditionais?.reduce((addSum, add) => addSum + add.price, 0) || 0
+  const additionaisTotal =
+    item.selectedAdditionais?.reduce((addSum, add) => addSum + add.price, 0) || 0
 
-    return sum + (item.price + additionaisTotal) * item.quantity
-  }, 0)
+  const basePrice = item.selectedSize
+    ? item.selectedSize.price
+    : item.price
+
+  return sum + (basePrice + additionaisTotal) * item.quantity
+}, 0)
+
 
   const cartItemCount = cart.reduce((sum, item) => sum + item.quantity, 0)
 
@@ -543,9 +585,16 @@ const CatalogoPublico = () => {
                       )}
 
                       <div className="mt-auto flex items-center justify-between">
-                        <span className="font-bold text-blue-600">
-                          {formatPrice(product.price)}
-                        </span>
+                      <span className="font-bold text-blue-600">
+  {hasSizes(product)
+    ? 'A partir de ' +
+      formatPrice(
+        Math.min(...product.sizes!.map(s => s.price))
+      )
+    : formatPrice(product.price!)
+  }
+</span>
+
 
                         <Button size="icon" variant="ghost">
                           <Eye className="w-4 h-4" />
@@ -760,9 +809,53 @@ const CatalogoPublico = () => {
                 )}
               </div>
 
-              <div className="text-lg font-bold text-blue-600">
-                {formatPrice(viewingProduct.price)}
-              </div>
+              {!hasSizes(viewingProduct) && (
+  <div className="text-lg font-bold text-blue-600">
+    {formatPrice(viewingProduct.price!)}
+  </div>
+)}
+{hasSizes(viewingProduct) && (
+  <div className="space-y-2">
+    <h4 className="font-semibold text-sm">
+      Tamanho
+    </h4>
+
+    <div className="grid grid-cols-3 gap-2">
+      {viewingProduct.sizes!.map((s, index) => (
+       <button
+  key={index}
+  type="button"
+  onClick={() => setSelectedSize(s)}
+  className={`
+    border rounded-md px-3 py-2 text-sm
+    flex flex-col items-center justify-center
+    transition
+    ${
+      selectedSize?.label === s.label
+        ? 'border-blue-600 bg-blue-600 text-white ring-2 ring-blue-300'
+        : 'border-gray-300 bg-white hover:bg-gray-50'
+    }
+  `}
+>
+  <div className="text-sm font-semibold">
+    {s.label || 'Tamanho'}
+  </div>
+
+  <div
+    className={`text-xs ${
+      selectedSize?.label === s.label
+        ? 'text-white/90'
+        : 'text-gray-500'
+    }`}
+  >
+    {formatPrice(s.price)}
+  </div>
+</button>
+
+      ))}
+    </div>
+  </div>
+)}
 
               {viewingProduct.adicionais && viewingProduct.adicionais.length > 0 && (
                 <div className="space-y-2">
@@ -849,9 +942,13 @@ const CatalogoPublico = () => {
 
 
               <Button
-                className="w-full"
-                onClick={addToCartWithAdditionais}
-              >
+  className="w-full"
+  disabled={
+    !!viewingProduct.sizes?.length && !selectedSize
+  }
+  onClick={addToCartWithAdditionais}
+>
+
                 <ShoppingCart className="w-4 h-4 mr-2" />
                 Adicionar ao orçamento
               </Button>
@@ -942,6 +1039,8 @@ const CatalogoPublico = () => {
 
           const addsTotal =
             item.selectedAdditionais?.reduce((s, a) => s + a.price, 0) || 0
+            const sizePrice = item.selectedSize?.price || 0
+
 
           return (
             <div
@@ -950,16 +1049,23 @@ const CatalogoPublico = () => {
             >
               <div className="flex justify-between gap-2">
                 <div className="min-w-0">
-                  <p className="font-medium text-sm truncate">
-                    {item.name}
-                  </p>
 
-                  {item.selectedAdditionais?.length > 0 && (
-                    <p className="text-xs text-gray-500 truncate">
-                      {item.selectedAdditionais.map(a => a.name).join(', ')}
-                    </p>
-                  )}
-                </div>
+  <p className="text-sm font-medium truncate">
+    {item.name}
+    {item.selectedSize && (
+      <span className="text-xs text-gray-500">
+        {' '}({item.selectedSize.label})
+      </span>
+    )}
+  </p>
+
+  {item.selectedAdditionais?.length > 0 && (
+    <p className="text-xs text-gray-500 truncate">
+      {item.selectedAdditionais.map(a => a.name).join(', ')}
+    </p>
+  )}
+</div>
+
 
                 <Button
                   size="icon"
@@ -1030,7 +1136,11 @@ const CatalogoPublico = () => {
                 </div>
 
                 <span className="text-sm font-semibold">
-                  {formatPrice((item.price + addsTotal) * item.quantity)}
+                {formatPrice(
+  ((item.selectedSize ? item.selectedSize.price : item.price) + addsTotal)
+  * item.quantity
+)}
+
                 </span>
 
               </div>
@@ -1049,30 +1159,21 @@ const CatalogoPublico = () => {
         </div>
 
         <Button
-          className="w-full bg-green-600 hover:bg-green-700"
-          onClick={() => {
-            const text = cart.map(item => {
-              const adds =
-                item.selectedAdditionais?.length
-                  ? ` (Adicionais: ${item.selectedAdditionais.map(a => a.name).join(', ')})`
-                  : ''
+  className="w-full"
+  onClick={() =>
+    navigate('/finalizar', {
+      state: {
+        cart,
+        cartTotal,
+        bakerySettings
+      }
+    })
+  }
+>
+  <ShoppingCart className="w-4 h-4 mr-2" />
+  Finalizar pedido
+</Button>
 
-              return `- ${item.quantity}x ${item.name}${adds} — ${formatPrice(
-                item.price +
-                  (item.selectedAdditionais?.reduce((s, a) => s + a.price, 0) || 0)
-              )}`
-            }).join('\n')
-
-            const message = `Olá! Gostaria de fazer um orçamento:\n\n${text}\n\nTotal: ${formatPrice(cartTotal)}`
-
-            const phone = bakerySettings.phone?.replace(/\D/g, '')
-            const url = `https://wa.me/55${phone}?text=${encodeURIComponent(message)}`
-            window.open(url, '_blank')
-          }}
-        >
-          <MessageCircle className="w-4 h-4 mr-2" />
-          Enviar pelo WhatsApp
-        </Button>
 
       </div>
 
