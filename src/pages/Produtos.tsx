@@ -317,6 +317,82 @@ const Produtos = () => {
     }
   }
 
+  const handleCategorySubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    
+    if (!categoryFormData.nome.trim()) {
+      showError('Nome da categoria é obrigatório')
+      return
+    }
+    
+    try {
+      if (editingCategory) {
+        const { error } = await supabase
+          .from('categorias_produtos')
+          .update({
+            nome: categoryFormData.nome.trim(),
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', editingCategory.id)
+
+        if (error) throw error
+        showSuccess('Categoria atualizada com sucesso!')
+      } else {
+        const { error } = await supabase
+          .from('categorias_produtos')
+          .insert({
+            nome: categoryFormData.nome.trim(),
+            user_id: user?.id
+          })
+
+        if (error) throw error
+        showSuccess('Categoria criada com sucesso!')
+      }
+
+      setIsCategoryDialogOpen(false)
+      setEditingCategory(null)
+      setCategoryFormData({ nome: '' })
+      fetchCategories()
+    } catch (error) {
+      console.error('Error saving category:', error)
+      showError('Erro ao salvar categoria')
+    }
+  }
+
+   const handleEditCategory = (category: Category) => {
+    setEditingCategory(category)
+    setCategoryFormData({
+      nome: category.nome
+    })
+    setIsCategoryDialogOpen(true)
+  }
+
+  const handleDeleteCategory = async (categoryId: string) => {
+    const productsInCategory = products.filter(p => p.categoria_id === categoryId)
+    if (productsInCategory.length > 0) {
+      showError('Não é possível excluir esta categoria pois existem produtos vinculados a ela')
+      return
+    }
+
+    if (!confirm('Tem certeza que deseja excluir esta categoria?')) return
+
+    try {
+      const { error } = await supabase
+        .from('categorias_produtos')
+        .delete()
+        .eq('id', categoryId)
+
+      if (error) throw error
+      showSuccess('Categoria excluída com sucesso!')
+      fetchCategories()
+    } catch (error) {
+      console.error('Error deleting category:', error)
+      showError('Erro ao excluir categoria')
+    }
+  }
+
+
+
   const resetForm = () => {
     setFormData({
       name: '',
@@ -434,11 +510,132 @@ const Produtos = () => {
   ]
 
   return (
-    <Layout>
+    
+      <Layout>
       <div className="space-y-6">
-        <div className="flex justify-between">
-          <h1 className="text-2xl font-bold">Produtos</h1>
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <h1 className="text-2xl font-bold text-gray-900">Produtos</h1>
+          <div className="flex gap-2">
+            <Button 
+              variant="outline" 
+              onClick={() => setIsCategoriesListOpen(true)}
+            >
+              <List className="w-4 h-4 mr-2" />
+              Categorias
+            </Button>
+            <Dialog open={isCategoriesListOpen} onOpenChange={setIsCategoriesListOpen}>
+          <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Categorias de Produtos</DialogTitle>
+            </DialogHeader>
+            
+            {loadingCategories ? (
+              <div className="flex justify-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Nome</TableHead>
+                      <TableHead className="text-right">Ações</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {categories.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={2} className="text-center py-8 text-muted-foreground">
+                          Nenhuma categoria cadastrada
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      categories.map(category => (
+                        <TableRow key={category.id}>
+                          <TableCell className="font-medium">{category.nome}</TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex gap-2 justify-end">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleEditCategory(category)}
+                              >
+                                <Edit className="w-4 h-4" />
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleDeleteCategory(category.id)}
+                                className="text-destructive hover:text-destructive"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+                
+                <Button 
+                  onClick={() => {
+                    setIsCategoriesListOpen(false)
+                    setIsCategoryDialogOpen(true)
+                  }}
+                  className="w-full"
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Adicionar Nova Categoria
+                </Button>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
 
+            <Dialog open={isCategoryDialogOpen} onOpenChange={setIsCategoryDialogOpen}>
+              <DialogTrigger asChild>
+                <Button variant="outline" onClick={() => {
+                  setEditingCategory(null)
+                  setCategoryFormData({ nome: '' })
+                }}>
+                  <Tag className="w-4 h-4 mr-2" />
+                  Nova Categoria
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-md">
+                <DialogHeader>
+                  <DialogTitle>
+                    {editingCategory ? 'Editar Categoria' : 'Nova Categoria'}
+                  </DialogTitle>
+                </DialogHeader>
+                <form onSubmit={handleCategorySubmit} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="category_name">Nome da Categoria *</Label>
+                    <Input
+                      id="category_name"
+                      value={categoryFormData.nome}
+                      onChange={(e) => setCategoryFormData({ nome: e.target.value })}
+                      placeholder="Ex: Bolos de Aniversário"
+                      required
+                    />
+                  </div>
+                  
+                  <DialogFooter>
+                    <Button type="submit">
+                      {editingCategory ? 'Atualizar' : 'Criar'}
+                    </Button>
+                    <Button 
+                      type="button" 
+                      variant="outline" 
+                      onClick={() => setIsCategoryDialogOpen(false)}
+                    >
+                      Cancelar
+                    </Button>
+                  </DialogFooter>
+                </form>
+              </DialogContent>
+            </Dialog>
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
               <Button onClick={() => { resetForm(); setEditingProduct(null) }}>
@@ -648,6 +845,7 @@ const Produtos = () => {
                   </div>
                   
                   
+                  
                 <DialogFooter>
                   <Button type="submit">
                     {editingProduct ? 'Atualizar' : 'Criar'}
@@ -657,7 +855,7 @@ const Produtos = () => {
             </DialogContent>
           </Dialog>
         </div>
-
+        </div>
         <Card>
           <CardContent className="pt-6">
             <div className="relative">
