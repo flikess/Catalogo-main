@@ -16,6 +16,7 @@ interface Product {
   description?: string
   price: number
   show_in_catalog: boolean
+  is_featured: boolean
   image_url?: string
   created_at: string
 }
@@ -148,6 +149,31 @@ const Catalogos = () => {
     }
   }
 
+  const toggleProductFeatured = async (product: Product) => {
+    try {
+      const { error } = await supabase
+        .from('products')
+        .update({
+          is_featured: !product.is_featured,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', product.id)
+
+      if (error) throw error
+
+      showSuccess(
+        !product.is_featured
+          ? 'Produto marcado como destaque!'
+          : 'Produto removido dos destaques!'
+      )
+
+      fetchProducts()
+    } catch (error) {
+      console.error('Error updating featured product:', error)
+      showError('Erro ao atualizar destaque do produto')
+    }
+  }
+
   const generateCatalogUrl = () => {
     const baseUrl = window.location.origin
     return `${baseUrl}/catalogo/${user?.id}`
@@ -218,7 +244,7 @@ const Catalogos = () => {
       key: 'show_in_catalog',
       label: 'Visibilidade',
       render: (value: boolean, row: Product) => (
-        <div className="flex flex-col items-center">
+        <div className="flex flex-col items-center gap-2">
           <Badge 
             className={value 
               ? 'bg-green-100 text-green-800' 
@@ -227,24 +253,47 @@ const Catalogos = () => {
           >
             {value ? 'Visível' : 'Oculto'}
           </Badge>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => toggleProductVisibility(row)}
-            className="mt-2"
-          >
-            {value ? (
-              <>
-                <EyeOff className="w-4 h-4 mr-1" />
-                Ocultar
-              </>
-            ) : (
-              <>
-                <Eye className="w-4 h-4 mr-1" />
-                Mostrar
-              </>
-            )}
-          </Button>
+
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => toggleProductVisibility(row)}
+              className="mt-2"
+            >
+              {value ? (
+                <>
+                  <EyeOff className="w-4 h-4 mr-1" />
+                  Ocultar
+                </>
+              ) : (
+                <>
+                  <Eye className="w-4 h-4 mr-1" />
+                  Mostrar
+                </>
+              )}
+            </Button>
+
+            <Button
+              variant="outline"
+              size="sm"
+              title="Marcar como destaque"
+              onClick={() => toggleProductFeatured(row)}
+              className={
+                row.is_featured
+                  ? 'mt-2 text-yellow-500 border-yellow-400'
+                  : 'mt-2'
+              }
+            >
+              <Star
+                className={
+                  row.is_featured
+                    ? 'w-4 h-4 fill-yellow-400'
+                    : 'w-4 h-4'
+                }
+              />
+            </Button>
+          </div>
         </div>
       )
     }
