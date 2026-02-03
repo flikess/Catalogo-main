@@ -22,6 +22,11 @@ interface Additional {
   price: number
 }
 
+interface SizeOption {
+  name: string
+  price?: number | null
+}
+
 interface Product {
   id: string
   name: string
@@ -35,6 +40,7 @@ interface Product {
     nome: string
   }
   adicionais?: Additional[]
+  sizes?: SizeOption[]
 }
 
 interface Category {
@@ -45,6 +51,7 @@ interface Category {
 
 const Produtos = () => {
   const { user } = useAuth()
+
   const [products, setProducts] = useState<Product[]>([])
   const [categories, setCategories] = useState<Category[]>([])
   const [loading, setLoading] = useState(true)
@@ -58,6 +65,7 @@ const Produtos = () => {
   const [uploading, setUploading] = useState(false)
   const [imagePreview, setImagePreview] = useState<string | null>(null)
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
+
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -65,8 +73,10 @@ const Produtos = () => {
     categoria_id: '',
     show_in_catalog: true,
     image_url: '',
-    adicionais: [] as Additional[]
+    adicionais: [] as Additional[],
+    sizes: [] as SizeOption[]
   })
+
   const [categoryFormData, setCategoryFormData] = useState({
     nome: ''
   })
@@ -90,16 +100,16 @@ const Produtos = () => {
         .order('created_at', { ascending: false })
 
       if (error) throw error
-      
-      // Garantir que adicionais seja sempre um array
-      const formattedProducts = data?.map(product => ({
-        ...product,
-        adicionais: product.adicionais ? JSON.parse(JSON.stringify(product.adicionais)) : []
-      })) || []
-      
-      setProducts(formattedProducts)
+
+      const formatted = (data || []).map(p => ({
+        ...p,
+        adicionais: p.adicionais || [],
+        sizes: p.sizes || []
+      }))
+
+      setProducts(formatted)
     } catch (error) {
-      console.error('Error fetching products:', error)
+      console.error(error)
       showError('Erro ao carregar produtos')
     } finally {
       setLoading(false)
@@ -109,6 +119,7 @@ const Produtos = () => {
   const fetchCategories = async () => {
     try {
       setLoadingCategories(true)
+
       const { data, error } = await supabase
         .from('categorias_produtos')
         .select('*')
@@ -116,9 +127,10 @@ const Produtos = () => {
         .order('nome')
 
       if (error) throw error
+
       setCategories(data || [])
     } catch (error) {
-      console.error('Error fetching categories:', error)
+      console.error(error)
       showError('Erro ao carregar categorias')
     } finally {
       setLoadingCategories(false)
@@ -128,26 +140,23 @@ const Produtos = () => {
   const uploadImage = async (file: File): Promise<string | null> => {
     try {
       setUploading(true)
-      
+
       const fileExt = file.name.split('.').pop()
       const fileName = `${user?.id}/${Date.now()}.${fileExt}`
-      
-      const { data, error } = await supabase.storage
+
+      const { error } = await supabase.storage
         .from('product-images')
-        .upload(fileName, file, {
-          cacheControl: '3600',
-          upsert: false
-        })
+        .upload(fileName, file)
 
       if (error) throw error
 
-      const { data: { publicUrl } } = supabase.storage
+      const { data } = supabase.storage
         .from('product-images')
         .getPublicUrl(fileName)
 
-      return publicUrl
+      return data.publicUrl
     } catch (error) {
-      console.error('Error uploading image:', error)
+      console.error(error)
       showError('Erro ao fazer upload da imagem')
       return null
     } finally {
@@ -159,17 +168,13 @@ const Produtos = () => {
     try {
       const urlParts = imageUrl.split('/product-images/')
       if (urlParts.length < 2) return
-      
+
       const filePath = urlParts[1]
-      
-      const { error } = await supabase.storage
+
+      await supabase.storage
         .from('product-images')
         .remove([filePath])
-
-      if (error) throw error
-    } catch (error) {
-      console.error('Error deleting image:', error)
-    }
+    } catch {}
   }
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -177,21 +182,14 @@ const Produtos = () => {
     if (!file) return
 
     if (!file.type.startsWith('image/')) {
-      showError('Por favor, selecione apenas arquivos de imagem')
-      return
-    }
-
-    if (file.size > 5 * 1024 * 1024) {
-      showError('A imagem deve ter no máximo 5MB')
+      showError('Selecione uma imagem')
       return
     }
 
     setSelectedFile(file)
-    
+
     const reader = new FileReader()
-    reader.onload = (e) => {
-      setImagePreview(e.target?.result as string)
-    }
+    reader.onload = e => setImagePreview(e.target?.result as string)
     reader.readAsDataURL(file)
   }
 
@@ -202,70 +200,86 @@ const Produtos = () => {
   }
 
   const handleAdditionalChange = (index: number, field: keyof Additional, value: string) => {
-    const newAdditionais = [...formData.adicionais]
-    
-    if (field === 'price') {
-      newAdditionais[index][field] = parseFloat(value) || 0
-    } else {
-      newAdditionais[index][field] = value as any
-    }
-    
-    setFormData({ ...formData, adicionais: newAdditionais })
+    const newList = [...formData.adicionais]
+
+    if (field === 'price') newList[index][field] = Number(value)
+    else newList[index][field] = value as any
+
+    setFormData({ ...formData, adicionais: newList })
   }
 
   const addAdditional = () => {
-    setFormData({ 
-      ...formData, 
-      adicionais: [...formData.adicionais, { name: '', price: 0 }] 
+    setFormData({
+      ...formData,
+      adicionais: [...formData.adicionais, { name: '', price: 0 }]
     })
   }
 
   const removeAdditional = (index: number) => {
-    const newAdditionais = formData.adicionais.filter((_, i) => i !== index)
-    setFormData({ ...formData, adicionais: newAdditionais })
+    setFormData({
+      ...formData,
+      adicionais: formData.adicionais.filter((_, i) => i !== index)
+    })
+  }
+
+  /* =======================
+     TAMANHOS
+  ======================= */
+
+  const addSize = () => {
+    setFormData({
+      ...formData,
+      sizes: [...formData.sizes, { name: '', price: null }]
+    })
+  }
+
+  const updateSize = (index: number, field: keyof SizeOption, value: string) => {
+    const list = [...formData.sizes]
+
+    if (field === 'price') {
+      list[index].price = value === '' ? null : Number(value)
+    } else {
+      list[index].name = value
+    }
+
+    setFormData({ ...formData, sizes: list })
+  }
+
+  const removeSize = (index: number) => {
+    setFormData({
+      ...formData,
+      sizes: formData.sizes.filter((_, i) => i !== index)
+    })
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    
+
     if (!formData.categoria_id) {
-      showError('Por favor, selecione uma categoria')
+      showError('Selecione a categoria')
       return
     }
-    
+
     try {
       let imageUrl = formData.image_url
 
       if (selectedFile) {
         const uploadedUrl = await uploadImage(selectedFile)
-        if (uploadedUrl) {
-          imageUrl = uploadedUrl
-        } else {
-          showError('Erro ao fazer upload da imagem')
-          return
-        }
+        if (!uploadedUrl) return
+        imageUrl = uploadedUrl
       }
-
-      // Preparar os adicionais para envio
-      const adicionaisParaEnviar = formData.adicionais.length > 0 
-        ? formData.adicionais.map(add => ({
-            name: add.name.trim(),
-            price: Number(add.price)
-          }))
-        : null
 
       const productData = {
         name: formData.name,
         description: formData.description || null,
-        price: parseFloat(formData.price),
+        price: Number(formData.price),
         categoria_id: formData.categoria_id,
         show_in_catalog: formData.show_in_catalog,
         image_url: imageUrl || null,
-        adicionais: adicionaisParaEnviar,
+        adicionais: formData.adicionais.length ? formData.adicionais : null,
+        sizes: formData.sizes.length ? formData.sizes : null,
         updated_at: new Date().toISOString()
       }
-
-      console.log('Dados a serem enviados:', productData) // Para debug
 
       if (editingProduct) {
         if (selectedFile && editingProduct.image_url) {
@@ -278,7 +292,8 @@ const Produtos = () => {
           .eq('id', editingProduct.id)
 
         if (error) throw error
-        showSuccess('Produto atualizado com sucesso!')
+
+        showSuccess('Produto atualizado!')
       } else {
         const { error } = await supabase
           .from('products')
@@ -288,152 +303,17 @@ const Produtos = () => {
           })
 
         if (error) throw error
-        showSuccess('Produto criado com sucesso!')
+
+        showSuccess('Produto criado!')
       }
 
       setIsDialogOpen(false)
       setEditingProduct(null)
       resetForm()
       fetchProducts()
-    } catch (error) {
-      console.error('Error saving product:', error)
-      showError('Erro ao salvar produto: ' + (error as any).message)
-    }
-  }
-
-  const handleCategorySubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    
-    if (!categoryFormData.nome.trim()) {
-      showError('Nome da categoria é obrigatório')
-      return
-    }
-    
-    try {
-      if (editingCategory) {
-        const { error } = await supabase
-          .from('categorias_produtos')
-          .update({
-            nome: categoryFormData.nome.trim(),
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', editingCategory.id)
-
-        if (error) throw error
-        showSuccess('Categoria atualizada com sucesso!')
-      } else {
-        const { error } = await supabase
-          .from('categorias_produtos')
-          .insert({
-            nome: categoryFormData.nome.trim(),
-            user_id: user?.id
-          })
-
-        if (error) throw error
-        showSuccess('Categoria criada com sucesso!')
-      }
-
-      setIsCategoryDialogOpen(false)
-      setEditingCategory(null)
-      setCategoryFormData({ nome: '' })
-      fetchCategories()
-    } catch (error) {
-      console.error('Error saving category:', error)
-      showError('Erro ao salvar categoria')
-    }
-  }
-
-  const handleEdit = (product: Product) => {
-    setEditingProduct(product)
-    setFormData({
-      name: product.name,
-      description: product.description || '',
-      price: product.price.toString(),
-      categoria_id: product.categoria_id || '',
-      show_in_catalog: product.show_in_catalog,
-      image_url: product.image_url || '',
-      adicionais: product.adicionais || []
-    })
-    
-    if (product.image_url) {
-      setImagePreview(product.image_url)
-    }
-    
-    setIsDialogOpen(true)
-  }
-
-  const handleEditCategory = (category: Category) => {
-    setEditingCategory(category)
-    setCategoryFormData({
-      nome: category.nome
-    })
-    setIsCategoryDialogOpen(true)
-  }
-
-  const handleDelete = async (productId: string) => {
-    if (!confirm('Tem certeza que deseja excluir este produto?')) return
-
-    try {
-      const product = products.find(p => p.id === productId)
-      
-      if (product?.image_url) {
-        await deleteImage(product.image_url)
-      }
-
-      const { error } = await supabase
-        .from('products')
-        .delete()
-        .eq('id', productId)
-
-      if (error) throw error
-      showSuccess('Produto excluído com sucesso!')
-      fetchProducts()
-    } catch (error) {
-      console.error('Error deleting product:', error)
-      showError('Erro ao excluir produto')
-    }
-  }
-
-  const handleDeleteCategory = async (categoryId: string) => {
-    const productsInCategory = products.filter(p => p.categoria_id === categoryId)
-    if (productsInCategory.length > 0) {
-      showError('Não é possível excluir esta categoria pois existem produtos vinculados a ela')
-      return
-    }
-
-    if (!confirm('Tem certeza que deseja excluir esta categoria?')) return
-
-    try {
-      const { error } = await supabase
-        .from('categorias_produtos')
-        .delete()
-        .eq('id', categoryId)
-
-      if (error) throw error
-      showSuccess('Categoria excluída com sucesso!')
-      fetchCategories()
-    } catch (error) {
-      console.error('Error deleting category:', error)
-      showError('Erro ao excluir categoria')
-    }
-  }
-
-  const toggleCatalogVisibility = async (product: Product) => {
-    try {
-      const { error } = await supabase
-        .from('products')
-        .update({ 
-          show_in_catalog: !product.show_in_catalog,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', product.id)
-
-      if (error) throw error
-      showSuccess(`Produto ${!product.show_in_catalog ? 'adicionado ao' : 'removido do'} catálogo!`)
-      fetchProducts()
-    } catch (error) {
-      console.error('Error updating product visibility:', error)
-      showError('Erro ao atualizar visibilidade do produto')
+    } catch (error: any) {
+      console.error(error)
+      showError(error.message || 'Erro ao salvar')
     }
   }
 
@@ -445,60 +325,76 @@ const Produtos = () => {
       categoria_id: '',
       show_in_catalog: true,
       image_url: '',
-      adicionais: []
+      adicionais: [],
+      sizes: []
     })
     setSelectedFile(null)
     setImagePreview(null)
   }
 
-  const filteredProducts = products.filter(product =>
-    product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    product.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    product.categorias_produtos?.nome.toLowerCase().includes(searchTerm.toLowerCase())
+  const handleEdit = (product: Product) => {
+    setEditingProduct(product)
+
+    setFormData({
+      name: product.name,
+      description: product.description || '',
+      price: product.price.toString(),
+      categoria_id: product.categoria_id || '',
+      show_in_catalog: product.show_in_catalog,
+      image_url: product.image_url || '',
+      adicionais: product.adicionais || [],
+      sizes: product.sizes || []
+    })
+
+    setImagePreview(product.image_url || null)
+    setIsDialogOpen(true)
+  }
+
+  const toggleCatalogVisibility = async (product: Product) => {
+    await supabase
+      .from('products')
+      .update({ show_in_catalog: !product.show_in_catalog })
+      .eq('id', product.id)
+
+    fetchProducts()
+  }
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('Excluir produto?')) return
+
+    await supabase.from('products').delete().eq('id', id)
+
+    fetchProducts()
+  }
+
+  const filteredProducts = products.filter(p =>
+    p.name.toLowerCase().includes(searchTerm.toLowerCase())
   )
 
-  const formatPrice = (price: number) => {
-    return new Intl.NumberFormat('pt-BR', {
-      style: 'currency',
-      currency: 'BRL'
-    }).format(price)
-  }
-
-  const formatDate = (date: string) => {
-    return new Date(date).toLocaleDateString('pt-BR')
-  }
+  const formatPrice = (price: number) =>
+    new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(price)
 
   const tableColumns = [
     {
       key: 'name',
       label: 'Produto',
       render: (value: string, row: Product) => (
-        <div className="flex items-center space-x-3">
+        <div className="flex items-center gap-3">
           {row.image_url ? (
-            <img 
-              src={row.image_url} 
-              alt={row.name}
-              className="w-12 h-12 object-cover rounded-md flex-shrink-0"
-              onError={(e) => {
-                e.currentTarget.style.display = 'none'
-              }}
-            />
+            <img src={row.image_url} className="w-12 h-12 rounded object-cover" />
           ) : (
-            <div className="w-12 h-12 bg-muted rounded-md flex items-center justify-center flex-shrink-0">
-              <ImageIcon className="w-6 h-6 text-muted-foreground" />
+            <div className="w-12 h-12 bg-muted flex items-center justify-center rounded">
+              <ImageIcon className="w-5 h-5" />
             </div>
           )}
-          <div className="min-w-0">
-            <div className="font-medium truncate">{value}</div>
-            {row.description && (
-              <div className="text-sm text-muted-foreground truncate">
-                {row.description}
+
+          <div>
+            <div className="font-medium">{value}</div>
+
+            {row.sizes && row.sizes.length > 0 && (
+              <div className="text-xs text-muted-foreground">
+                Tamanhos: {row.sizes.map(s => s.name).join(', ')}
               </div>
-            )}
-            {row.categorias_produtos && (
-              <Badge variant="outline" className="mt-1">
-                {row.categorias_produtos.nome}
-              </Badge>
             )}
           </div>
         </div>
@@ -506,39 +402,18 @@ const Produtos = () => {
     },
     {
       key: 'price',
-      label: 'Preço',
-      render: (value: number) => (
-        <span className="font-medium text-green-600">
-          {formatPrice(value)}
-        </span>
+      label: 'Preço base',
+      render: (v: number) => (
+        <span className="font-medium text-green-600">{formatPrice(v)}</span>
       )
     },
     {
       key: 'show_in_catalog',
       label: 'Catálogo',
-      render: (value: boolean, row: Product) => (
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => toggleCatalogVisibility(row)}
-          className={value ? 'text-green-600' : 'text-gray-400'}
-        >
-          {value ? (
-            <Eye className="w-4 h-4" />
-          ) : (
-            <EyeOff className="w-4 h-4" />
-          )}
+      render: (v: boolean, row: Product) => (
+        <Button variant="ghost" size="sm" onClick={() => toggleCatalogVisibility(row)}>
+          {v ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
         </Button>
-      )
-    },
-    {
-      key: 'created_at',
-      label: 'Criado em',
-      hideOnMobile: true,
-      render: (value: string) => (
-        <Badge variant="outline">
-          {formatDate(value)}
-        </Badge>
       )
     },
     {
@@ -546,20 +421,11 @@ const Produtos = () => {
       label: 'Ações',
       className: 'text-right',
       render: (_: any, row: Product) => (
-        <div className="flex gap-2 justify-end">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => handleEdit(row)}
-          >
+        <div className="flex justify-end gap-2">
+          <Button size="sm" variant="outline" onClick={() => handleEdit(row)}>
             <Edit className="w-4 h-4" />
           </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => handleDelete(row.id)}
-            className="text-destructive hover:text-destructive"
-          >
+          <Button size="sm" variant="outline" onClick={() => handleDelete(row.id)}>
             <Trash2 className="w-4 h-4" />
           </Button>
         </div>
@@ -570,75 +436,26 @@ const Produtos = () => {
   return (
     <Layout>
       <div className="space-y-6">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <h1 className="text-2xl font-bold text-gray-900">Produtos</h1>
-          <div className="flex gap-2">
-            <Button 
-              variant="outline" 
-              onClick={() => setIsCategoriesListOpen(true)}
-            >
-              <List className="w-4 h-4 mr-2" />
-              Categorias
-            </Button>
+        <div className="flex justify-between">
+          <h1 className="text-2xl font-bold">Produtos</h1>
 
-            <Dialog open={isCategoryDialogOpen} onOpenChange={setIsCategoryDialogOpen}>
-              <DialogTrigger asChild>
-                <Button variant="outline" onClick={() => {
-                  setEditingCategory(null)
-                  setCategoryFormData({ nome: '' })
-                }}>
-                  <Tag className="w-4 h-4 mr-2" />
-                  Nova Categoria
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="max-w-md">
-                <DialogHeader>
-                  <DialogTitle>
-                    {editingCategory ? 'Editar Categoria' : 'Nova Categoria'}
-                  </DialogTitle>
-                </DialogHeader>
-                <form onSubmit={handleCategorySubmit} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="category_name">Nome da Categoria *</Label>
-                    <Input
-                      id="category_name"
-                      value={categoryFormData.nome}
-                      onChange={(e) => setCategoryFormData({ nome: e.target.value })}
-                      placeholder="Ex: Bolos de Aniversário"
-                      required
-                    />
-                  </div>
-                  
-                  <DialogFooter>
-                    <Button type="submit">
-                      {editingCategory ? 'Atualizar' : 'Criar'}
-                    </Button>
-                    <Button 
-                      type="button" 
-                      variant="outline" 
-                      onClick={() => setIsCategoryDialogOpen(false)}
-                    >
-                      Cancelar
-                    </Button>
-                  </DialogFooter>
-                </form>
-              </DialogContent>
-            </Dialog>
+          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+            <DialogTrigger asChild>
+              <Button onClick={() => { resetForm(); setEditingProduct(null) }}>
+                <Plus className="w-4 h-4 mr-2" />
+                Novo Produto
+              </Button>
+            </DialogTrigger>
 
-            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-              <DialogTrigger asChild>
-                <Button onClick={() => { resetForm(); setEditingProduct(null) }}>
-                  <Plus className="w-4 h-4 mr-2" />
-                  Novo Produto
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
-                <DialogHeader>
-                  <DialogTitle>
-                    {editingProduct ? 'Editar Produto' : 'Novo Produto'}
-                  </DialogTitle>
-                </DialogHeader>
-                <form onSubmit={handleSubmit} className="space-y-4">
+            <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>
+                  {editingProduct ? 'Editar Produto' : 'Novo Produto'}
+                </DialogTitle>
+              </DialogHeader>
+
+              <form onSubmit={handleSubmit} className="space-y-4">
+
                   <div className="space-y-2">
                     <Label htmlFor="name">Nome *</Label>
                     <Input
@@ -694,6 +511,40 @@ const Produtos = () => {
                       required
                     />
                   </div>
+                       <div className="space-y-2">
+                  <Label>Tamanhos / variações</Label>
+
+                  {formData.sizes.map((s, i) => (
+                    <div key={i} className="flex gap-2">
+                      <Input
+                        placeholder="Ex: P, M, G"
+                        value={s.name}
+                        onChange={e => updateSize(i, 'name', e.target.value)}
+                      />
+
+                      <Input
+                        type="number"
+                        step="0.01"
+                        placeholder="Preço (opcional)"
+                        value={s.price ?? ''}
+                        onChange={e => updateSize(i, 'price', e.target.value)}
+                      />
+
+                      <Button type="button" variant="outline" onClick={() => removeSize(i)}>
+                        <X className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  ))}
+
+                  <Button type="button" variant="outline" onClick={addSize} className="w-full">
+                    <Plus className="w-4 h-4 mr-2" />
+                    Adicionar tamanho
+                  </Button>
+
+                  <p className="text-xs text-muted-foreground">
+                    Se o preço ficar vazio, será usado o preço base.
+                  </p>
+                </div>
                   
                   {/* Seção de Adicionais */}
                   <div className="space-y-2">
@@ -796,103 +647,26 @@ const Produtos = () => {
                     <Label htmlFor="show_in_catalog">Mostrar no catálogo</Label>
                   </div>
                   
-                  <DialogFooter>
-                    <Button type="submit" disabled={uploading}>
-                      {uploading ? 'Fazendo upload...' : editingProduct ? 'Atualizar' : 'Criar'}
-                    </Button>
-                    <Button 
-                      type="button" 
-                      variant="outline" 
-                      onClick={() => setIsDialogOpen(false)}
-                    >
-                      Cancelar
-                    </Button>
-                  </DialogFooter>
-                </form>
-              </DialogContent>
-            </Dialog>
-          </div>
+                  
+                <DialogFooter>
+                  <Button type="submit">
+                    {editingProduct ? 'Atualizar' : 'Criar'}
+                  </Button>
+                </DialogFooter>
+              </form>
+            </DialogContent>
+          </Dialog>
         </div>
-
-        <Dialog open={isCategoriesListOpen} onOpenChange={setIsCategoriesListOpen}>
-          <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>Categorias de Produtos</DialogTitle>
-            </DialogHeader>
-            
-            {loadingCategories ? (
-              <div className="flex justify-center py-8">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Nome</TableHead>
-                      <TableHead className="text-right">Ações</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {categories.length === 0 ? (
-                      <TableRow>
-                        <TableCell colSpan={2} className="text-center py-8 text-muted-foreground">
-                          Nenhuma categoria cadastrada
-                        </TableCell>
-                      </TableRow>
-                    ) : (
-                      categories.map(category => (
-                        <TableRow key={category.id}>
-                          <TableCell className="font-medium">{category.nome}</TableCell>
-                          <TableCell className="text-right">
-                            <div className="flex gap-2 justify-end">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleEditCategory(category)}
-                              >
-                                <Edit className="w-4 h-4" />
-                              </Button>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleDeleteCategory(category.id)}
-                                className="text-destructive hover:text-destructive"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </Button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))
-                    )}
-                  </TableBody>
-                </Table>
-                
-                <Button 
-                  onClick={() => {
-                    setIsCategoriesListOpen(false)
-                    setIsCategoryDialogOpen(true)
-                  }}
-                  className="w-full"
-                >
-                  <Plus className="w-4 h-4 mr-2" />
-                  Adicionar Nova Categoria
-                </Button>
-              </div>
-            )}
-          </DialogContent>
-        </Dialog>
 
         <Card>
           <CardContent className="pt-6">
             <div className="relative">
-              <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+              <Search className="absolute left-3 top-3 w-4 h-4 text-muted-foreground" />
               <Input
-                placeholder="Buscar produtos ou categorias..."
+                placeholder="Buscar produto..."
+                className="pl-9"
                 value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
+                onChange={e => setSearchTerm(e.target.value)}
               />
             </div>
           </CardContent>
@@ -900,14 +674,14 @@ const Produtos = () => {
 
         <Card>
           <CardHeader>
-            <CardTitle>Lista de Produtos ({filteredProducts.length})</CardTitle>
+            <CardTitle>Lista de Produtos</CardTitle>
           </CardHeader>
           <CardContent>
             <ResponsiveTable
               data={filteredProducts}
               columns={tableColumns}
               loading={loading}
-              emptyMessage={searchTerm ? 'Nenhum produto encontrado' : 'Nenhum produto cadastrado'}
+              emptyMessage="Nenhum produto"
             />
           </CardContent>
         </Card>
