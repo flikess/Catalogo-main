@@ -207,7 +207,9 @@ if (field === 'price') {
 } else {
   newList[index][field] = value
 }
-
+      setFormData({ ...formData, adicionais: newList })
+  }
+  
   const addAdditional = () => {
     setFormData({
       ...formData,
@@ -241,6 +243,8 @@ if (field === 'price') {
 } else {
   list[index].name = value
 }
+     setFormData({ ...formData, adicionais: newList })
+  } 
 
   const removeSize = (index: number) => {
     setFormData({
