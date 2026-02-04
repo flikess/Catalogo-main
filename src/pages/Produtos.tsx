@@ -255,23 +255,23 @@ const Produtos = () => {
 
   if (field === 'price') {
     let numeric = value.replace(/\D/g, '')
+
     if (!numeric) {
-      list[index].price = null
+      list[index].price = '' as any
     } else {
-      numeric = numeric.replace(/^0+/, '')
       if (numeric.length <= 2) {
-        list[index].price = parseFloat('0.' + numeric.padStart(2, '0'))
+        list[index].price = '0,' + numeric.padStart(2, '0') as any
       } else {
         const integerPart = numeric.slice(0, -2)
         const decimalPart = numeric.slice(-2)
-        list[index].price = parseFloat(integerPart + '.' + decimalPart)
+        list[index].price = integerPart + ',' + decimalPart as any
       }
     }
   } else {
     list[index].name = value
   }
 
-  setFormData({ ...formData, sizes: list }) // ⚠️ Corrigido: atualiza sizes, não adicionais
+  setFormData({ ...formData, sizes: list })
 }
 
   const removeSize = (index: number) => {
@@ -776,9 +776,10 @@ const handlePriceChange = (value: string) => {
   type="text"
   step="0.01"
   placeholder="Preço (opcional)"
-  value={s.price !== null ? s.price.toString().replace('.', ',') : ''}
-  onChange={e => updateSize(i, 'price', formatPriceInput(e.target.value))}
+  value={s.price}
+  onChange={e => updateSize(i, 'price', e.target.value)}
 />
+
 
                       <Button type="button" variant="outline" onClick={() => removeSize(i)}>
                         <X className="w-4 h-4" />
