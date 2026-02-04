@@ -777,8 +777,9 @@ const handlePriceChange = (value: string) => {
                <Input
   type="text"
   placeholder="Preço (opcional)"
-  value={s.price ?? ''}
-  onChange={e => updateSize(i, 'price', e.target.value)}
+  value={s.price === 0 ? '' : s.price.toFixed(2).replace('.', ',')}
+  onChange={e => updateSize(index, 'price', e.target.value)}
+  className="w-32"
 />
 
 
