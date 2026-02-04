@@ -338,7 +338,7 @@ const handlePriceChange = (value: string) => {
       const productData = {
         name: formData.name,
         description: formData.description || null,
-        price: Number(formData.price.replace(',', '.')),
+        price: formData.price,
         categoria_id: formData.categoria_id,
         show_in_catalog: formData.show_in_catalog,
         image_url: imageUrl || null,
@@ -480,7 +480,7 @@ const handlePriceChange = (value: string) => {
     setFormData({
       name: product.name,
       description: product.description || '',
-      price: product.price.toString(),
+      price: product.price ?? null,
       categoria_id: product.categoria_id || '',
       show_in_catalog: product.show_in_catalog,
       image_url: product.image_url || '',
