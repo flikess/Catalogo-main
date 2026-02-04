@@ -774,13 +774,13 @@ const handlePriceChange = (value: string) => {
                         onChange={e => updateSize(i, 'name', e.target.value)}
                       />
 
-                     <Input
+               <Input
   type="text"
-  step="0.01"
   placeholder="Preço (opcional)"
-  value={s.price}
+  value={s.price ?? ''}
   onChange={e => updateSize(i, 'price', e.target.value)}
 />
+
 
 
                       <Button type="button" variant="outline" onClick={() => removeSize(i)}>
