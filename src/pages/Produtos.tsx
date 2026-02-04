@@ -243,37 +243,41 @@ const Produtos = () => {
      TAMANHOS
   ======================= */
 
-  const addSize = () => {
-    setFormData({
-      ...formData,
-      sizes: [...formData.sizes, { name: '', price: null }]
-    })
-  }
+const addSize = () => {
+  setFormData({
+    ...formData,
+    sizes: [...formData.sizes, { name: '', price: null }]
+  })
+}
 
  const updateSize = (index: number, field: keyof SizeOption, value: string) => {
- const newlist = [...formData.sizes]
-   if (field === 'price') {
-    // Mantém string para digitar livremente
-    // Remove tudo que não seja número
+  const list = [...formData.sizes]
+
+  if (field === 'price') {
     let numeric = value.replace(/\D/g, '')
-     if (!numeric) {
-      newList[index][field] = '' as any
+
+    if (!numeric) {
+      list[index].price = null
     } else {
-      // Formata com vírgula sempre antes dos dois últimos dígitos
-      if (numeric.length <= 2) {
-        newList[index][field] = '0,' + numeric.padStart(2, '0') as any
+      numeric = numeric.replace(/^0+/, '')
+
+      if (!numeric) {
+        list[index].price = null
+      } else if (numeric.length <= 2) {
+        list[index].price = Number('0.' + numeric.padStart(2, '0'))
       } else {
         const integerPart = numeric.slice(0, -2)
         const decimalPart = numeric.slice(-2)
-        newList[index][field] = integerPart + ',' + decimalPart as any
+        list[index].price = Number(integerPart + '.' + decimalPart)
       }
     }
   } else {
-    newList[index][field] = value
+    list[index].name = value
   }
-   
-  setFormData({ ...formData, sizes: newlist })
+
+  setFormData({ ...formData, sizes: list })
 }
+
 
 
   const removeSize = (index: number) => {
@@ -774,10 +778,14 @@ const handlePriceChange = (value: string) => {
                         onChange={e => updateSize(i, 'name', e.target.value)}
                       />
 
-               <Input
+<Input
   type="text"
   placeholder="Preço (opcional)"
-  value={s.price === 0 ? '' : s.price.toFixed(2).replace('.', ',')}
+  value={
+    s.price === null || s.price === undefined
+      ? ''
+      : s.price.toFixed(2).replace('.', ',')
+  }
   onChange={e => updateSize(i, 'price', e.target.value)}
   className="w-32"
 />
