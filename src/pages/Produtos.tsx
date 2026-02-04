@@ -254,19 +254,19 @@ const Produtos = () => {
   const list = [...formData.sizes]
 
   if (field === 'price') {
-    // Remove tudo que não é número
     let numeric = value.replace(/\D/g, '')
 
     if (!numeric) {
       list[index].price = '' as any
-    } else if (numeric.length === 1) {
-      list[index].price = numeric as any // só 1 dígito
-    } else if (numeric.length === 2) {
-      list[index].price = '0,' + numeric as any // dois dígitos = centavos
     } else {
-      const integerPart = numeric.slice(0, -2)
-      const decimalPart = numeric.slice(-2)
-      list[index].price = integerPart + ',' + decimalPart as any
+      if (numeric.length <= 2) {
+        // exatamente igual ao adicional
+        list[index].price = numeric as any
+      } else {
+        const integerPart = numeric.slice(0, -2)
+        const decimalPart = numeric.slice(-2)
+        list[index].price = integerPart + ',' + decimalPart as any
+      }
     }
   } else {
     list[index].name = value
@@ -274,6 +274,7 @@ const Produtos = () => {
 
   setFormData({ ...formData, sizes: list })
 }
+
 
   const removeSize = (index: number) => {
     setFormData({
