@@ -10,7 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Separator } from '@/components/ui/separator'
-import { ArrowLeft, Plus, Printer, MessageCircle, Edit, Trash2 } from 'lucide-react'
+import { ArrowLeft, Plus, Printer, MessageCircle, Trash2 } from 'lucide-react'
 import { supabase } from '@/integrations/supabase/client'
 import { useAuth } from '@/components/auth/AuthProvider'
 import { showSuccess, showError } from '@/utils/toast'
@@ -33,10 +33,16 @@ interface OrderItem {
   id: string
   product_id?: string
   product_name: string
+  size?: SizeOption | string | null
   quantity: number
   unit_price: number
   total_price: number
   adicionais?: Additional[]
+}
+
+interface SizeOption {
+  name: string
+  price: number
 }
 
 interface Product {
@@ -44,6 +50,7 @@ interface Product {
   name: string
   price: number
   adicionais?: Additional[]
+  sizes?: SizeOption[]
 }
 
 interface Additional {
@@ -55,6 +62,7 @@ interface BakerySettings {
   bakery_name?: string
   email?: string
   phone?: string
+  pix_key?: string
   address_street?: string
   address_number?: string
   address_neighborhood?: string
@@ -75,160 +83,208 @@ const PedidoDetalhes = () => {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const { user } = useAuth()
+
   const [order, setOrder] = useState<Order | null>(null)
   const [products, setProducts] = useState<Product[]>([])
   const [bakerySettings, setBakerySettings] = useState<BakerySettings>({})
   const [loading, setLoading] = useState(true)
   const [isAddItemDialogOpen, setIsAddItemDialogOpen] = useState(false)
- const [newItem, setNewItem] = useState({
+
+  const [newItem, setNewItem] = useState<{
+  product_id: string
+  product_name: string
+  size: SizeOption | null
+  quantity: number
+  unit_price: number
+  selectedAdditionais: Additional[]
+}>({
   product_id: '',
   product_name: '',
+  size: null,
   quantity: 1,
   unit_price: 0,
-  selectedAdditionais: [] as Additional[]
+  selectedAdditionais: []
 })
 
+
   useEffect(() => {
-    if (id) {
-      fetchOrder()
-      fetchProducts()
-      fetchBakerySettings()
-    }
-  }, [id])
+  if (!user || !id) return
+
+  fetchOrder()
+  fetchProducts()
+  fetchBakerySettings()
+}, [user, id])
+
 
   const fetchOrder = async () => {
-  try {
-    const { data, error } = await supabase
-      .from('orders')
-      .select(`
-        *,
-        order_items (
-          id,
-          product_id,
-          product_name,
-          quantity,
-          unit_price,
-          total_price,
-          adicionais
-        )
-      `)
-      .eq('id', id)
-      .eq('user_id', user?.id)
-      .single()
-
-    if (error) throw error
-    setOrder(data)
-  } catch (error) {
-    console.error('Error fetching order:', error)
-    showError('Erro ao carregar pedido')
-    navigate('/pedidos')
-  } finally {
-    setLoading(false)
-  }
-}
-
- const fetchProducts = async () => {
-  try {
-    const { data, error } = await supabase
-      .from('products')
-      .select('id, name, price, adicionais')
-      .eq('user_id', user?.id)
-      .order('name')
-
-    if (error) throw error
-    setProducts(data || [])
-  } catch (error) {
-    console.error('Error fetching products:', error)
-  }
-}
-
-  const fetchBakerySettings = async () => {
     try {
       const { data, error } = await supabase
-        .from('bakery_settings')
-        .select('*')
-        .eq('id', user?.id)
+        .from('orders')
+        .select(`
+          *,
+          order_items (
+            id,
+            product_id,
+            product_name,
+            size,
+            quantity,
+            unit_price,
+            total_price,
+            adicionais
+          )
+        `)
+        .eq('id', id)
+        .eq('user_id', user?.id)
         .single()
 
-      if (error && error.code !== 'PGRST116') {
-        throw error
-      }
+      if (error) throw error
 
-      if (data) {
-        setBakerySettings(data)
-      }
+      setOrder(data)
     } catch (error) {
-      console.error('Error fetching bakery settings:', error)
+      console.error(error)
+      showError('Erro ao carregar pedido')
+      navigate('/pedidos')
+    } finally {
+      setLoading(false)
     }
   }
 
- const handleAddItem = async () => {
-  if (!order || !newItem.product_name || newItem.quantity <= 0 || newItem.unit_price <= 0) {
-    showError('Preencha todos os campos obrigatórios')
-    return
+
+  const fetchProducts = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('products')
+        .select('id, name, price, adicionais, sizes')
+        .eq('user_id', user?.id)
+        .order('name')
+
+      if (error) throw error
+
+      setProducts(data || [])
+    } catch (error) {
+      console.error(error)
+    }
   }
 
+  const fetchBakerySettings = async () => {
   try {
-    const additionaisTotal = newItem.selectedAdditionais.reduce((sum, add) => sum + add.price, 0)
-    const totalPrice = newItem.quantity * (newItem.unit_price + additionaisTotal)
+    const { data, error } = await supabase
+      .from('bakery_settings')
+      .select('*')
+      .eq('id', user?.id)
+      .single()
 
-    const { error } = await supabase
-      .from('order_items')
-      .insert({
+    if (error && error.code !== 'PGRST116') throw error
+
+    if (data) setBakerySettings(data)
+  } catch (error) {
+    console.error(error)
+  }
+}
+
+
+  const getItemVariationLabel = (item: OrderItem) => {
+  // prioridade para o campo novo
+  if ((item as any).variation_label) {
+    return (item as any).variation_label
+  }
+
+  // fallback para o size antigo
+  if (!item.size) return null
+
+  if (typeof item.size === 'string') return item.size
+
+  if (typeof item.size === 'object' && (item.size as any).name) {
+    return (item.size as any).name
+  }
+
+  return null
+}
+
+
+  const handleAddItem = async () => {
+    const selectedProduct = products.find(p => p.id === newItem.product_id)
+
+    const hasSizes = selectedProduct?.sizes && selectedProduct.sizes.length > 0
+
+    if (
+      !order ||
+      !newItem.product_name ||
+      newItem.quantity <= 0 ||
+      newItem.unit_price <= 0 ||
+      (hasSizes && !newItem.size)
+    ) {
+      showError('Preencha todos os campos obrigatórios')
+      return
+    }
+
+    try {
+      const additionaisTotal = newItem.selectedAdditionais.reduce(
+        (sum, add) => sum + add.price,
+        0
+      )
+
+      const totalPrice =
+        newItem.quantity * (newItem.unit_price + additionaisTotal)
+
+      const { error } = await supabase.from('order_items').insert({
         order_id: order.id,
         product_id: newItem.product_id || null,
         product_name: newItem.product_name,
+        size: newItem.size,
         quantity: newItem.quantity,
         unit_price: newItem.unit_price,
         total_price: totalPrice,
-        adicionais: newItem.selectedAdditionais.length > 0 ? newItem.selectedAdditionais : null
+        adicionais:
+          newItem.selectedAdditionais.length > 0
+            ? newItem.selectedAdditionais
+            : null
       })
 
-    if (error) throw error
+      if (error) throw error
 
-    // Update order total
-    const newTotal = (order.total_amount || 0) + totalPrice
-    await supabase
-      .from('orders')
-      .update({ 
-        total_amount: newTotal,
-        updated_at: new Date().toISOString()
+      await supabase
+        .from('orders')
+        .update({
+          total_amount: (order.total_amount || 0) + totalPrice,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', order.id)
+
+      showSuccess('Item adicionado com sucesso!')
+
+      setIsAddItemDialogOpen(false)
+      setNewItem({
+        product_id: '',
+        product_name: '',
+        size: null,
+        quantity: 1,
+        unit_price: 0,
+        selectedAdditionais: []
       })
-      .eq('id', order.id)
 
-    showSuccess('Item adicionado com sucesso!')
-    setIsAddItemDialogOpen(false)
-    setNewItem({ 
-      product_id: '', 
-      product_name: '', 
-      quantity: 1, 
-      unit_price: 0,
-      selectedAdditionais: [] 
-    })
-    fetchOrder()
-  } catch (error) {
-    console.error('Error adding item:', error)
-    showError('Erro ao adicionar item')
+      fetchOrder()
+    } catch (error) {
+      console.error(error)
+      showError('Erro ao adicionar item')
+    }
   }
-}
 
   const handleRemoveItem = async (itemId: string, itemTotal: number) => {
     if (!confirm('Tem certeza que deseja remover este item?')) return
 
     try {
-      const { error } = await supabase
-        .from('order_items')
-        .delete()
-        .eq('id', itemId)
+      const { error } = await supabase.from('order_items').delete().eq('id', itemId)
 
       if (error) throw error
 
-      // Update order total
-      const newTotal = Math.max(0, (order?.total_amount || 0) - itemTotal)
       await supabase
         .from('orders')
-        .update({ 
-          total_amount: newTotal,
+        .update({
+          total_amount: Math.max(
+            0,
+            (order?.total_amount || 0) - itemTotal
+          ),
           updated_at: new Date().toISOString()
         })
         .eq('id', order?.id)
@@ -236,106 +292,90 @@ const PedidoDetalhes = () => {
       showSuccess('Item removido com sucesso!')
       fetchOrder()
     } catch (error) {
-      console.error('Error removing item:', error)
+      console.error(error)
       showError('Erro ao remover item')
     }
   }
 
-  const handlePrint = () => {
-    window.print()
-  }
+  const handlePrint = () => window.print()
+
   const handleWhatsApp = () => {
     if (!order) return
 
     const message = generateWhatsAppMessage()
-    const encodedMessage = encodeURIComponent(message)
-    const whatsappUrl = `https://wa.me/?text=${encodedMessage}`
-    window.open(whatsappUrl, '_blank')
+    const encoded = encodeURIComponent(message)
+
+    window.open(`https://wa.me/?text=${encoded}`, '_blank')
   }
- const generateWhatsAppMessage = () => {
-  if (!order) return ''
 
-  const itemsText = order.order_items?.map(item => {
-    let itemText = `• ${item.product_name} - ${item.quantity}x ${formatPrice(item.unit_price)} = ${formatPrice(item.total_price)}`
-    
-    if (item.adicionais && item.adicionais.length > 0) {
-      itemText += `\n ↳ Adicionais: ${item.adicionais.map(a => `${a.name} (+${formatPrice(a.price)})`).join(', ')}`
-    }
+  const generateWhatsAppMessage = () => {
+    if (!order) return ''
 
-    return itemText
-  }).join('\n') || ''
+    const itemsText =
+      order.order_items?.map((item, index) => {
+        const sizeLabel = getItemVariationLabel(item)
+  ? ` | Tamanho: ${getItemVariationLabel(item)}`
+  : ''
 
-  const subtotal = order.order_items?.reduce((sum, item) => sum + item.total_price, 0) || 0
-  const discount = subtotal * (order.discount_percentage / 100)
-  const total = subtotal - discount + order.delivery_fee
+        const additionalsText =
+          item.adicionais && item.adicionais.length > 0
+            ? `\n   Adicionais: ${item.adicionais
+                .map(a => `${a.name} (+${formatPrice(a.price)})`)
+                .join(', ')}`
+            : ''
 
-  return `🧁 *${bakerySettings.bakery_name || 'Loja'}*
+        return (
+          `*${index + 1}. ${item.product_name}*${sizeLabel}\n` +
+          `   Quantidade: ${item.quantity}\n` +
+          `   Valor unitário: ${formatPrice(item.unit_price)}\n` +
+          additionalsText +
+          `\n   Subtotal: ${formatPrice(item.total_price)}`
+        )
+      }).join('\n\n') || ''
 
-📦 *Resumo do Pedido #${order.id.slice(0, 8)}*
-👤 Cliente: ${order.client_name}
-📅 Realizado em: ${formatDate(order.created_at)}
-${order.delivery_date ? `🚚 Entrega para: ${formatDate(order.delivery_date)}` : ''}
-🧾 *Itens do Pedido:*
+    return `Olá, ${order.client_name || 'cliente'}! 👋
+
+Segue o resumo do seu pedido:
+
+*Pedido nº ${order.id}*
+
 ${itemsText}
-💵 *Resumo Financeiro:*
-Subtotal: ${formatPrice(subtotal)}
-${order.discount_percentage > 0 ? `Desconto (${order.discount_percentage}%): -${formatPrice(discount)}\n` : ''}
-${order.delivery_fee > 0 ? `Taxa de entrega: ${formatPrice(order.delivery_fee)}\n` : ''}
-*Valor Total: ${formatPrice(total)}*
-${order.payment_method ? `💳 Forma de Pagamento: ${order.payment_method}` : ''}
-${order.notes ? `📝 Observações: ${order.notes}` : ''}
-${bakerySettings.pix_key ? `🔑 Chave Pix para pagamento: ${bakerySettings.pix_key}` : ''}
-📌 *Status Atual:* ${getStatusLabel(order.status)}`
-}
 
-  const formatPrice = (price: number) => {
-    return new Intl.NumberFormat('pt-BR', {
+-------------------------
+*Total do pedido: ${formatPrice(calculateTotal())}*
+
+Qualquer dúvida, fico à disposição.
+Muito obrigado pela preferência!`
+  }
+
+  const formatPrice = (price: number) =>
+    new Intl.NumberFormat('pt-BR', {
       style: 'currency',
       currency: 'BRL'
-    }).format(price)
-  }
+    }).format(price || 0)
 
-  const formatDate = (date: string) => {
-    return new Date(date).toLocaleDateString('pt-BR')
-  }
+  const formatDate = (date: string) =>
+    new Date(date).toLocaleDateString('pt-BR')
 
-  const getStatusBadge = (status: string) => {
-    const statusOption = statusOptions.find(option => option.value === status)
-    return statusOption || statusOptions[0]
-  }
+  const getStatusBadge = (status: string) =>
+    statusOptions.find(o => o.value === status) || statusOptions[0]
 
-  const getStatusLabel = (status: string) => {
-    const labels = {
-      'orcamento': 'Orçamento',
-      'confirmado': 'Confirmado',
-      'producao': 'Em Produção',
-      'pronto': 'Pronto',
-      'entregue': 'Entregue',
-      'cancelado': 'Cancelado'
-    }
-    return labels[status as keyof typeof labels] || status
-  }
+  const calculateSubtotal = () =>
+    order?.order_items?.reduce((sum, item) => sum + item.total_price, 0) || 0
 
-  const calculateSubtotal = () => {
-    return order?.order_items?.reduce((sum, item) => sum + item.total_price, 0) || 0
-  }
+  const calculateDiscount = () =>
+    calculateSubtotal() * ((order?.discount_percentage || 0) / 100)
 
-  const calculateDiscount = () => {
-    const subtotal = calculateSubtotal()
-    return subtotal * ((order?.discount_percentage || 0) / 100)
-  }
-
-  const calculateTotal = () => {
-    const subtotal = calculateSubtotal()
-    const discount = calculateDiscount()
-    return subtotal - discount + (order?.delivery_fee || 0)
-  }
+  const calculateTotal = () =>
+    calculateSubtotal() -
+    calculateDiscount() +
+    (order?.delivery_fee || 0)
 
   if (loading) {
     return (
       <Layout>
         <div className="flex items-center justify-center min-h-[400px]">
-          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
+          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600" />
         </div>
       </Layout>
     )
@@ -358,9 +398,128 @@ ${bakerySettings.pix_key ? `🔑 Chave Pix para pagamento: ${bakerySettings.pix_
 
   return (
     <Layout>
-      <div className="space-y-6 print:space-y-4">
-        {/* Header - Hidden in print */}
-        <div className="flex justify-between items-center print:hidden">
+      
+      <div
+  id="print-area"
+  className="hidden print:block text-[11px] font-mono"
+>
+
+
+  <div className="text-center mb-2 leading-tight">
+  <div className="font-bold text-sm">
+    {bakerySettings.bakery_name || 'Minha Loja'}
+  </div>
+
+  {(bakerySettings.address_street || bakerySettings.address_city) && (
+    <div>
+      {[
+        bakerySettings.address_street,
+        bakerySettings.address_number,
+        bakerySettings.address_neighborhood,
+        bakerySettings.address_city,
+        bakerySettings.address_state
+      ]
+        .filter(Boolean)
+        .join(', ')}
+    </div>
+  )}
+
+  {bakerySettings.phone && (
+    <div>Tel: {bakerySettings.phone}</div>
+  )}
+
+  {bakerySettings.email && (
+    <div>{bakerySettings.email}</div>
+  )}
+</div>
+
+  
+
+  <div className="border-t border-dashed my-2" />
+
+  <div>
+    Pedido: {order.id.slice(0, 8)}<br />
+    Data: {formatDate(order.created_at)}<br />
+    Cliente: {order.client_name}
+  </div>
+
+  <div className="border-t border-dashed my-2" />
+
+  <div>
+    {order.order_items?.map((item, i) => (
+      <div key={item.id} className="mb-2">
+        <div>
+          {item.quantity}x {item.product_name}
+        </div>
+
+        {getItemVariationLabel(item) && (
+          <div className="pl-2">
+            Tam: {getItemVariationLabel(item)}
+          </div>
+        )}
+
+        {item.adicionais?.map((a, idx) => (
+          <div key={idx} className="pl-2">
+            + {a.name} ({formatPrice(a.price)})
+          </div>
+        ))}
+
+        <div className="flex justify-between">
+          <span>Subtotal</span>
+          <span>{formatPrice(item.total_price)}</span>
+        </div>
+      </div>
+    ))}
+  </div>
+
+  <div className="border-t border-dashed my-2" />
+
+  <div className="space-y-1">
+    <div className="flex justify-between">
+      <span>Subtotal</span>
+      <span>{formatPrice(calculateSubtotal())}</span>
+    </div>
+
+    {order.discount_percentage > 0 && (
+      <div className="flex justify-between">
+        <span>Desconto</span>
+        <span>-{formatPrice(calculateDiscount())}</span>
+      </div>
+    )}
+
+    {order.delivery_fee > 0 && (
+      <div className="flex justify-between">
+        <span>Entrega</span>
+        <span>{formatPrice(order.delivery_fee)}</span>
+      </div>
+    )}
+
+    <div className="border-t border-dashed my-1" />
+
+    <div className="flex justify-between font-bold text-sm">
+      <span>TOTAL</span>
+      <span>{formatPrice(calculateTotal())}</span>
+    </div>
+  </div>
+
+  <div className="border-t border-dashed my-2" />
+
+  {bakerySettings.pix_key && (
+    <div>
+      PIX: {bakerySettings.pix_key}
+    </div>
+  )}
+
+  <div className="text-center mt-3">
+    Documento sem valor fiscal
+  </div>
+  </div>
+
+<div className="space-y-6 print:hidden">
+
+  {/* Header */}
+  <div className="flex justify-between items-center print:hidden">
+
           <div className="flex items-center gap-4">
             <Button variant="outline" onClick={() => navigate('/pedidos')}>
               <ArrowLeft className="w-4 h-4 mr-2" />
@@ -400,6 +559,7 @@ ${bakerySettings.pix_key ? `🔑 Chave Pix para pagamento: ${bakerySettings.pix_
             product_id: value,
             product_name: product?.name || '',
             unit_price: product?.price || 0,
+            size: '',
             selectedAdditionais: []
           })
         }}
@@ -416,6 +576,42 @@ ${bakerySettings.pix_key ? `🔑 Chave Pix para pagamento: ${bakerySettings.pix_
         </SelectContent>
       </Select>
     </div>
+    {newItem.product_id &&
+  products.find(p => p.id === newItem.product_id)?.sizes?.length > 0 && (
+
+  <div className="space-y-2">
+    <Label>Tamanho / Variação</Label>
+
+    <Select
+      value={newItem.size?.name || ''}
+    onValueChange={(value) => {
+  const product = products.find(p => p.id === newItem.product_id)
+  const size = product?.sizes?.find(s => s.name === value) || null
+
+  setNewItem({
+    ...newItem,
+    size,
+    unit_price: size?.price ?? newItem.unit_price
+  })
+}}
+
+    >
+      <SelectTrigger>
+        <SelectValue placeholder="Selecione um tamanho..." />
+      </SelectTrigger>
+
+      <SelectContent>
+        {products
+          .find(p => p.id === newItem.product_id)
+          ?.sizes?.map((s, i) => (
+            <SelectItem key={i} value={s.name}>
+              {s.name} – {formatPrice(s.price)}
+            </SelectItem>
+          ))}
+      </SelectContent>
+    </Select>
+  </div>
+)}
      {newItem.product_id && products.find(p => p.id === newItem.product_id)?.adicionais?.length > 0 && (
       <div className="space-y-2">
         <Label>Adicionais:</Label>
@@ -478,8 +674,11 @@ ${bakerySettings.pix_key ? `🔑 Chave Pix para pagamento: ${bakerySettings.pix_
                   <div className="space-y-2">
                     <Label htmlFor="unit_price">Preço Unitário *</Label>
                     <Input
-                      id="unit_price"
-                      type="number"
+  id="unit_price"
+  type="number"
+  disabled={
+    products.find(p => p.id === newItem.product_id)?.sizes?.length > 0
+  }
                       step="0.01"
                       min="0"
                       value={newItem.unit_price}
@@ -492,7 +691,11 @@ ${bakerySettings.pix_key ? `🔑 Chave Pix para pagamento: ${bakerySettings.pix_
                 <div className="space-y-2">
                   <Label>Total do Item</Label>
                   <div className="text-lg font-bold text-green-600">
-                    {formatPrice(newItem.quantity * newItem.unit_price)}
+                   {formatPrice(
+  newItem.quantity *
+  (newItem.unit_price +
+    newItem.selectedAdditionais.reduce((s, a) => s + a.price, 0))
+)}
                   </div>
                 </div>
 
@@ -651,7 +854,13 @@ ${bakerySettings.pix_key ? `🔑 Chave Pix para pagamento: ${bakerySettings.pix_
                   {order.order_items.map((item) => (
                <TableRow key={item.id}>
   <TableCell className="font-medium">
-    {item.product_name}
+    <div>{item.product_name}</div>
+
+{getItemVariationLabel(item) && (
+  <div className="text-xs text-muted-foreground">
+    Tamanho: {getItemVariationLabel(item)}
+  </div>
+)}
     {item.adicionais && item.adicionais.length > 0 && (
       <div className="text-xs text-muted-foreground mt-1">
         Adicionais: {item.adicionais.map(a => `${a.name} (+${formatPrice(a.price)})`).join(', ')}
