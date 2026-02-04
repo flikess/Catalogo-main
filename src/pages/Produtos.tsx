@@ -202,11 +202,11 @@ const Produtos = () => {
   const handleAdditionalChange = (index: number, field: keyof Additional, value: string) => {
     const newList = [...formData.adicionais]
 
-    if (field === 'price') newList[index][field] = Number(value)
-    else newList[index][field] = value as any
-
-    setFormData({ ...formData, adicionais: newList })
-  }
+if (field === 'price') {
+  newList[index][field] = Number(value.replace(',', '.')) // salva como número
+} else {
+  newList[index][field] = value
+}
 
   const addAdditional = () => {
     setFormData({
@@ -236,14 +236,11 @@ const Produtos = () => {
   const updateSize = (index: number, field: keyof SizeOption, value: string) => {
     const list = [...formData.sizes]
 
-    if (field === 'price') {
-      list[index].price = value === '' ? null : Number(value)
-    } else {
-      list[index].name = value
-    }
-
-    setFormData({ ...formData, sizes: list })
-  }
+   if (field === 'price') {
+  list[index].price = value === '' ? null : Number(value.replace(',', '.'))
+} else {
+  list[index].name = value
+}
 
   const removeSize = (index: number) => {
     setFormData({
@@ -743,13 +740,13 @@ const handlePriceChange = (value: string) => {
                         onChange={e => updateSize(i, 'name', e.target.value)}
                       />
 
-                      <Input
-                        type="number"
-                        step="0.01"
-                        placeholder="Preço (opcional)"
-                        value={s.price ?? ''}
-                        onChange={e => updateSize(i, 'price', e.target.value)}
-                      />
+                     <Input
+  type="text"
+  step="0.01"
+  placeholder="Preço (opcional)"
+  value={s.price !== null ? s.price.toString().replace('.', ',') : ''}
+  onChange={e => updateSize(i, 'price', formatPriceInput(e.target.value))}
+/>
 
                       <Button type="button" variant="outline" onClick={() => removeSize(i)}>
                         <X className="w-4 h-4" />
