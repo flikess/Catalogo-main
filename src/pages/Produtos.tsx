@@ -251,6 +251,18 @@ const Produtos = () => {
       sizes: formData.sizes.filter((_, i) => i !== index)
     })
   }
+const handlePriceChange = (value: string) => {
+  // Remove tudo que não seja número ou vírgula
+  let sanitized = value.replace(/[^0-9,]/g, '')
+
+  // Garante que só exista uma vírgula
+  const parts = sanitized.split(',')
+  if (parts.length > 2) {
+    sanitized = parts[0] + ',' + parts[1]
+  }
+
+  setFormData({ ...formData, price: sanitized })
+}
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -272,7 +284,7 @@ const Produtos = () => {
       const productData = {
         name: formData.name,
         description: formData.description || null,
-        price: Number(formData.price),
+        price: Number(formData.price.replace(',', '.')),
         categoria_id: formData.categoria_id,
         show_in_catalog: formData.show_in_catalog,
         image_url: imageUrl || null,
@@ -697,16 +709,15 @@ const Produtos = () => {
                   
                   <div className="space-y-2">
                     <Label htmlFor="price">Preço *</Label>
-                    <Input
-                      id="price"
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={formData.price}
-                      onChange={(e) => setFormData({ ...formData, price: e.target.value })}
-                      placeholder="0,00"
-                      required
-                    />
+              <Input
+  id="price"
+  type="text"
+  placeholder="0,00"
+  value={formData.price}
+  onChange={(e) => handlePriceChange(e.target.value)}
+  required
+/>
+
                   </div>
                        <div className="space-y-2">
                   <Label>Tamanhos / variações</Label>
