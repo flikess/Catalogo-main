@@ -262,12 +262,18 @@ const handlePriceChange = (value: string) => {
     return
   }
 
-  // Adiciona vírgula antes dos dois últimos dígitos
-  if (numeric.length === 1) numeric = '0' + numeric
-  const integerPart = numeric.slice(0, -2)
-  const decimalPart = numeric.slice(-2)
+  // Se tiver 1 ou 2 dígitos, exibe apenas como centavos
+  let formatted = ''
+  if (numeric.length === 1) {
+    formatted = '0,0' + numeric
+  } else if (numeric.length === 2) {
+    formatted = '0,' + numeric
+  } else {
+    const integerPart = numeric.slice(0, -2)
+    const decimalPart = numeric.slice(-2)
+    formatted = integerPart + ',' + decimalPart
+  }
 
-  const formatted = integerPart + ',' + decimalPart
   setFormData({ ...formData, price: formatted })
 }
 
