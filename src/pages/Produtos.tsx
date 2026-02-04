@@ -757,11 +757,14 @@ const handlePriceChange = (value: string) => {
                   
                   <div className="space-y-2">
                     <Label htmlFor="price">Preço *</Label>
-              <Input
-  id="price"
+            <Input
   type="text"
-  placeholder="0,00"
-  value={formData.price}
+  placeholder="Preço"
+  value={
+    formData.price === null || formData.price === undefined
+      ? ''
+      : formData.price.toFixed(2).replace('.', ',')
+  }
   onChange={(e) => handlePriceChange(e.target.value)}
   required
 />
