@@ -42,6 +42,7 @@ interface OrderItem {
   unit_price: number;
   total_price: number;
   adicionais?: Additional[];
+  size?: SizeOption | null;
 }
 
 interface Client {
@@ -54,6 +55,12 @@ interface Product {
   name: string;
   price: number;
   adicionais?: Additional[];
+  sizes?: SizeOption[];
+}
+
+interface SizeOption {
+  name: string
+  price: number
 }
 
 interface Additional {
@@ -67,6 +74,7 @@ interface OrderItemForm {
   quantity: number;
   unit_price: number;
   adicionais?: Additional[];
+  size?: SizeOption | null;
 }
 
 const statusOptions = [
@@ -153,12 +161,16 @@ const Pedidos = () => {
 
     const parsedData = (data || []).map(order => ({
       ...order,
-      order_items: order.order_items?.map(item => ({
-        ...item,
-        adicionais: typeof item.adicionais === 'string'
-          ? JSON.parse(item.adicionais)
-          : item.adicionais || []
-      }))
+   order_items: order.order_items?.map(item => ({
+  ...item,
+  adicionais: typeof item.adicionais === 'string'
+    ? JSON.parse(item.adicionais)
+    : item.adicionais || [],
+  size: typeof (item as any).size === 'string'
+    ? JSON.parse((item as any).size)
+    : (item as any).size || null
+}))
+
     }))
 
     setOrders(parsedData);
@@ -189,7 +201,7 @@ const Pedidos = () => {
     try {
       const { data, error } = await supabase
         .from('products')
-        .select('id, name, price, adicionais')
+        .select('id, name, price, adicionais, sizes')
         .eq('user_id', user?.id)
         .order('name');
 
@@ -209,7 +221,8 @@ const Pedidos = () => {
     const item: OrderItemForm = {
       ...newItem,
       product_id: newItem.product_id || '',
-      adicionais: newItem.adicionais || []
+      adicionais: newItem.adicionais || [],
+      size: newItem.size || null
     };
 
     setOrderItems([...orderItems, item]);
@@ -218,7 +231,8 @@ const Pedidos = () => {
       product_name: '',
       quantity: 1,
       unit_price: 0,
-      adicionais: []
+      adicionais: [],
+      size: null
     });
   };
 
@@ -228,11 +242,16 @@ const Pedidos = () => {
   };
 
   const calculateSubtotal = () => {
-    return orderItems.reduce((sum, item) => {
-      const additionalPrice = item.adicionais?.reduce((a, b) => a + b.price, 0) || 0;
-      return sum + (item.quantity * (item.unit_price + additionalPrice));
-    }, 0);
-  };
+  return orderItems.reduce((sum, item) => {
+    const additionalPrice =
+      item.adicionais?.reduce((a, b) => a + b.price, 0) || 0
+
+    const base =
+      item.size ? item.size.price : item.unit_price
+
+    return sum + item.quantity * (base + additionalPrice)
+  }, 0)
+};
 
   const calculateDiscount = () => {
     const subtotal = calculateSubtotal()
@@ -290,15 +309,24 @@ const Pedidos = () => {
         newOrder = data;
         showSuccess('Pedido criado com sucesso!');
 
-        const orderItemsData = orderItems.map(item => ({
-  order_id: newOrder!.id,
-  product_id: item.product_id || null,
-  product_name: item.product_name,
-  quantity: item.quantity,
-  unit_price: item.unit_price,
-  total_price: (item.unit_price + (item.adicionais?.reduce((a, b) => a + b.price, 0) || 0)) * item.quantity,
-  adicionais: item.adicionais?.length ? item.adicionais : null
-}))
+        const orderItemsData = orderItems.map(item => {
+  const base = item.size ? item.size.price : item.unit_price
+
+  return {
+    order_id: newOrder!.id,
+    product_id: item.product_id || null,
+    product_name: item.product_name,
+    quantity: item.quantity,
+    unit_price: base,
+    total_price:
+      (base +
+        (item.adicionais?.reduce((a, b) => a + b.price, 0) || 0)
+      ) * item.quantity,
+    adicionais: item.adicionais?.length ? item.adicionais : null,
+    size: item.size || null
+  }
+})
+
 
         const { error: itemsError } = await supabase
           .from('order_items')
@@ -333,16 +361,18 @@ const Pedidos = () => {
     
     if (order.order_items) {
   const items: OrderItemForm[] = order.order_items.map(item => ({
-    product_id: item.product_id || '',
-    product_name: item.product_name,
-    quantity: item.quantity,
-    unit_price: item.unit_price,
-    adicionais: Array.isArray(item.adicionais)
-      ? item.adicionais
-      : (typeof item.adicionais === 'string'
-          ? JSON.parse(item.adicionais)
-          : [])
-  }))
+  product_id: item.product_id || '',
+  product_name: item.product_name,
+  quantity: item.quantity,
+  unit_price: item.unit_price,
+  adicionais: Array.isArray(item.adicionais)
+    ? item.adicionais
+    : (typeof item.adicionais === 'string'
+        ? JSON.parse(item.adicionais)
+        : []),
+  size: (item as any).size || null
+}))
+
   setOrderItems(items);
 }
    setIsDialogOpen(true);
@@ -534,7 +564,8 @@ const Pedidos = () => {
       product_name: '',
       quantity: 1,
       unit_price: 0,
-      adicionais: []
+      adicionais: [],
+      size: null
     });
   };
 
@@ -835,7 +866,8 @@ const Pedidos = () => {
                                 product_id: value,
                                 product_name: product?.name || '',
                                 unit_price: product?.price || 0,
-                                adicionais: []
+                                adicionais: [],
+                                size: null
                               });
                             }}
                           >
@@ -850,6 +882,44 @@ const Pedidos = () => {
                               ))}
                             </SelectContent>
                           </Select>
+                          {newItem.product_id &&
+  products.find(p => p.id === newItem.product_id)?.sizes?.length > 0 && (
+
+  <div className="space-y-2">
+    <Label>Tamanho / Variação</Label>
+
+    <Select
+      value={newItem.size?.name || ''}
+      onValueChange={(value) => {
+        const product = products.find(p => p.id === newItem.product_id)
+        const size = product?.sizes?.find(s => s.name === value)
+
+        if (!size) return
+
+        setNewItem({
+          ...newItem,
+          size,
+          unit_price: size.price
+        })
+      }}
+    >
+      <SelectTrigger>
+        <SelectValue placeholder="Selecione..." />
+      </SelectTrigger>
+
+      <SelectContent>
+        {products
+          .find(p => p.id === newItem.product_id)
+          ?.sizes?.map((s, i) => (
+            <SelectItem key={i} value={s.name}>
+              {s.name} (+{formatPrice(s.price)})
+            </SelectItem>
+          ))}
+      </SelectContent>
+    </Select>
+  </div>
+)}
+
 
                           {/* Seção de Adicionais */}
                           {newItem.product_id && products.find(p => p.id === newItem.product_id)?.adicionais?.length > 0 && (
@@ -877,6 +947,7 @@ const Pedidos = () => {
                             </div>
                           )}
                         </div>
+
 
                         <div className="space-y-2">
                           <Label>Nome do Produto</Label>
@@ -926,6 +997,12 @@ const Pedidos = () => {
                               <div key={index} className="flex items-center justify-between p-3 border-b last:border-b-0">
                                 <div className="flex-1">
                                   <div className="font-medium">{item.product_name}</div>
+                                  {item.size && (
+  <div className="text-sm text-muted-foreground">
+    Tamanho: {item.size.name}
+  </div>
+)}
+
                                   <div className="text-sm text-muted-foreground">
                                     {item.quantity}x {formatPrice(item.unit_price)} = {formatPrice(item.quantity * item.unit_price)}
                                   </div>
