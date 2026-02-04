@@ -269,7 +269,7 @@ if (!numeric) {
   const formatted = integerPart + ',' + decimalPart
   setFormData({ ...formData, price: formatted })
 
-
+}
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
