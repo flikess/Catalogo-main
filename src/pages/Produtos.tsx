@@ -250,32 +250,31 @@ const Produtos = () => {
     })
   }
 
-  const updateSize = (index: number, field: keyof SizeOption, value: string) => {
+ const updateSize = (index: number, field: keyof SizeOption, value: string) => {
   const list = [...formData.sizes]
 
   if (field === 'price') {
-    // Mantém string para digitar livremente
-    // Remove tudo que não seja número
+    // Remove tudo que não é número
     let numeric = value.replace(/\D/g, '')
 
     if (!numeric) {
-      newList[index][field] = '' as any
+      list[index].price = '' as any
+    } else if (numeric.length === 1) {
+      list[index].price = numeric as any // só 1 dígito
+    } else if (numeric.length === 2) {
+      list[index].price = '0,' + numeric as any // dois dígitos = centavos
     } else {
-      // Formata com vírgula sempre antes dos dois últimos dígitos
-      if (numeric.length <= 2) {
-        newList[index][field] = '0,' + numeric.padStart(2, '0') as any
-      } else {
-        const integerPart = numeric.slice(0, -2)
-        const decimalPart = numeric.slice(-2)
-        newList[index][field] = integerPart + ',' + decimalPart as any
-      }
+      const integerPart = numeric.slice(0, -2)
+      const decimalPart = numeric.slice(-2)
+      list[index].price = integerPart + ',' + decimalPart as any
     }
   } else {
-    newList[index][field] = value
+    list[index].name = value
   }
 
-  setFormData({ ...formData, adicionais: newList })
-  }
+  setFormData({ ...formData, sizes: list })
+}
+
   const removeSize = (index: number) => {
     setFormData({
       ...formData,
