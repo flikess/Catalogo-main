@@ -289,35 +289,29 @@ const addSize = () => {
 
   
 const handlePriceChange = (value: string) => {
-   let numeric = value.replace(/\D/g, '')
+   // Remove tudo que não seja número
+  let numeric = value.replace(/\D/g, '')
 
   if (!numeric) {
-    setFormData({ ...formData, price: null })
+    setFormData({ ...formData, price: '' })
     return
   }
 
-  numeric = numeric.replace(/^0+/, '')
-
-  if (!numeric) {
-    setFormData({ ...formData, price: null })
-    return
-  }
+  let formatted = ''
 
   if (numeric.length <= 2) {
-    setFormData({
-      ...formData,
-      price: Number('0.' + numeric.padStart(2, '0'))
-    })
+    // 1 ou 2 dígitos: apenas exibe como número inteiro
+    formatted = numeric
   } else {
+    // Mais de 2 dígitos: insere vírgula antes dos dois últimos
     const integerPart = numeric.slice(0, -2)
     const decimalPart = numeric.slice(-2)
-
-    setFormData({
-      ...formData,
-      price: Number(integerPart + '.' + decimalPart)
-    })
+    formatted = integerPart + ',' + decimalPart
   }
+
+  setFormData({ ...formData, price: formatted })
 }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
@@ -338,7 +332,7 @@ const handlePriceChange = (value: string) => {
       const productData = {
         name: formData.name,
         description: formData.description || null,
-        price: formData.price,
+        price: Number(formData.price.replace(',', '.')),
         categoria_id: formData.categoria_id,
         show_in_catalog: formData.show_in_catalog,
         image_url: imageUrl || null,
@@ -480,7 +474,7 @@ const handlePriceChange = (value: string) => {
     setFormData({
       name: product.name,
       description: product.description || '',
-      price: product.price ?? null,
+      price: product.price.toString(),
       categoria_id: product.categoria_id || '',
       show_in_catalog: product.show_in_catalog,
       image_url: product.image_url || '',
@@ -763,14 +757,11 @@ const handlePriceChange = (value: string) => {
                   
                   <div className="space-y-2">
                     <Label htmlFor="price">Preço *</Label>
-            <Input
+              <Input
+  id="price"
   type="text"
-  placeholder="Preço"
-  value={
-    formData.price === null || formData.price === undefined
-      ? ''
-      : formData.price.toFixed(2).replace('.', ',')
-  }
+  placeholder="0,00"
+  value={formData.price}
   onChange={(e) => handlePriceChange(e.target.value)}
   required
 />
