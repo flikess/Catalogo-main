@@ -254,7 +254,7 @@ const Produtos = () => {
 
   
 const handlePriceChange = (value: string) => {
-   // Remove tudo que não seja número
+  // Remove tudo que não seja número
   let numeric = value.replace(/\D/g, '')
 
   if (!numeric) {
@@ -262,13 +262,13 @@ const handlePriceChange = (value: string) => {
     return
   }
 
-  // Se tiver 1 ou 2 dígitos, exibe apenas como centavos
   let formatted = ''
-  if (numeric.length === 1) {
-    formatted = '0,0' + numeric
-  } else if (numeric.length === 2) {
-    formatted = '0,' + numeric
+
+  if (numeric.length <= 2) {
+    // Até 2 dígitos: mostra como centavos
+    formatted = '0,' + numeric.padStart(2, '0')
   } else {
+    // Mais de 2 dígitos: insere vírgula antes dos dois últimos
     const integerPart = numeric.slice(0, -2)
     const decimalPart = numeric.slice(-2)
     formatted = integerPart + ',' + decimalPart
