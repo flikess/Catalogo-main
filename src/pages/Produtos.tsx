@@ -200,15 +200,30 @@ const Produtos = () => {
   }
 
   const handleAdditionalChange = (index: number, field: keyof Additional, value: string) => {
-    const newList = [...formData.adicionais]
+  const newList = [...formData.adicionais]
 
-if (field === 'price') {
-  newList[index][field] = Number(value.replace(',', '.')) // salva como número
-} else {
-  newList[index][field] = value
-}
-      setFormData({ ...formData, adicionais: newList })
+  if (field === 'price') {
+    // Remove tudo que não seja número e vírgula
+    let numeric = value.replace(/\D/g, '')
+    if (!numeric) {
+      newList[index][field] = 0
+    } else {
+      numeric = numeric.replace(/^0+/, '')
+      if (numeric.length <= 2) {
+        newList[index][field] = parseFloat('0.' + numeric.padStart(2, '0'))
+      } else {
+        const integerPart = numeric.slice(0, -2)
+        const decimalPart = numeric.slice(-2)
+        newList[index][field] = parseFloat(integerPart + '.' + decimalPart)
+      }
+    }
+  } else {
+    newList[index][field] = value
   }
+
+  setFormData({ ...formData, adicionais: newList })
+}
+
   
   const addAdditional = () => {
     setFormData({
@@ -236,15 +251,28 @@ if (field === 'price') {
   }
 
   const updateSize = (index: number, field: keyof SizeOption, value: string) => {
-    const list = [...formData.sizes]
+  const list = [...formData.sizes]
 
-   if (field === 'price') {
-  list[index].price = value === '' ? null : Number(value.replace(',', '.'))
-} else {
-  list[index].name = value
+  if (field === 'price') {
+    let numeric = value.replace(/\D/g, '')
+    if (!numeric) {
+      list[index].price = null
+    } else {
+      numeric = numeric.replace(/^0+/, '')
+      if (numeric.length <= 2) {
+        list[index].price = parseFloat('0.' + numeric.padStart(2, '0'))
+      } else {
+        const integerPart = numeric.slice(0, -2)
+        const decimalPart = numeric.slice(-2)
+        list[index].price = parseFloat(integerPart + '.' + decimalPart)
+      }
+    }
+  } else {
+    list[index].name = value
+  }
+
+  setFormData({ ...formData, sizes: list }) // ⚠️ Corrigido: atualiza sizes, não adicionais
 }
-     setFormData({ ...formData, adicionais: newList })
-  } 
 
   const removeSize = (index: number) => {
     setFormData({
@@ -780,15 +808,14 @@ const handlePriceChange = (value: string) => {
                             onChange={(e) => handleAdditionalChange(index, 'name', e.target.value)}
                             className="flex-1"
                           />
-                          <Input
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            placeholder="Preço"
-                            value={additional.price}
-                            onChange={(e) => handleAdditionalChange(index, 'price', e.target.value)}
-                            className="w-32"
-                          />
+                     <Input
+  type="text"
+  placeholder="Preço"
+  value={additional.price === 0 ? '' : additional.price.toFixed(2).replace('.', ',')}
+  onChange={(e) => handleAdditionalChange(index, 'price', e.target.value)}
+  className="w-32"
+/>
+
                           <Button
                             type="button"
                             variant="outline"
