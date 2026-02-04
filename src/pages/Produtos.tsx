@@ -289,29 +289,35 @@ const addSize = () => {
 
   
 const handlePriceChange = (value: string) => {
-   // Remove tudo que não seja número
-  let numeric = value.replace(/\D/g, '')
+   let numeric = value.replace(/\D/g, '')
 
   if (!numeric) {
-    setFormData({ ...formData, price: '' })
+    setFormData({ ...formData, price: null })
     return
   }
 
-  let formatted = ''
+  numeric = numeric.replace(/^0+/, '')
 
-  if (numeric.length <= 2) {
-    // 1 ou 2 dígitos: apenas exibe como número inteiro
-    formatted = numeric
-  } else {
-    // Mais de 2 dígitos: insere vírgula antes dos dois últimos
-    const integerPart = numeric.slice(0, -2)
-    const decimalPart = numeric.slice(-2)
-    formatted = integerPart + ',' + decimalPart
+  if (!numeric) {
+    setFormData({ ...formData, price: null })
+    return
   }
 
-  setFormData({ ...formData, price: formatted })
-}
+  if (numeric.length <= 2) {
+    setFormData({
+      ...formData,
+      price: Number('0.' + numeric.padStart(2, '0'))
+    })
+  } else {
+    const integerPart = numeric.slice(0, -2)
+    const decimalPart = numeric.slice(-2)
 
+    setFormData({
+      ...formData,
+      price: Number(integerPart + '.' + decimalPart)
+    })
+  }
+}
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
