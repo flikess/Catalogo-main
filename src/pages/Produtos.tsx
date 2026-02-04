@@ -593,7 +593,49 @@ const Produtos = () => {
           </DialogContent>
         </Dialog>
 
-            
+            <Dialog open={isCategoryDialogOpen} onOpenChange={setIsCategoryDialogOpen}>
+              <DialogTrigger asChild>
+                <Button variant="outline" onClick={() => {
+                  setEditingCategory(null)
+                  setCategoryFormData({ nome: '' })
+                }}>
+                  <Tag className="w-4 h-4 mr-2" />
+                  Nova Categoria
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-md">
+                <DialogHeader>
+                  <DialogTitle>
+                    {editingCategory ? 'Editar Categoria' : 'Nova Categoria'}
+                  </DialogTitle>
+                </DialogHeader>
+                <form onSubmit={handleCategorySubmit} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="category_name">Nome da Categoria *</Label>
+                    <Input
+                      id="category_name"
+                      value={categoryFormData.nome}
+                      onChange={(e) => setCategoryFormData({ nome: e.target.value })}
+                      placeholder="Ex: Bolos de Aniversário"
+                      required
+                    />
+                  </div>
+                  
+                  <DialogFooter>
+                    <Button type="submit">
+                      {editingCategory ? 'Atualizar' : 'Criar'}
+                    </Button>
+                    <Button 
+                      type="button" 
+                      variant="outline" 
+                      onClick={() => setIsCategoryDialogOpen(false)}
+                    >
+                      Cancelar
+                    </Button>
+                  </DialogFooter>
+                </form>
+              </DialogContent>
+            </Dialog>
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
               <Button onClick={() => { resetForm(); setEditingProduct(null) }}>
