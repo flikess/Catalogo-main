@@ -251,18 +251,25 @@ const Produtos = () => {
       sizes: formData.sizes.filter((_, i) => i !== index)
     })
   }
+
+  
 const handlePriceChange = (value: string) => {
   // Remove tudo que não seja número ou vírgula
   let sanitized = value.replace(/[^0-9,]/g, '')
-
-  // Garante que só exista uma vírgula
-  const parts = sanitized.split(',')
-  if (parts.length > 2) {
-    sanitized = parts[0] + ',' + parts[1]
+if (!numeric) {
+    setFormData({ ...formData, price: '' })
+    return
   }
 
-  setFormData({ ...formData, price: sanitized })
-}
+  // Adiciona vírgula antes dos dois últimos dígitos
+  if (numeric.length === 1) numeric = '0' + numeric
+  const integerPart = numeric.slice(0, -2)
+  const decimalPart = numeric.slice(-2)
+
+  const formatted = integerPart + ',' + decimalPart
+  setFormData({ ...formData, price: formatted })
+
+
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
