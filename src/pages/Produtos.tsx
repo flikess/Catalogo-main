@@ -254,26 +254,28 @@ const Produtos = () => {
   const list = [...formData.sizes]
 
   if (field === 'price') {
+    // Mantém string para digitar livremente
+    // Remove tudo que não seja número
     let numeric = value.replace(/\D/g, '')
 
     if (!numeric) {
-      list[index].price = '' as any
+      newList[index][field] = '' as any
     } else {
+      // Formata com vírgula sempre antes dos dois últimos dígitos
       if (numeric.length <= 2) {
-        list[index].price = '0,' + numeric.padStart(2, '0') as any
+        newList[index][field] = '0,' + numeric.padStart(2, '0') as any
       } else {
         const integerPart = numeric.slice(0, -2)
         const decimalPart = numeric.slice(-2)
-        list[index].price = integerPart + ',' + decimalPart as any
+        newList[index][field] = integerPart + ',' + decimalPart as any
       }
     }
   } else {
-    list[index].name = value
+    newList[index][field] = value
   }
 
-  setFormData({ ...formData, sizes: list })
-}
-
+  setFormData({ ...formData, adicionais: newList })
+  }
   const removeSize = (index: number) => {
     setFormData({
       ...formData,
