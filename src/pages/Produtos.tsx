@@ -254,9 +254,10 @@ const Produtos = () => {
 
   
 const handlePriceChange = (value: string) => {
-  // Remove tudo que não seja número ou vírgula
-  let sanitized = value.replace(/[^0-9,]/g, '')
-if (!numeric) {
+   // Remove tudo que não seja número
+  let numeric = value.replace(/\D/g, '')
+
+  if (!numeric) {
     setFormData({ ...formData, price: '' })
     return
   }
@@ -268,7 +269,6 @@ if (!numeric) {
 
   const formatted = integerPart + ',' + decimalPart
   setFormData({ ...formData, price: formatted })
-
 }
 
   const handleSubmit = async (e: React.FormEvent) => {
