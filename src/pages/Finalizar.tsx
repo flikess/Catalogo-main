@@ -2,11 +2,16 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { useState } from 'react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
-import { MessageCircle, ArrowLeft, ImageIcon, Phone, Mail, MapPin } from 'lucide-react'
+import { MessageCircle, ArrowLeft, Phone, Mail, MapPin } from 'lucide-react'
 import { supabase } from '@/integrations/supabase/client'
 import { toast } from 'sonner'
 
 interface Additional {
+  name: string
+  price: number
+}
+
+interface SizeOption {
   name: string
   price: number
 }
@@ -16,7 +21,9 @@ interface CartItem {
   name: string
   price: number
   quantity: number
+  size?: SizeOption | string | null
   selectedAdditionais: Additional[]
+  selectedSize?: SizeOption // opcional caso use selectedSize
 }
 
 const FinalizarPedido = () => {
@@ -40,29 +47,40 @@ const FinalizarPedido = () => {
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(price)
 
   const getFullAddress = () => {
-    const {
-      address_street,
-      address_number,
-      address_neighborhood,
-      address_city,
-      address_state
-    } = bakerySettings
-    return [address_street, address_number, address_neighborhood, address_city, address_state]
-      .filter(Boolean)
-      .join(', ')
+    const { address_street, address_number, address_neighborhood, address_city, address_state } = bakerySettings
+    return [address_street, address_number, address_neighborhood, address_city, address_state].filter(Boolean).join(', ')
   }
 
+  // --- HELPERS PARA TAMANHO E PREÇO ---
+  const getSizeName = (item: CartItem) => {
+    if (!item.size && !item.selectedSize) return null
+    if (item.selectedSize) return item.selectedSize.name
+    return typeof item.size === 'string' ? item.size : item.size.name
+  }
+
+  const getUnitPrice = (item: CartItem) => {
+    if (item.selectedSize?.price) return item.selectedSize.price
+    if (typeof item.size === 'object' && item.size?.price) return item.size.price
+    return item.price
+  }
+
+  const getTotalPrice = (item: CartItem) => {
+    const unitPrice = getUnitPrice(item)
+    const adicionaisTotal = item.selectedAdditionais?.reduce((sum, a) => sum + a.price, 0) || 0
+    return (unitPrice + adicionaisTotal) * item.quantity
+  }
+
+  // --- GERA MENSAGEM WHATSAPP ---
   const generateWhatsAppMessage = () => {
     const itemsText = cart
       .map(item => {
-        let itemText = `• ${item.name} - ${item.quantity}x ${formatPrice(item.price)}`
-        
+        const sizeLabel = getSizeName(item) ? ` | Tamanho: ${getSizeName(item)}` : ''
+        let itemText = `• ${item.name}${sizeLabel} - ${item.quantity}x ${formatPrice(getUnitPrice(item))}`
+
         if (item.selectedAdditionais?.length > 0) {
-          itemText += `\n   ➕ Adicionais: ${item.selectedAdditionais
-            .map(add => `${add.name} (+${formatPrice(add.price)})`)
-            .join(', ')}`
+          itemText += `\n   ➕ Adicionais: ${item.selectedAdditionais.map(a => `${a.name} (+${formatPrice(a.price)})`).join(', ')}`
         }
-        
+
         return itemText
       })
       .join('%0A')
@@ -80,6 +98,7 @@ const FinalizarPedido = () => {
       `Aguardo a confirmação para dar continuidade. Obrigado!`
   }
 
+  // --- SUBMIT PEDIDO ---
   const handleSubmit = async () => {
     const camposObrigatorios = ['nome', 'celular', 'endereco', 'dataEntrega', 'horaRetirada']
     const camposVazios = camposObrigatorios.filter(campo => !form[campo as keyof typeof form])
@@ -119,7 +138,6 @@ const FinalizarPedido = () => {
           })
           .select()
           .single()
-
         if (erroCliente) throw erroCliente
         clienteId = novoCliente.id
       }
@@ -138,18 +156,18 @@ const FinalizarPedido = () => {
         })
         .select()
         .single()
-
       if (erroPedido) throw erroPedido
 
-      // Cria itens do pedido com adicionais
+      // Cria itens do pedido
       const itens = cart.map(item => ({
         order_id: pedido.id,
         product_id: item.id,
         product_name: item.name,
         quantity: item.quantity,
-        unit_price: item.price,
-        total_price: item.price * item.quantity,
-        adicionais: item.selectedAdditionais
+        unit_price: getUnitPrice(item),
+        total_price: getTotalPrice(item),
+        adicionais: item.selectedAdditionais,
+        size: getSizeName(item) // salva o nome do tamanho sempre
       }))
 
       const { error: erroItens } = await supabase.from('order_items').insert(itens)
@@ -170,7 +188,6 @@ const FinalizarPedido = () => {
         window.open(link, '_blank')
         navigate(`/catalogo/${userId}`)
       }, 1500)
-
     } catch (error) {
       console.error(error)
       toast.error('Erro ao processar pedido. Por favor, tente novamente.')
@@ -234,32 +251,29 @@ const FinalizarPedido = () => {
             <p className="text-gray-500">Nenhum item no carrinho.</p>
           ) : (
             <ul className="divide-y">
-              {cart.map((item: CartItem) => (
-                <li key={item.id} className="py-3">
-                  <div className="flex justify-between">
-                    <div>
-                      <p className="font-medium">{item.name}</p>
-                      <p className="text-sm text-gray-500">{item.quantity}x {formatPrice(item.price)}</p>
+              {cart.map(item => {
+                const tamanhoLabel = getSizeName(item) ? ` | Tamanho: ${getSizeName(item)}` : ''
+                return (
+                  <li key={item.id} className="py-3">
+                    <div className="flex justify-between">
+                      <div>
+                        <p className="font-medium">{item.name}{tamanhoLabel}</p>
+
+                        {item.selectedAdditionais?.length > 0 && (
+                          <p className="text-xs text-gray-500">
+                            Adicionais: {item.selectedAdditionais.map(a => a.name).join(', ')}
+                          </p>
+                        )}
+
+                        <p className="text-sm text-gray-500">
+                          {item.quantity}x {formatPrice(getUnitPrice(item) + (item.selectedAdditionais?.reduce((sum, a) => sum + a.price, 0) || 0))}
+                        </p>
+                      </div>
+                      <p className="font-semibold">{formatPrice(getTotalPrice(item))}</p>
                     </div>
-                    <p className="font-semibold">{formatPrice(item.price * item.quantity)}</p>
-                  </div>
-                  
-                  {/* Adicionais do item */}
-                  {item.selectedAdditionais?.length > 0 && (
-                    <div className="mt-2 pl-4 border-l-2 border-gray-100">
-                      <p className="text-xs text-gray-500 mb-1">Adicionais:</p>
-                      <ul className="space-y-1">
-                        {item.selectedAdditionais.map((add, index) => (
-                          <li key={index} className="flex justify-between text-sm">
-                            <span>+ {add.name}</span>
-                            <span>+ {formatPrice(add.price)}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                </li>
-              ))}
+                  </li>
+                )
+              })}
             </ul>
           )}
           <div className="mt-6 border-t pt-4 flex justify-between text-lg font-bold">
