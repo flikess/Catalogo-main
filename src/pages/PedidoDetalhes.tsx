@@ -29,28 +29,45 @@ interface Order {
   order_items?: OrderItem[]
 }
 
-interface OrderItem {
-  id: string
-  product_id?: string
-  product_name: string
-  size?: SizeOption | string | null
-  quantity: number
-  unit_price: number
-  total_price: number
-  adicionais?: Additional[]
+interface VariationSelection {
+  group: string;
+  name: string;
+  price: number;
 }
 
+interface VariationGroup {
+  name: string;
+  options: VariationOption[];
+}
+
+interface VariationOption {
+  name: string;
+  price?: number | null;
+}
+
+interface OrderItem {
+  id: string;
+  product_id?: string;
+  product_name: string;
+  size?: SizeOption | string | null;
+  quantity: number;
+  unit_price: number;
+  total_price: number;
+  adicionais?: Additional[];
+  variations?: VariationSelection[]; // NOVO
+}
 interface SizeOption {
   name: string
   price: number
 }
 
 interface Product {
-  id: string
-  name: string
-  price: number
-  adicionais?: Additional[]
-  sizes?: SizeOption[]
+  id: string;
+  name: string;
+  price: number;
+  adicionais?: Additional[];
+  sizes?: SizeOption[];
+  variations?: VariationGroup[]; // NOVO
 }
 
 interface Additional {
@@ -90,21 +107,33 @@ const PedidoDetalhes = () => {
   const [loading, setLoading] = useState(true)
   const [isAddItemDialogOpen, setIsAddItemDialogOpen] = useState(false)
 
-  const [newItem, setNewItem] = useState<{
+ const [newItem, setNewItem] = useState<{
   product_id: string
   product_name: string
   size: SizeOption | null
   quantity: number
   unit_price: number
   selectedAdditionais: Additional[]
+  selectedVariations: VariationSelection[] // 👈 ADICIONE AQUI
 }>({
   product_id: '',
   product_name: '',
   size: null,
   quantity: 1,
   unit_price: 0,
-  selectedAdditionais: []
+  selectedAdditionais: [],
+  selectedVariations: [] // 👈 ADICIONE AQUI
 })
+
+const resetVariationsForNewProduct = () => {
+  setNewItem(prev => ({
+    ...prev,
+    selectedVariations: [],
+    size: null,
+    selectedAdditionais: [],
+    unit_price: 0
+  }))
+}
 
 
   useEffect(() => {
@@ -116,55 +145,65 @@ const PedidoDetalhes = () => {
 }, [user, id])
 
 
-  const fetchOrder = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('orders')
-        .select(`
-          *,
-          order_items (
-            id,
-            product_id,
-            product_name,
-            size,
-            quantity,
-            unit_price,
-            total_price,
-            adicionais
-          )
-        `)
-        .eq('id', id)
-        .eq('user_id', user?.id)
-        .single()
+const fetchOrder = async () => {
+  try {
+    const { data, error } = await supabase
+      .from('orders')
+      .select(`
+        *,
+        order_items (
+          id,
+          product_id,
+          product_name,
+          size,
+          quantity,
+          unit_price,
+          total_price,
+          adicionais,
+          variations
+        )
+      `) // 👈 COMENTÁRIO AQUI, FORA DA STRING
+      .eq('id', id)
+      .eq('user_id', user?.id)
+      .single()
 
-      if (error) throw error
+    if (error) throw error
 
-      setOrder(data)
-    } catch (error) {
-      console.error(error)
-      showError('Erro ao carregar pedido')
-      navigate('/pedidos')
-    } finally {
-      setLoading(false)
+    // Parse variations
+    if (data.order_items) {
+      data.order_items = data.order_items.map((item: any) => ({
+        ...item,
+        variations: typeof item.variations === 'string'
+          ? JSON.parse(item.variations)
+          : item.variations || []
+      }))
     }
+
+    setOrder(data)
+  } catch (error) {
+    console.error(error)
+    showError('Erro ao carregar pedido')
+    navigate('/pedidos')
+  } finally {
+    setLoading(false)
   }
+}
 
+const fetchProducts = async () => {
+  try {
+    const { data, error } = await supabase
+      .from('products')
+      .select('id, name, price, adicionais, sizes, variations') // 👈 NOVO
+      .eq('user_id', user?.id)
+      .order('name')
 
-  const fetchProducts = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('products')
-        .select('id, name, price, adicionais, sizes')
-        .eq('user_id', user?.id)
-        .order('name')
+    if (error) throw error
 
-      if (error) throw error
-
-      setProducts(data || [])
-    } catch (error) {
-      console.error(error)
-    }
+    setProducts(data || [])
+  } catch (error) {
+    console.error(error)
   }
+}
 
   const fetchBakerySettings = async () => {
   try {
@@ -183,10 +222,10 @@ const PedidoDetalhes = () => {
 }
 
 
-  const getItemVariationLabel = (item: OrderItem) => {
-  // prioridade para o campo novo
-  if ((item as any).variation_label) {
-    return (item as any).variation_label
+const getItemVariationLabel = (item: OrderItem) => {
+  // Prioridade para variações
+  if (item.variations && item.variations.length > 0) {
+    return item.variations.map(v => `${v.group}: ${v.name}`).join(' | ');
   }
 
   // fallback para o size antigo
@@ -202,73 +241,81 @@ const PedidoDetalhes = () => {
 }
 
 
-  const handleAddItem = async () => {
-    const selectedProduct = products.find(p => p.id === newItem.product_id)
+ const handleAddItem = async () => {
+  const selectedProduct = products.find(p => p.id === newItem.product_id)
 
-    const hasSizes = selectedProduct?.sizes && selectedProduct.sizes.length > 0
+  const hasSizes = selectedProduct?.sizes && selectedProduct.sizes.length > 0
 
-    if (
-      !order ||
-      !newItem.product_name ||
-      newItem.quantity <= 0 ||
-      newItem.unit_price <= 0 ||
-      (hasSizes && !newItem.size)
-    ) {
-      showError('Preencha todos os campos obrigatórios')
-      return
-    }
-
-    try {
-      const additionaisTotal = newItem.selectedAdditionais.reduce(
-        (sum, add) => sum + add.price,
-        0
-      )
-
-      const totalPrice =
-        newItem.quantity * (newItem.unit_price + additionaisTotal)
-
-      const { error } = await supabase.from('order_items').insert({
-        order_id: order.id,
-        product_id: newItem.product_id || null,
-        product_name: newItem.product_name,
-        size: newItem.size,
-        quantity: newItem.quantity,
-        unit_price: newItem.unit_price,
-        total_price: totalPrice,
-        adicionais:
-          newItem.selectedAdditionais.length > 0
-            ? newItem.selectedAdditionais
-            : null
-      })
-
-      if (error) throw error
-
-      await supabase
-        .from('orders')
-        .update({
-          total_amount: (order.total_amount || 0) + totalPrice,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', order.id)
-
-      showSuccess('Item adicionado com sucesso!')
-
-      setIsAddItemDialogOpen(false)
-      setNewItem({
-        product_id: '',
-        product_name: '',
-        size: null,
-        quantity: 1,
-        unit_price: 0,
-        selectedAdditionais: []
-      })
-
-      fetchOrder()
-    } catch (error) {
-      console.error(error)
-      showError('Erro ao adicionar item')
-    }
+  if (
+    !order ||
+    !newItem.product_name ||
+    newItem.quantity <= 0 ||
+    newItem.unit_price <= 0 ||
+    (hasSizes && !newItem.size)
+  ) {
+    showError('Preencha todos os campos obrigatórios')
+    return
   }
+
+  try {
+    const additionaisTotal = newItem.selectedAdditionais.reduce(
+      (sum, add) => sum + add.price,
+      0
+    )
+    
+    const variationsTotal = newItem.selectedVariations.reduce( // 👈 NOVO
+      (sum, v) => sum + v.price,
+      0
+    )
+
+    const totalPrice =
+      newItem.quantity * (newItem.unit_price + additionaisTotal + variationsTotal) // 👈 ATUALIZADO
+
+    const { error } = await supabase.from('order_items').insert({
+      order_id: order.id,
+      product_id: newItem.product_id || null,
+      product_name: newItem.product_name,
+      size: newItem.size,
+      quantity: newItem.quantity,
+      unit_price: newItem.unit_price,
+      total_price: totalPrice,
+      adicionais: newItem.selectedAdditionais.length > 0
+        ? newItem.selectedAdditionais
+        : null,
+      variations: newItem.selectedVariations.length > 0 // 👈 NOVO
+        ? newItem.selectedVariations
+        : null
+    })
+
+    if (error) throw error
+
+    await supabase
+      .from('orders')
+      .update({
+        total_amount: (order.total_amount || 0) + totalPrice,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', order.id)
+
+    showSuccess('Item adicionado com sucesso!')
+
+    setIsAddItemDialogOpen(false)
+    setNewItem({
+      product_id: '',
+      product_name: '',
+      size: null,
+      quantity: 1,
+      unit_price: 0,
+      selectedAdditionais: [],
+      selectedVariations: [] // 👈 NOVO
+    })
+
+    fetchOrder()
+  } catch (error) {
+    console.error(error)
+    showError('Erro ao adicionar item')
+  }
+}
 
   const handleRemoveItem = async (itemId: string, itemTotal: number) => {
     if (!confirm('Tem certeza que deseja remover este item?')) return
@@ -308,36 +355,44 @@ const PedidoDetalhes = () => {
     window.open(`https://wa.me/?text=${encoded}`, '_blank')
   }
 
-  const generateWhatsAppMessage = () => {
-    if (!order) return ''
+const generateWhatsAppMessage = () => {
+  if (!order) return ''
 
-    const itemsText =
-      order.order_items?.map((item, index) => {
-        const sizeLabel = getItemVariationLabel(item)
-  ? ` | Tamanho: ${getItemVariationLabel(item)}`
-  : ''
+  const itemsText =
+    order.order_items?.map((item, index) => {
+      const sizeLabel = getItemVariationLabel(item)
+        ? ` | Tamanho: ${getItemVariationLabel(item)}`
+        : ''
+      
+      const variationsText = item.variations && item.variations.length > 0
+        ? `\n   Variações: ${item.variations
+            .map(v => `${v.group}: ${v.name}${v.price > 0 ? ` (+${formatPrice(v.price)})` : ''}`)
+            .join(', ')}`
+        : ''
 
-        const additionalsText =
-          item.adicionais && item.adicionais.length > 0
-            ? `\n   Adicionais: ${item.adicionais
-                .map(a => `${a.name} (+${formatPrice(a.price)})`)
-                .join(', ')}`
-            : ''
+      const additionalsText =
+        item.adicionais && item.adicionais.length > 0
+          ? `\n   Adicionais: ${item.adicionais
+              .map(a => `${a.name} (+${formatPrice(a.price)})`)
+              .join(', ')}`
+          : ''
 
-        return (
-          `*${index + 1}. ${item.product_name}*${sizeLabel}\n` +
-          `   Quantidade: ${item.quantity}\n` +
-          `   Valor unitário: ${formatPrice(item.unit_price)}\n` +
-          additionalsText +
-          `\n   Subtotal: ${formatPrice(item.total_price)}`
-        )
-      }).join('\n\n') || ''
+      return (
+        `*${index + 1}. ${item.product_name}*${sizeLabel}\n` +
+        `   Quantidade: ${item.quantity}\n` +
+        `   Valor unitário: ${formatPrice(item.unit_price)}\n` +
+        variationsText +
+        additionalsText +
+        `\n   Subtotal: ${formatPrice(item.total_price)}`
+      )
+    }).join('\n\n') || ''
 
-    return `Olá, ${order.client_name || 'cliente'}! 👋
+  // ✅ ADICIONE O RETORNO DA MENSAGEM COMPLETA
+  return `Olá, ${order.client_name || 'cliente'}! 👋
 
 Segue o resumo do seu pedido:
 
-*Pedido nº ${order.id}*
+*Pedido nº ${order.id.slice(0, 8)}*
 
 ${itemsText}
 
@@ -346,7 +401,7 @@ ${itemsText}
 
 Qualquer dúvida, fico à disposição.
 Muito obrigado pela preferência!`
-  }
+}
 
   const formatPrice = (price: number) =>
     new Intl.NumberFormat('pt-BR', {
@@ -399,41 +454,37 @@ Muito obrigado pela preferência!`
   return (
     <Layout>
       
-      <div
+   <div
   id="print-area"
   className="hidden print:block text-[11px] font-mono"
 >
-
-
   <div className="text-center mb-2 leading-tight">
-  <div className="font-bold text-sm">
-    {bakerySettings.bakery_name || 'Minha Loja'}
-  </div>
-
-  {(bakerySettings.address_street || bakerySettings.address_city) && (
-    <div>
-      {[
-        bakerySettings.address_street,
-        bakerySettings.address_number,
-        bakerySettings.address_neighborhood,
-        bakerySettings.address_city,
-        bakerySettings.address_state
-      ]
-        .filter(Boolean)
-        .join(', ')}
+    <div className="font-bold text-sm">
+      {bakerySettings.bakery_name || 'Minha Loja'}
     </div>
-  )}
 
-  {bakerySettings.phone && (
-    <div>Tel: {bakerySettings.phone}</div>
-  )}
+    {(bakerySettings.address_street || bakerySettings.address_city) && (
+      <div>
+        {[
+          bakerySettings.address_street,
+          bakerySettings.address_number,
+          bakerySettings.address_neighborhood,
+          bakerySettings.address_city,
+          bakerySettings.address_state
+        ]
+          .filter(Boolean)
+          .join(', ')}
+      </div>
+    )}
 
-  {bakerySettings.email && (
-    <div>{bakerySettings.email}</div>
-  )}
-</div>
+    {bakerySettings.phone && (
+      <div>Tel: {bakerySettings.phone}</div>
+    )}
 
-  
+    {bakerySettings.email && (
+      <div>{bakerySettings.email}</div>
+    )}
+  </div>
 
   <div className="border-t border-dashed my-2" />
 
@@ -452,12 +503,25 @@ Muito obrigado pela preferência!`
           {item.quantity}x {item.product_name}
         </div>
 
+        {/* TAMANHO */}
         {getItemVariationLabel(item) && (
           <div className="pl-2">
             Tam: {getItemVariationLabel(item)}
           </div>
         )}
 
+        {/* 👇 VARIAÇÕES (COR, SABOR, ETC) - COLOQUE AQUI */}
+        {item.variations && item.variations.length > 0 && (
+          <div className="pl-2 text-xs">
+            {item.variations.map((v, idx) => (
+              <div key={idx}>
+                {v.group}: {v.name} {v.price > 0 && `(+${formatPrice(v.price)})`}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* ADICIONAIS */}
         {item.adicionais?.map((a, idx) => (
           <div key={idx} className="pl-2">
             + {a.name} ({formatPrice(a.price)})
@@ -513,7 +577,7 @@ Muito obrigado pela preferência!`
   <div className="text-center mt-3">
     Documento sem valor fiscal
   </div>
-  </div>
+</div>
 
 <div className="space-y-6 print:hidden">
 
@@ -550,20 +614,21 @@ Muito obrigado pela preferência!`
   <div className="space-y-4">
     <div className="space-y-2">
       <Label>Produto</Label>
-      <Select 
-        value={newItem.product_id} 
-        onValueChange={(value) => {
-          const product = products.find(p => p.id === value)
-          setNewItem({
-            ...newItem,
-            product_id: value,
-            product_name: product?.name || '',
-            unit_price: product?.price || 0,
-            size: '',
-            selectedAdditionais: []
-          })
-        }}
-      >
+    <Select 
+  value={newItem.product_id} 
+  onValueChange={(value) => {
+    const product = products.find(p => p.id === value)
+    resetVariationsForNewProduct(); // 👈 ADICIONE AQUI
+   setNewItem({
+  ...newItem,
+  product_id: value,
+  product_name: product?.name || '',
+  unit_price: product?.price || 0,
+  size: null, // ✅ null é melhor que ''
+  selectedAdditionais: []
+})
+  }}
+>
         <SelectTrigger>
           <SelectValue placeholder="Selecione um produto..." />
         </SelectTrigger>
@@ -576,41 +641,122 @@ Muito obrigado pela preferência!`
         </SelectContent>
       </Select>
     </div>
-    {newItem.product_id &&
+{/* SEÇÃO DE TAMANHOS */}
+{newItem.product_id &&
   products.find(p => p.id === newItem.product_id)?.sizes?.length > 0 && (
+    <div className="space-y-2">
+      <Label>Tamanho / Variação</Label>
+      <Select
+        value={newItem.size?.name || ''}
+        onValueChange={(value) => {
+          const product = products.find(p => p.id === newItem.product_id)
+          const size = product?.sizes?.find(s => s.name === value) || null
+          setNewItem({
+            ...newItem,
+            size,
+            unit_price: size?.price ?? newItem.unit_price
+          })
+        }}
+      >
+        <SelectTrigger>
+          <SelectValue placeholder="Selecione um tamanho..." />
+        </SelectTrigger>
+        <SelectContent>
+          {products
+            .find(p => p.id === newItem.product_id)
+            ?.sizes?.map((s, i) => (
+              <SelectItem key={i} value={s.name}>
+                <div className="flex items-center justify-between w-full gap-4">
+                  <span>{s.name}</span>
+                  <Badge variant="secondary">
+                    +{formatPrice(s.price)}
+                  </Badge>
+                </div>
+              </SelectItem>
+            ))}
+        </SelectContent>
+      </Select>
+    </div>
+)}
 
-  <div className="space-y-2">
-    <Label>Tamanho / Variação</Label>
-
-    <Select
-      value={newItem.size?.name || ''}
-    onValueChange={(value) => {
-  const product = products.find(p => p.id === newItem.product_id)
-  const size = product?.sizes?.find(s => s.name === value) || null
-
-  setNewItem({
-    ...newItem,
-    size,
-    unit_price: size?.price ?? newItem.unit_price
-  })
-}}
-
-    >
-      <SelectTrigger>
-        <SelectValue placeholder="Selecione um tamanho..." />
-      </SelectTrigger>
-
-      <SelectContent>
-        {products
-          .find(p => p.id === newItem.product_id)
-          ?.sizes?.map((s, i) => (
-            <SelectItem key={i} value={s.name}>
-              {s.name} – {formatPrice(s.price)}
-            </SelectItem>
-          ))}
-      </SelectContent>
-    </Select>
-  </div>
+{/* NOVA SEÇÃO - VARIAÇÕES (Cores, Sabores, etc) */}
+{newItem.product_id && 
+  products.find(p => p.id === newItem.product_id)?.variations?.length > 0 && (
+    <div className="space-y-4 mt-4 border-t pt-4">
+      <Label className="text-base font-semibold">Opções do Produto</Label>
+      {products
+        .find(p => p.id === newItem.product_id)
+        ?.variations?.map((group, groupIndex) => {
+          const selectedVariation = newItem.selectedVariations?.find(
+            v => v.group === group.name
+          );
+          
+          return (
+            <div key={groupIndex} className="space-y-2">
+              <Label className="font-medium">
+                {group.name}
+              </Label>
+              
+              <Select
+                value={selectedVariation?.name || ''}
+                onValueChange={(value) => {
+                  const option = group.options.find(opt => opt.name === value);
+                  if (!option) return;
+                  
+                  let updatedVariations = [...(newItem.selectedVariations || [])];
+                  
+                  // Remove qualquer opção já selecionada deste grupo
+                  updatedVariations = updatedVariations.filter(
+                    v => v.group !== group.name
+                  );
+                  
+                  // Adiciona a nova seleção
+                  updatedVariations.push({
+                    group: group.name,
+                    name: option.name,
+                    price: option.price || 0
+                  });
+                  
+                  // Recalcula o preço unitário
+                  const product = products.find(p => p.id === newItem.product_id);
+                  const basePrice = newItem.size?.price || product?.price || 0;
+                  const variationsTotal = updatedVariations.reduce((sum, v) => sum + v.price, 0);
+                  
+                  setNewItem({
+                    ...newItem,
+                    selectedVariations: updatedVariations,
+                    unit_price: basePrice + variationsTotal
+                  });
+                }}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder={`Selecione ${group.name.toLowerCase()}...`} />
+                </SelectTrigger>
+                <SelectContent>
+                  {group.options.map((option, optIndex) => (
+                    <SelectItem key={optIndex} value={option.name}>
+                      <div className="flex items-center justify-between w-full gap-4">
+                        <span>{option.name}</span>
+                        {option.price && option.price > 0 && (
+                          <Badge variant="secondary">
+                            +{formatPrice(option.price)}
+                          </Badge>
+                        )}
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              
+              {selectedVariation && selectedVariation.price > 0 && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  Adicional: {formatPrice(selectedVariation.price)}
+                </p>
+              )}
+            </div>
+          );
+        })}
+    </div>
 )}
      {newItem.product_id && products.find(p => p.id === newItem.product_id)?.adicionais?.length > 0 && (
       <div className="space-y-2">
@@ -688,16 +834,17 @@ Muito obrigado pela preferência!`
                   </div>
                 </div>
 
-                <div className="space-y-2">
-                  <Label>Total do Item</Label>
-                  <div className="text-lg font-bold text-green-600">
-                   {formatPrice(
-  newItem.quantity *
-  (newItem.unit_price +
-    newItem.selectedAdditionais.reduce((s, a) => s + a.price, 0))
-)}
-                  </div>
-                </div>
+            <div className="space-y-2">
+  <Label>Total do Item</Label>
+  <div className="text-lg font-bold text-green-600">
+    {formatPrice(
+      newItem.quantity *
+      (newItem.unit_price +
+        newItem.selectedAdditionais.reduce((s, a) => s + a.price, 0) +
+        newItem.selectedVariations.reduce((s, v) => s + v.price, 0)) // 👈 NOVO
+    )}
+  </div>
+</div>
 
                 <div className="flex gap-2">
                   <Button onClick={handleAddItem} className="flex-1">
@@ -753,6 +900,14 @@ Muito obrigado pela preferência!`
                   <Label className="text-sm font-medium text-gray-500">Cliente</Label>
                   <p>{order.client_name}</p>
                 </div>
+                {order.order_items?.some(item => item.variations?.length > 0) && (
+  <div>
+    <Label className="text-sm font-medium text-gray-500">Variações nos itens</Label>
+    <p className="text-sm text-muted-foreground">
+      Este pedido possui produtos com variações selecionadas
+    </p>
+  </div>
+)}
                 <div>
                   <Label className="text-sm font-medium text-gray-500">Data do Pedido</Label>
                   <p>{formatDate(order.created_at)}</p>
@@ -854,19 +1009,33 @@ Muito obrigado pela preferência!`
                   {order.order_items.map((item) => (
                <TableRow key={item.id}>
   <TableCell className="font-medium">
-    <div>{item.product_name}</div>
+  <div>{item.product_name}</div>
 
-{getItemVariationLabel(item) && (
-  <div className="text-xs text-muted-foreground">
-    Tamanho: {getItemVariationLabel(item)}
-  </div>
-)}
-    {item.adicionais && item.adicionais.length > 0 && (
-      <div className="text-xs text-muted-foreground mt-1">
-        Adicionais: {item.adicionais.map(a => `${a.name} (+${formatPrice(a.price)})`).join(', ')}
-      </div>
-    )}
-  </TableCell>
+  {getItemVariationLabel(item) && (
+    <div className="text-xs text-muted-foreground">
+      Tamanho: {getItemVariationLabel(item)}
+    </div>
+  )}
+  
+  {/* 👇 ADICIONE ESTE BLOCO - EXIBIR VARIAÇÕES */}
+  {item.variations && item.variations.length > 0 && (
+    <div className="text-xs text-muted-foreground mt-1">
+      <span className="font-medium">Variações:</span>{" "}
+      {item.variations.map((v, i) => (
+        <span key={i}>
+          {v.group}: {v.name} {v.price > 0 && `(+${formatPrice(v.price)})`}
+          {i < item.variations.length - 1 ? '; ' : ''}
+        </span>
+      ))}
+    </div>
+  )}
+  
+  {item.adicionais && item.adicionais.length > 0 && (
+    <div className="text-xs text-muted-foreground mt-1">
+      Adicionais: {item.adicionais.map(a => `${a.name} (+${formatPrice(a.price)})`).join(', ')}
+    </div>
+  )}
+</TableCell>
   <TableCell className="text-center">{item.quantity}</TableCell>
   <TableCell className="text-right">{formatPrice(item.unit_price)}</TableCell>
   <TableCell className="text-right font-medium">
