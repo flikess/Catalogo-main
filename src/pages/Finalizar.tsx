@@ -16,15 +16,26 @@ interface SizeOption {
   price: number
 }
 
+
+
 interface CartItem {
   id: string
   name: string
   price: number
   quantity: number
+
   size?: SizeOption | string | null
+  selectedSize?: SizeOption | null
+
   selectedAdditionais: Additional[]
-  selectedSize?: SizeOption // opcional caso use selectedSize
+
+  selectedVariations?: {
+    group: string
+    name: string
+    price: number
+  }[]
 }
+
 
 const FinalizarPedido = () => {
   const location = useLocation()
@@ -58,45 +69,99 @@ const FinalizarPedido = () => {
     return typeof item.size === 'string' ? item.size : item.size.name
   }
 
-  const getUnitPrice = (item: CartItem) => {
-    if (item.selectedSize?.price) return item.selectedSize.price
-    if (typeof item.size === 'object' && item.size?.price) return item.size.price
+const getUnitPrice = (item: CartItem) => {
+  const sizePrice =
+    item.selectedSize?.price ??
+    (typeof item.size === 'object' ? item.size?.price : undefined)
+
+  // se o tamanho não tiver preço ou for 0 → usa o preço base
+  if (!sizePrice || sizePrice <= 0) {
     return item.price
   }
 
-  const getTotalPrice = (item: CartItem) => {
-    const unitPrice = getUnitPrice(item)
-    const adicionaisTotal = item.selectedAdditionais?.reduce((sum, a) => sum + a.price, 0) || 0
-    return (unitPrice + adicionaisTotal) * item.quantity
-  }
+  return sizePrice
+}
+
+
+const getTotalPrice = (item: CartItem) => {
+  return getItemUnitWithAdditionals(item) * item.quantity
+}
+
+  const getAdditionalsTotal = (item: CartItem) => {
+  return item.selectedAdditionais?.reduce((sum, a) => sum + a.price, 0) || 0
+}
+
+const getVariationsTotal = (item: CartItem) => {
+  return item.selectedVariations?.reduce(
+    (sum, v) => sum + (v.price || 0),
+    0
+  ) || 0
+}
+
+const getItemUnitWithAdditionals = (item: CartItem) => {
+  return (
+    getUnitPrice(item) +
+    getAdditionalsTotal(item) +
+    getVariationsTotal(item)
+  )
+}
+
+
+      const finalTotal = cart.reduce((sum, item) => {
+  return sum + getTotalPrice(item)
+}, 0)
 
   // --- GERA MENSAGEM WHATSAPP ---
-  const generateWhatsAppMessage = () => {
-    const itemsText = cart
-      .map(item => {
-        const sizeLabel = getSizeName(item) ? ` | Tamanho: ${getSizeName(item)}` : ''
-        let itemText = `• ${item.name}${sizeLabel} - ${item.quantity}x ${formatPrice(getUnitPrice(item))}`
+ const generateWhatsAppMessage = () => {
+  const itemsText = cart
+    .map(item => {
+      const lines: string[] = []
 
-        if (item.selectedAdditionais?.length > 0) {
-          itemText += `\n   ➕ Adicionais: ${item.selectedAdditionais.map(a => `${a.name} (+${formatPrice(a.price)})`).join(', ')}`
-        }
+      lines.push(`• ${item.name}`)
 
-        return itemText
-      })
-      .join('%0A')
+      const size = getSizeName(item)
+      if (size) {
+        lines.push(`   Tamanho: ${size}`)
+      }
 
-    return `Olá, *${bakerySettings.bakery_name || 'Loja'}*!%0A%0A` +
-      `Estou finalizando um pedido com os seguintes itens:%0A` +
-      `*Itens selecionados:*%0A${itemsText}%0A%0A` +
-      `💰 *Total estimado:* ${formatPrice(cartTotal)}%0A%0A` +
-      `*Informações do cliente:*%0A` +
-      `📍 Nome: ${form.nome}%0A` +
-      `📞 Telefone: ${form.celular}%0A` +
-      `🏠 Endereço: ${form.endereco}%0A` +
-      `📅 Entrega: ${form.dataEntrega}%0A` +
-      `⏰ Retirada: ${form.horaRetirada}%0A%0A` +
-      `Aguardo a confirmação para dar continuidade. Obrigado!`
-  }
+      if (item.selectedAdditionais?.length > 0) {
+        lines.push(`   Adicionais:`)
+        item.selectedAdditionais.forEach(a => {
+          lines.push(`     - ${a.name} (+${formatPrice(a.price)})`)
+        })
+      }
+      if (item.selectedVariations?.length > 0) {
+  lines.push(`   Variações:`)
+
+  item.selectedVariations.forEach(v => {
+    lines.push(`     - ${v.group}: ${v.name}`)
+  })
+}
+
+
+
+      lines.push(`   Quantidade: ${item.quantity}`)
+      lines.push(`   Unitário: ${formatPrice(getItemUnitWithAdditionals(item))}`)
+      lines.push(`   Subtotal: ${formatPrice(getTotalPrice(item))}`)
+
+      return lines.join('%0A')
+    })
+    .join('%0A%0A')
+
+  return (
+    `Olá, *${bakerySettings.bakery_name || 'Loja'}*!%0A%0A` +
+    `📋 *Resumo do pedido*%0A%0A` +
+    `${itemsText}%0A%0A` +
+    `💰 *Total do pedido:* ${formatPrice(finalTotal)}%0A%0A` +
+    `👤 *Dados do cliente*%0A` +
+    `Nome: ${form.nome}%0A` +
+    `Telefone: ${form.celular}%0A` +
+    `Endereço: ${form.endereco}%0A` +
+    `Data de entrega: ${form.dataEntrega}%0A` +
+    `Hora: ${form.horaRetirada}`
+  )
+}
+
 
   // --- SUBMIT PEDIDO ---
   const handleSubmit = async () => {
@@ -142,6 +207,7 @@ const FinalizarPedido = () => {
         clienteId = novoCliente.id
       }
 
+  
       // Cria pedido
       const { data: pedido, error: erroPedido } = await supabase
         .from('orders')
@@ -149,7 +215,7 @@ const FinalizarPedido = () => {
           user_id: userId,
           client_id: clienteId,
           client_name: form.nome,
-          total_amount: cartTotal,
+          total_amount: finalTotal,
           delivery_date: form.dataEntrega,
           notes: `Endereço: ${form.endereco} | Retirada: ${form.horaRetirada}`,
           status: 'orcamento'
@@ -159,16 +225,24 @@ const FinalizarPedido = () => {
       if (erroPedido) throw erroPedido
 
       // Cria itens do pedido
-      const itens = cart.map(item => ({
-        order_id: pedido.id,
-        product_id: item.id,
-        product_name: item.name,
-        quantity: item.quantity,
-        unit_price: getUnitPrice(item),
-        total_price: getTotalPrice(item),
-        adicionais: item.selectedAdditionais,
-        size: getSizeName(item) // salva o nome do tamanho sempre
-      }))
+const itens = cart.map(item => ({
+  order_id: pedido.id,
+  product_id: item.id,
+  product_name: item.name,
+  quantity: item.quantity,
+  unit_price: getItemUnitWithAdditionals(item),
+total_price: getTotalPrice(item),
+
+
+  adicionais: item.selectedAdditionais,
+
+  variations: item.selectedVariations, // 👈 NOVO
+
+  size: getSizeName(item)
+}))
+
+
+
 
       const { error: erroItens } = await supabase.from('order_items').insert(itens)
       if (erroItens) throw erroItens
@@ -265,9 +339,43 @@ const FinalizarPedido = () => {
                           </p>
                         )}
 
+
+{item.selectedVariations?.length > 0 && (
+  <div className="mt-1 text-xs text-gray-500 space-y-0.5">
+    {item.selectedVariations.map((v, index) => (
+      <p key={index}>
+        {v.group}: {v.name}
+      </p>
+    ))}
+  </div>
+)}
+
+
+
                         <p className="text-sm text-gray-500">
-                          {item.quantity}x {formatPrice(getUnitPrice(item) + (item.selectedAdditionais?.reduce((sum, a) => sum + a.price, 0) || 0))}
-                        </p>
+  {item.quantity}x {formatPrice(getItemUnitWithAdditionals(item))}
+</p>
+
+{getSizeName(item) && (
+  <p className="text-xs text-gray-500">
+    Tamanho: {getSizeName(item)}
+  </p>
+)}
+
+{item.selectedAdditionais?.length > 0 && (
+  <div className="mt-1 text-xs text-gray-500 space-y-0.5">
+    {item.selectedAdditionais.map((a, index) => (
+      <p key={index}>
+        + {a.name} ({formatPrice(a.price)})
+      </p>
+    ))}
+  </div>
+)}
+
+<p className="text-xs text-gray-600 mt-1">
+  Subtotal: {formatPrice(getTotalPrice(item))}
+</p>
+
                       </div>
                       <p className="font-semibold">{formatPrice(getTotalPrice(item))}</p>
                     </div>
@@ -278,7 +386,7 @@ const FinalizarPedido = () => {
           )}
           <div className="mt-6 border-t pt-4 flex justify-between text-lg font-bold">
             <span>Total:</span>
-            <span>{formatPrice(cartTotal)}</span>
+            <span>{formatPrice(finalTotal)}</span>
           </div>
         </div>
       </div>
