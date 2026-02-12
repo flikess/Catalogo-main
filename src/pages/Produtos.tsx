@@ -27,6 +27,16 @@ interface SizeOption {
   price?: number | null
 }
 
+interface VariationOption {
+  name: string
+  price?: number | null
+}
+
+interface VariationGroup {
+  name: string
+  options: VariationOption[]
+}
+
 interface Product {
   id: string
   name: string
@@ -41,7 +51,9 @@ interface Product {
   }
   adicionais?: Additional[]
   sizes?: SizeOption[]
+  variations?: VariationGroup[]
 }
+
 
 interface Category {
   id: string
@@ -74,7 +86,8 @@ const Produtos = () => {
     show_in_catalog: true,
     image_url: '',
     adicionais: [] as Additional[],
-    sizes: [] as SizeOption[]
+    sizes: [] as SizeOption[],
+    variations: [] as VariationGroup[]
   })
 
   const [categoryFormData, setCategoryFormData] = useState({
@@ -104,7 +117,8 @@ const Produtos = () => {
       const formatted = (data || []).map(p => ({
         ...p,
         adicionais: p.adicionais || [],
-        sizes: p.sizes || []
+        sizes: p.sizes || [],
+        variations: p.variations || []
       }))
 
       setProducts(formatted)
@@ -287,6 +301,82 @@ const Produtos = () => {
     })
   }
 
+  /* =======================
+   VARIAÇÕES
+======================= */
+
+const addVariationGroup = () => {
+  setFormData({
+    ...formData,
+    variations: [
+      ...formData.variations,
+      { name: '', options: [] }
+    ]
+  })
+}
+
+const updateVariationGroupName = (index: number, value: string) => {
+  const list = [...formData.variations]
+  list[index].name = value
+  setFormData({ ...formData, variations: list })
+}
+
+const removeVariationGroup = (index: number) => {
+  setFormData({
+    ...formData,
+    variations: formData.variations.filter((_, i) => i !== index)
+  })
+}
+
+const addVariationOption = (groupIndex: number) => {
+  const list = [...formData.variations]
+  list[groupIndex].options.push({ name: '', price: null })
+  setFormData({ ...formData, variations: list })
+}
+
+const removeVariationOption = (groupIndex: number, optionIndex: number) => {
+  const list = [...formData.variations]
+  list[groupIndex].options = list[groupIndex].options.filter(
+    (_, i) => i !== optionIndex
+  )
+  setFormData({ ...formData, variations: list })
+}
+
+const updateVariationOption = (
+  groupIndex: number,
+  optionIndex: number,
+  field: 'name' | 'price',
+  value: string
+) => {
+  const list = [...formData.variations]
+
+  if (field === 'price') {
+    let numeric = value.replace(/\D/g, '')
+
+    if (!numeric) {
+      list[groupIndex].options[optionIndex].price = null
+    } else {
+      numeric = numeric.replace(/^0+/, '')
+
+      if (!numeric) {
+        list[groupIndex].options[optionIndex].price = null
+      } else if (numeric.length <= 2) {
+        list[groupIndex].options[optionIndex].price =
+          Number('0.' + numeric.padStart(2, '0'))
+      } else {
+        const int = numeric.slice(0, -2)
+        const dec = numeric.slice(-2)
+        list[groupIndex].options[optionIndex].price =
+          Number(int + '.' + dec)
+      }
+    }
+  } else {
+    list[groupIndex].options[optionIndex].name = value
+  }
+
+  setFormData({ ...formData, variations: list })
+}
+
   
 const handlePriceChange = (value: string) => {
    // Remove tudo que não seja número
@@ -329,17 +419,19 @@ const handlePriceChange = (value: string) => {
         imageUrl = uploadedUrl
       }
 
-      const productData = {
-        name: formData.name,
-        description: formData.description || null,
-        price: Number(formData.price.replace(',', '.')),
-        categoria_id: formData.categoria_id,
-        show_in_catalog: formData.show_in_catalog,
-        image_url: imageUrl || null,
-        adicionais: formData.adicionais.length ? formData.adicionais : null,
-        sizes: formData.sizes.length ? formData.sizes : null,
-        updated_at: new Date().toISOString()
-      }
+     const productData = {
+  name: formData.name,
+  description: formData.description || null,
+  price: Number(formData.price.replace(',', '.')),
+  categoria_id: formData.categoria_id,
+  show_in_catalog: formData.show_in_catalog,
+  image_url: imageUrl || null,
+  adicionais: formData.adicionais.length ? formData.adicionais : null,
+  sizes: formData.sizes.length ? formData.sizes : null,
+  variations: formData.variations.length ? formData.variations : null,
+  updated_at: new Date().toISOString()
+}
+
 
       if (editingProduct) {
         if (selectedFile && editingProduct.image_url) {
@@ -462,7 +554,8 @@ const handlePriceChange = (value: string) => {
       show_in_catalog: true,
       image_url: '',
       adicionais: [],
-      sizes: []
+      sizes: [],
+      variations: []
     })
     setSelectedFile(null)
     setImagePreview(null)
@@ -479,7 +572,8 @@ const handlePriceChange = (value: string) => {
       show_in_catalog: product.show_in_catalog,
       image_url: product.image_url || '',
       adicionais: product.adicionais || [],
-      sizes: product.sizes || []
+      sizes: product.sizes || [],
+      variations: product.variations || []
     })
 
     setImagePreview(product.image_url || null)
@@ -808,6 +902,108 @@ const handlePriceChange = (value: string) => {
                     Se o preço ficar vazio, será usado o preço base.
                   </p>
                 </div>
+                {/* Variações */}
+<div className="space-y-2">
+  <Label>Variações (ex: Cor, Acabamento, Recheio fixo)</Label>
+
+  {formData.variations.map((group, gIndex) => (
+    <div
+      key={gIndex}
+      className="border rounded-md p-3 space-y-3"
+    >
+      <div className="flex gap-2">
+        <Input
+          placeholder="Nome da variação (ex: Cor)"
+          value={group.name}
+          onChange={e =>
+            updateVariationGroupName(gIndex, e.target.value)
+          }
+        />
+
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => removeVariationGroup(gIndex)}
+        >
+          <X className="w-4 h-4" />
+        </Button>
+      </div>
+
+      <div className="space-y-2">
+        {group.options.map((opt, oIndex) => (
+          <div key={oIndex} className="flex gap-2">
+            <Input
+              placeholder="Opção (ex: Preta)"
+              value={opt.name}
+              onChange={e =>
+                updateVariationOption(
+                  gIndex,
+                  oIndex,
+                  'name',
+                  e.target.value
+                )
+              }
+            />
+
+            <Input
+              type="text"
+              placeholder="Preço extra"
+              value={
+                opt.price === null || opt.price === undefined
+                  ? ''
+                  : opt.price.toFixed(2).replace('.', ',')
+              }
+              onChange={e =>
+                updateVariationOption(
+                  gIndex,
+                  oIndex,
+                  'price',
+                  e.target.value
+                )
+              }
+              className="w-32"
+            />
+
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() =>
+                removeVariationOption(gIndex, oIndex)
+              }
+            >
+              <Trash2 className="w-4 h-4" />
+            </Button>
+          </div>
+        ))}
+
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => addVariationOption(gIndex)}
+          className="w-full"
+        >
+          <Plus className="w-4 h-4 mr-2" />
+          Adicionar opção
+        </Button>
+      </div>
+    </div>
+  ))}
+
+  <Button
+    type="button"
+    variant="outline"
+    onClick={addVariationGroup}
+    className="w-full"
+  >
+    <Plus className="w-4 h-4 mr-2" />
+    Adicionar variação
+  </Button>
+
+  <p className="text-xs text-muted-foreground">
+    Cada variação pode ter preço adicional (ex: cor preta +10).
+  </p>
+</div>
+
                   
                   {/* Seção de Adicionais */}
                   <div className="space-y-2">
