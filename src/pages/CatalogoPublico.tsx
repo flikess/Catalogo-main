@@ -43,11 +43,19 @@ interface Product {
   }
   adicionais?: Additional[]
   is_featured?: boolean
-    sizes?: {
+  sizes?: {
     name: string
     price: number
- }[]
+  }[]
+  variations?: {
+    name: string
+    options: {
+      name: string
+      price: number
+    }[]
+  }[]
 }
+
 
 interface Category {
   id: string
@@ -77,7 +85,13 @@ interface CartItem extends Product {
     name: string
     price: number
   } | null
+  selectedVariations?: {
+    group: string
+    name: string
+    price: number
+  }[]
 }
+
 
 
 type ViewMode = 'grid' | 'list'
@@ -97,6 +111,9 @@ const CatalogoPublico = () => {
 
   const [viewingProduct, setViewingProduct] = useState<Product | null>(null)
   const [selectedAdditionais, setSelectedAdditionais] = useState<Record<string, boolean>>({})
+  const [selectedVariations, setSelectedVariations] = useState<
+  Record<string, { name: string; price: number }>
+>({})
   const [quantity, setQuantity] = useState(1)
   const [selectedSize, setSelectedSize] = useState<{
   name: string
@@ -163,12 +180,13 @@ const getBasePrice = (p: Product) => {
 
       const { data: productsData, error: productsError } = await supabase
         .from('products')
-        .select(`
-  id, name, description, price, image_url, categoria_id, adicionais, is_featured, sizes,
+.select(`
+  id, name, description, price, image_url, categoria_id, adicionais, is_featured, sizes, variations,
   categorias_produtos (
     nome
   )
 `)
+
         .eq('user_id', userId)
         .eq('show_in_catalog', true)
         .order('name')
@@ -218,6 +236,8 @@ const getBasePrice = (p: Product) => {
   setSelectedAdditionais({})
   setQuantity(1)
   setSelectedSize(null)
+  setSelectedVariations({})
+
 }
 
   const closeProductModal = () => {
@@ -233,30 +253,60 @@ const getBasePrice = (p: Product) => {
 
   const addToCartWithAdditionais = () => {
     if (!viewingProduct) return
+    if (viewingProduct.variations?.length) {
+  const notSelected = viewingProduct.variations.find(
+    g => !selectedVariations[g.name]
+  )
+
+  if (notSelected) {
+    alert(`Selecione: ${notSelected.name}`)
+    return
+  }
+}
+
 
     const selectedAdds =
       viewingProduct.adicionais?.filter(add =>
         selectedAdditionais[add.id || add.name]
       ) || []
 
-      let finalPrice = viewingProduct.price!
+      const variationsTotal = Object.values(selectedVariations)
+  .reduce((s, v) => s + (v?.price || 0), 0)
+
+let basePrice = viewingProduct.price || 0
 
 if (hasSizes(viewingProduct)) {
-  if (!selectedSize) {
+
+  // só obriga escolher tamanho se existir algum tamanho com preço > 0
+  const hasPaidSize =
+    viewingProduct.sizes?.some(s => Number(s.price) > 0)
+
+  if (hasPaidSize && !selectedSize) {
     alert('Selecione um tamanho.')
     return
   }
 
-  finalPrice = selectedSize.price
+  if (selectedSize && Number(selectedSize.price) > 0) {
+    basePrice = Number(selectedSize.price)
+  }
 }
 
-    setCart(prevCart => {
-      const itemKey = `${viewingProduct.id}-${selectedSize?.name || 'nosize'}-${JSON.stringify(selectedAdds)}`
+let finalPrice = basePrice + variationsTotal
 
-      const existingIndex = prevCart.findIndex(
-        item =>
-          `${item.id}-${item.selectedSize?.name || 'nosize'}-${JSON.stringify(item.selectedAdditionais)}` === itemKey
-      )
+
+    setCart(prevCart => {
+     const itemKey = `${viewingProduct.id}-${selectedSize?.name || 'nosize'}-${JSON.stringify(selectedAdds)}-${JSON.stringify(selectedVariations)}`
+
+     const existingIndex = prevCart.findIndex(item => {
+
+  const key =
+    `${item.id}-${item.selectedSize?.name || 'nosize'}`
+    + `-${JSON.stringify(item.selectedAdditionais)}`
+    + `-${JSON.stringify(item.selectedVariations)}`
+
+  return key === itemKey
+})
+
 
       if (existingIndex >= 0) {
         const newCart = [...prevCart]
@@ -269,13 +319,20 @@ if (hasSizes(viewingProduct)) {
 
     return [
   ...prevCart,
- {
+{
   ...viewingProduct,
-  price: finalPrice,
   selectedSize,
   quantity,
-  selectedAdditionais: selectedAdds
+  selectedAdditionais: selectedAdds,
+  selectedVariations: Object.entries(selectedVariations).map(
+    ([group, opt]) => ({
+      group,
+      name: opt.name,
+      price: opt.price
+    })
+  )
 }
+
 
 ]
 
@@ -286,33 +343,71 @@ if (hasSizes(viewingProduct)) {
     closeProductModal()
   }
 
-  const updateQuantity = (productId: string, newQuantity: number) => {
-    setCart(prevCart =>
-      prevCart.map(item =>
-        item.id === productId
-          ? { ...item, quantity: newQuantity }
-          : item
-      )
+ const updateQuantity = (index: number, newQuantity: number) => {
+  setCart(prev =>
+    prev.map((item, i) =>
+      i === index ? { ...item, quantity: newQuantity } : item
     )
-  }
+  )
+}
 
-  const removeFromCart = (productId: string) => {
-    setCart(prevCart => prevCart.filter(item => item.id !== productId))
-  }
+const removeFromCart = (index: number) => {
+  setCart(prev => prev.filter((_, i) => i !== index))
+}
 
-  const cartTotal = cart.reduce((sum, item) => {
+
+const cartTotal = cart.reduce((sum, item) => {
+
   const additionaisTotal =
     item.selectedAdditionais?.reduce((addSum, add) => addSum + add.price, 0) || 0
 
-  const basePrice = item.selectedSize
-    ? item.selectedSize.price
+  const variationsTotal =
+    item.selectedVariations?.reduce((s, v) => s + v.price, 0) || 0
+
+  const basePrice =
+  item.selectedSize && Number(item.selectedSize.price) > 0
+    ? Number(item.selectedSize.price)
     : item.price
 
-  return sum + (basePrice + additionaisTotal) * item.quantity
+  const unit =
+    basePrice + additionaisTotal + variationsTotal
+
+  return sum + unit * item.quantity
+
 }, 0)
 
 
+
   const cartItemCount = cart.reduce((sum, item) => sum + item.quantity, 0)
+const getItemPreviewTotal = () => {
+  if (!viewingProduct) return 0
+
+  let basePrice = viewingProduct.price || 0
+
+  if (hasSizes(viewingProduct)) {
+    if (selectedSize && Number(selectedSize.price) > 0) {
+      basePrice = Number(selectedSize.price)
+    }
+  }
+
+  const additionaisTotal =
+    viewingProduct.adicionais?.reduce((sum, add) => {
+      const key = add.id || add.name
+      return selectedAdditionais[key]
+        ? sum + add.price
+        : sum
+    }, 0) || 0
+
+  const variationsTotal =
+    Object.values(selectedVariations || {}).reduce(
+      (s, v) => s + (v?.price || 0),
+      0
+    )
+
+  return (basePrice + additionaisTotal + variationsTotal) * quantity
+}
+
+
 
   const formatPrice = (price: number) => {
     return new Intl.NumberFormat('pt-BR', {
@@ -841,6 +936,7 @@ if (hasSizes(viewingProduct)) {
     {s.name || 'Tamanho'}
   </div>
 
+  {Number(s.price) > 0 && (
   <div
     className={`text-xs ${
       selectedSize?.name === s.name
@@ -848,14 +944,71 @@ if (hasSizes(viewingProduct)) {
         : 'text-gray-500'
     }`}
   >
-    {formatPrice(s.price)}
+    {formatPrice(Number(s.price))}
   </div>
+)}
+
 </button>
 
       ))}
     </div>
   </div>
 )}
+
+{viewingProduct.variations && viewingProduct.variations.length > 0 && (
+  <div className="space-y-3">
+    <h4 className="font-semibold text-sm">
+      Opções
+    </h4>
+
+    {viewingProduct.variations.map((group, gIndex) => (
+      <div key={gIndex} className="space-y-2">
+        <p className="text-sm font-medium">
+          {group.name}
+        </p>
+
+        <div className="flex flex-wrap gap-2">
+          {group.options.map((opt, oIndex) => {
+            const key = `${group.name}-${opt.name}`
+
+            const selected =
+              selectedVariations[group.name]?.name === opt.name
+
+            return (
+              <button
+                key={oIndex}
+                type="button"
+                onClick={() =>
+                  setSelectedVariations(prev => ({
+                    ...prev,
+                    [group.name]: opt
+                  }))
+                }
+                className={`
+                  border rounded-md px-3 py-1.5 text-sm
+                  transition
+                  ${
+                    selected
+                      ? 'border-blue-600 bg-blue-600 text-white'
+                      : 'border-gray-300 bg-white hover:bg-gray-50'
+                  }
+                `}
+              >
+                {opt.name}
+                {opt.price > 0 && (
+                  <span className="ml-1 text-xs opacity-80">
+                    (+{formatPrice(opt.price)})
+                  </span>
+                )}
+              </button>
+            )
+          })}
+        </div>
+      </div>
+    ))}
+  </div>
+)}
+
 
               {viewingProduct.adicionais && viewingProduct.adicionais.length > 0 && (
                 <div className="space-y-2">
@@ -868,7 +1021,7 @@ if (hasSizes(viewingProduct)) {
                       const key = add.id || add.name
 
                       return (
-                        <name
+                        <div
                           key={key}
                           className="flex items-center justify-between border rounded p-2 cursor-pointer"
                         >
@@ -887,7 +1040,7 @@ if (hasSizes(viewingProduct)) {
                           <span className="text-sm font-medium">
                             + {formatPrice(add.price)}
                           </span>
-                        </name>
+                        </div>
                       )
                     })}
                   </div>
@@ -939,13 +1092,31 @@ if (hasSizes(viewingProduct)) {
   </Button>
 
 </div>
+<div className="flex justify-between items-center border-t pt-3">
+  <span className="text-sm textq text-gray-600">
+    Total deste item
+  </span>
+
+  <span className="text-lg font-bold text-blue-600">
+    {getItemPreviewTotal() > 0
+      ? formatPrice(getItemPreviewTotal())
+      : 'Selecione as opções'}
+  </span>
+</div>
+
 
 
               <Button
   className="w-full"
-  disabled={
-    !!viewingProduct.sizes?.length && !selectedSize
-  }
+ disabled={
+  (
+    viewingProduct.sizes?.some(s => Number(s.price) > 0) &&
+    !selectedSize
+  )
+  ||
+  (viewingProduct.variations?.some(v => !selectedVariations[v.name]))
+}
+
   onClick={addToCartWithAdditionais}
 >
 
@@ -1038,7 +1209,11 @@ if (hasSizes(viewingProduct)) {
         {cart.map((item, index) => {
 
           const addsTotal =
-            item.selectedAdditionais?.reduce((s, a) => s + a.price, 0) || 0
+  item.selectedAdditionais?.reduce((s, a) => s + a.price, 0) || 0
+
+const variationsTotal =
+  item.selectedVariations?.reduce((s, v) => s + v.price, 0) || 0
+  
             const sizePrice = item.selectedSize?.price || 0
 
 
@@ -1064,13 +1239,21 @@ if (hasSizes(viewingProduct)) {
       {item.selectedAdditionais.map(a => a.name).join(', ')}
     </p>
   )}
+  {item.selectedVariations?.length > 0 && (
+  <p className="text-xs text-gray-500 truncate">
+    {item.selectedVariations
+      .map(v => `${v.group}: ${v.name}`)
+      .join(', ')}
+  </p>
+)}
+
 </div>
 
 
                 <Button
                   size="icon"
                   variant="ghost"
-                  onClick={() => removeFromCart(item.id)}
+                  onClick={() => removeFromCart(index)}
                 >
                   <Trash2 className="w-4 h-4" />
                 </Button>
@@ -1085,8 +1268,8 @@ if (hasSizes(viewingProduct)) {
                     variant="outline"
                     className="h-7 w-7"
                     onClick={() =>
-                      updateQuantity(item.id, Math.max(1, item.quantity - 1))
-                    }
+                    updateQuantity(index, Math.max(1, item.quantity - 1))
+                     }
                   >
                     <Minus className="w-3 h-3" />
                   </Button>
@@ -1098,25 +1281,25 @@ if (hasSizes(viewingProduct)) {
   value={item.quantity === 0 ? '' : item.quantity}
   onFocus={() => {
     if (item.quantity === 1) {
-      updateQuantity(item.id, 0)
+      updateQuantity(index, 0)
     }
   }}
   onChange={(e) => {
     const v = e.target.value
 
     if (v === '') {
-      updateQuantity(item.id, 0)
+      updateQuantity(index, 0)
       return
     }
 
     const n = Number(v)
     if (!isNaN(n)) {
-      updateQuantity(item.id, n)
+      updateQuantity(index, n)
     }
   }}
   onBlur={() => {
     if (!item.quantity || item.quantity < 1) {
-      updateQuantity(item.id, 1)
+      updateQuantity(index, 1)
     }
   }}
   className="w-12 h-7 text-center border rounded-md text-xs"
@@ -1128,7 +1311,7 @@ if (hasSizes(viewingProduct)) {
                     variant="outline"
                     className="h-7 w-7"
                     onClick={() =>
-                      updateQuantity(item.id, item.quantity + 1)
+                      updateQuantity(index, item.quantity + 1)
                     }
                   >
                     <Plus className="w-3 h-3" />
@@ -1137,9 +1320,17 @@ if (hasSizes(viewingProduct)) {
 
                 <span className="text-sm font-semibold">
                 {formatPrice(
-  ((item.selectedSize ? item.selectedSize.price : item.price) + addsTotal)
-  * item.quantity
+  (
+    (
+  item.selectedSize && Number(item.selectedSize.price) > 0
+    ? Number(item.selectedSize.price)
+    : item.price
+)
+    + addsTotal
+    + variationsTotal
+  ) * item.quantity
 )}
+
 
                 </span>
 
