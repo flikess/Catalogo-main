@@ -35,6 +35,12 @@ interface Order {
   order_items?: OrderItem[];
 }
 
+interface VariationSelection {
+  group: string;
+  name: string;
+  price: number;
+}
+
 interface OrderItem {
   id: string;
   product_name: string;
@@ -43,6 +49,7 @@ interface OrderItem {
   total_price: number;
   adicionais?: Additional[];
   size?: SizeOption | null;
+  variations?: VariationSelection[]; // NOVO
 }
 
 interface Client {
@@ -56,6 +63,18 @@ interface Product {
   price: number;
   adicionais?: Additional[];
   sizes?: SizeOption[];
+  variations?: VariationGroup[]; // 👈 ADICIONE ISSO
+}
+
+// E adicione esta interface antes da Product:
+interface VariationGroup {
+  name: string;
+  options: VariationOption[];
+}
+
+interface VariationOption {
+  name: string;
+  price?: number | null;
 }
 
 interface SizeOption {
@@ -75,6 +94,7 @@ interface OrderItemForm {
   unit_price: number;
   adicionais?: Additional[];
   size?: SizeOption | null;
+  variations?: VariationSelection[]; // NOVO
 }
 
 const statusOptions = [
@@ -125,12 +145,14 @@ const Pedidos = () => {
   });
   const [orderItems, setOrderItems] = useState<OrderItemForm[]>([]);
   const [newItem, setNewItem] = useState<OrderItemForm>({
-    product_id: '',
-    product_name: '',
-    quantity: 1,
-    unit_price: 0,
-    adicionais: []
-  });
+  product_id: '',
+  product_name: '',
+  quantity: 1,
+  unit_price: 0,
+  adicionais: [],
+  size: null,
+  variations: [] // NOVO
+});
 
   useEffect(() => {
     fetchOrders();
@@ -138,8 +160,10 @@ const Pedidos = () => {
     fetchProducts();
   }, []);
 
- const fetchOrders = async () => {
+const fetchOrders = async () => {
   try {
+    console.log('🔍 Fetching orders for user:', user?.id);
+    
     const { data, error } = await supabase
       .from('orders')
       .select(`
@@ -151,31 +175,64 @@ const Pedidos = () => {
           quantity,
           unit_price,
           total_price,
-          adicionais
+          adicionais,
+          variations
         )
       `)
       .eq('user_id', user?.id)
       .order('created_at', { ascending: false });
 
-    if (error) throw error;
+    if (error) {
+      console.error('❌ Supabase error:', error);
+      throw error;
+    }
 
-    const parsedData = (data || []).map(order => ({
-      ...order,
-   order_items: order.order_items?.map(item => ({
-  ...item,
-  adicionais: typeof item.adicionais === 'string'
-    ? JSON.parse(item.adicionais)
-    : item.adicionais || [],
-  size: typeof (item as any).size === 'string'
-    ? JSON.parse((item as any).size)
-    : (item as any).size || null
-}))
+    console.log('📦 Raw orders data:', data);
+    console.log('📦 Raw order_items sample:', data?.[0]?.order_items);
 
-    }))
+    const parsedData = (data || []).map(order => {
+      console.log('🔄 Parsing order:', order.id);
+      
+      return {
+        ...order,
+        order_items: order.order_items?.map(item => {
+          console.log('  - Parsing item:', item.id, 'Variations raw:', item.variations);
+          
+          return {
+            ...item,
+            adicionais: typeof item.adicionais === 'string'
+              ? JSON.parse(item.adicionais)
+              : item.adicionais || [],
+            size: typeof (item as any).size === 'string'
+              ? JSON.parse((item as any).size)
+              : (item as any).size || null,
+            variations: (() => {
+              try {
+                if (Array.isArray(item.variations)) {
+                  console.log('    ✅ Variations is array:', item.variations);
+                  return item.variations;
+                }
+                if (typeof item.variations === 'string') {
+                  const parsed = JSON.parse(item.variations);
+                  console.log('    ✅ Parsed variations from string:', parsed);
+                  return parsed;
+                }
+                console.log('    ⚠️ No variations found, returning []');
+                return [];
+              } catch (e) {
+                console.error('    ❌ Error parsing variations:', e, 'Value:', item.variations);
+                return [];
+              }
+            })()
+          };
+        })
+      };
+    });
 
+    console.log('✅ Parsed orders:', parsedData);
     setOrders(parsedData);
   } catch (error) {
-    console.error('Error fetching orders:', error);
+    console.error('❌ Error fetching orders:', error);
     showError('Erro ao carregar pedidos');
   } finally {
     setLoading(false);
@@ -197,20 +254,20 @@ const Pedidos = () => {
     }
   };
 
-  const fetchProducts = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('products')
-        .select('id, name, price, adicionais, sizes')
-        .eq('user_id', user?.id)
-        .order('name');
+const fetchProducts = async () => {
+  try {
+    const { data, error } = await supabase
+      .from('products')
+      .select('id, name, price, adicionais, sizes, variations') // 👈 ADICIONE variations
+      .eq('user_id', user?.id)
+      .order('name');
 
-      if (error) throw error;
-      setProducts(data || []);
-    } catch (error) {
-      console.error('Error fetching products:', error);
-    }
-  };
+    if (error) throw error;
+    setProducts(data || []);
+  } catch (error) {
+    console.error('Error fetching products:', error);
+  }
+};
 
   const addItemToOrder = () => {
     if (!newItem.product_name || newItem.quantity <= 0 || newItem.unit_price <= 0) {
@@ -241,16 +298,23 @@ const Pedidos = () => {
     setOrderItems(updatedItems);
   };
 
-  const calculateSubtotal = () => {
+    const resetVariationsForNewProduct = () => {
+    setNewItem(prev => ({
+      ...prev,
+      variations: [],
+      size: null,
+      adicionais: []
+    }));
+  };
+
+const calculateSubtotal = () => {
   return orderItems.reduce((sum, item) => {
-    const additionalPrice =
-      item.adicionais?.reduce((a, b) => a + b.price, 0) || 0
+    const additionalPrice = item.adicionais?.reduce((a, b) => a + b.price, 0) || 0;
+    const variationsPrice = item.variations?.reduce((a, b) => a + b.price, 0) || 0; // NOVO
+    const base = item.size ? item.size.price : item.unit_price;
 
-    const base =
-      item.size ? item.size.price : item.unit_price
-
-    return sum + item.quantity * (base + additionalPrice)
-  }, 0)
+    return sum + item.quantity * (base + additionalPrice + variationsPrice); // ATUALIZADO
+  }, 0);
 };
 
   const calculateDiscount = () => {
@@ -309,8 +373,9 @@ const Pedidos = () => {
         newOrder = data;
         showSuccess('Pedido criado com sucesso!');
 
-        const orderItemsData = orderItems.map(item => {
-  const base = item.size ? item.size.price : item.unit_price
+const orderItemsData = orderItems.map(item => {
+  const base = item.size ? item.size.price : item.unit_price;
+  const variationsPrice = item.variations?.reduce((a, b) => a + b.price, 0) || 0; // NOVO
 
   return {
     order_id: newOrder!.id,
@@ -318,14 +383,15 @@ const Pedidos = () => {
     product_name: item.product_name,
     quantity: item.quantity,
     unit_price: base,
-    total_price:
-      (base +
-        (item.adicionais?.reduce((a, b) => a + b.price, 0) || 0)
-      ) * item.quantity,
+    total_price: (base + 
+      (item.adicionais?.reduce((a, b) => a + b.price, 0) || 0) +
+      variationsPrice // NOVO
+    ) * item.quantity,
     adicionais: item.adicionais?.length ? item.adicionais : null,
-    size: item.size || null
-  }
-})
+    size: item.size || null,
+    variations: item.variations?.length ? item.variations : null // NOVO
+  };
+});
 
 
         const { error: itemsError } = await supabase
@@ -359,20 +425,24 @@ const Pedidos = () => {
       notes: order.notes || ''
     });
     
-    if (order.order_items) {
+if (order.order_items) {
   const items: OrderItemForm[] = order.order_items.map(item => ({
-  product_id: item.product_id || '',
-  product_name: item.product_name,
-  quantity: item.quantity,
-  unit_price: item.unit_price,
-  adicionais: Array.isArray(item.adicionais)
-    ? item.adicionais
-    : (typeof item.adicionais === 'string'
-        ? JSON.parse(item.adicionais)
-        : []),
-  size: (item as any).size || null
-}))
-
+    product_id: item.product_id || '',
+    product_name: item.product_name,
+    quantity: item.quantity,
+    unit_price: item.unit_price,
+    adicionais: Array.isArray(item.adicionais)
+      ? item.adicionais
+      : (typeof item.adicionais === 'string'
+          ? JSON.parse(item.adicionais)
+          : []),
+    size: (item as any).size || null,
+    variations: Array.isArray((item as any).variations) // NOVO
+      ? (item as any).variations
+      : (typeof (item as any).variations === 'string'
+          ? JSON.parse((item as any).variations)
+          : [])
+  }));
   setOrderItems(items);
 }
    setIsDialogOpen(true);
@@ -547,27 +617,28 @@ const Pedidos = () => {
     }
   };
 
-  const resetForm = () => {
-    setFormData({
-      client_id: '',
-      client_name: '',
-      discount_percentage: '0',
-      delivery_fee: '0',
-      payment_method: '',
-      status: 'orcamento',
-      delivery_date: '',
-      notes: ''
-    });
-    setOrderItems([]);
-    setNewItem({
-      product_id: '',
-      product_name: '',
-      quantity: 1,
-      unit_price: 0,
-      adicionais: [],
-      size: null
-    });
-  };
+ const resetForm = () => {
+  setFormData({
+    client_id: '',
+    client_name: '',
+    discount_percentage: '0',
+    delivery_fee: '0',
+    payment_method: '',
+    status: 'orcamento',
+    delivery_date: '',
+    notes: ''
+  });
+  setOrderItems([]);
+  setNewItem({
+    product_id: '',
+    product_name: '',
+    quantity: 1,
+    unit_price: 0,
+    adicionais: [],
+    size: null,
+    variations: [] // NOVO
+  });
+};
 
   const filteredOrders = orders.filter(order => {
     const matchesSearch = order.client_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -857,20 +928,22 @@ const Pedidos = () => {
                       <div className="grid grid-cols-1 md:grid-cols-5 gap-2 p-4 bg-muted/30 rounded-lg">
                         <div className="space-y-2">
                           <Label>Produto</Label>
-                          <Select 
-                            value={newItem.product_id} 
-                            onValueChange={(value) => {
-                              const product = products.find(p => p.id === value);
-                              setNewItem({
-                                ...newItem,
-                                product_id: value,
-                                product_name: product?.name || '',
-                                unit_price: product?.price || 0,
-                                adicionais: [],
-                                size: null
-                              });
-                            }}
-                          >
+                        <Select 
+  value={newItem.product_id} 
+  onValueChange={(value) => {
+    const product = products.find(p => p.id === value);
+    resetVariationsForNewProduct(); // NOVO
+    setNewItem({
+      ...newItem,
+      product_id: value,
+      product_name: product?.name || '',
+      unit_price: product?.price || 0,
+      adicionais: [],
+      size: null,
+      variations: [] // explícito
+    });
+  }}
+>
                             <SelectTrigger>
                               <SelectValue placeholder="Selecione..." />
                             </SelectTrigger>
@@ -919,7 +992,81 @@ const Pedidos = () => {
     </Select>
   </div>
 )}
-
+{/* NOVA SEÇÃO - Variações (Cores, Sabores, etc) */}
+{newItem.product_id && 
+  products.find(p => p.id === newItem.product_id)?.variations?.length > 0 && (
+  <div className="space-y-4 mt-4 border-t pt-4">
+    {products
+      .find(p => p.id === newItem.product_id)
+      ?.variations?.map((group, groupIndex) => {
+        // Encontra a variação atualmente selecionada para este grupo
+        const selectedVariation = newItem.variations?.find(
+          v => v.group === group.name
+        );
+        
+        return (
+          <div key={groupIndex} className="space-y-2">
+            <Label className="font-medium">
+              {group.name}
+            </Label>
+            
+            <Select
+              value={selectedVariation?.name || ''}
+              onValueChange={(value) => {
+                // Encontra a opção selecionada
+                const option = group.options.find(opt => opt.name === value);
+                if (!option) return;
+                
+                let updatedVariations = [...(newItem.variations || [])];
+                
+                // Remove qualquer opção já selecionada deste grupo
+                updatedVariations = updatedVariations.filter(
+                  v => v.group !== group.name
+                );
+                
+                // Adiciona a nova seleção
+                updatedVariations.push({
+                  group: group.name,
+                  name: option.name,
+                  price: option.price || 0
+                });
+                
+                setNewItem({
+                  ...newItem,
+                  variations: updatedVariations
+                });
+              }}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder={`Selecione ${group.name.toLowerCase()}...`} />
+              </SelectTrigger>
+              <SelectContent>
+                {group.options.map((option, optIndex) => (
+                  <SelectItem key={optIndex} value={option.name}>
+                    <div className="flex items-center justify-between w-full gap-4">
+                      <span>{option.name}</span>
+                      {option.price && option.price > 0 && (
+                        <Badge variant="secondary" className="ml-2">
+                          +{formatPrice(option.price)}
+                        </Badge>
+                      )}
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            
+            {/* Mostrar preço adicional se houver */}
+            {selectedVariation && selectedVariation.price > 0 && (
+              <p className="text-xs text-muted-foreground mt-1">
+                Adicional: {formatPrice(selectedVariation.price)}
+              </p>
+            )}
+          </div>
+        );
+      })}
+  </div>
+)}
 
                           {/* Seção de Adicionais */}
                           {newItem.product_id && products.find(p => p.id === newItem.product_id)?.adicionais?.length > 0 && (
@@ -987,52 +1134,65 @@ const Pedidos = () => {
                           </Button>
                         </div>
                       </div>
-
-                      {/* Lista de Produtos */}
-                      {orderItems.length > 0 && (
-                        <div className="space-y-2">
-                          <Label>Produtos Adicionados:</Label>
-                          <div className="border rounded-lg">
-                            {orderItems.map((item, index) => (
-                              <div key={index} className="flex items-center justify-between p-3 border-b last:border-b-0">
-                                <div className="flex-1">
-                                  <div className="font-medium">{item.product_name}</div>
-                                  {item.size && (
-  <div className="text-sm text-muted-foreground">
-    Tamanho: {item.size.name}
+{/* Lista de Produtos */}
+{orderItems.length > 0 && (
+  <div className="space-y-2">
+    <Label>Produtos Adicionados:</Label>
+    <div className="border rounded-lg">
+      {orderItems.map((item, index) => (
+        <div key={index} className="flex items-center justify-between p-3 border-b last:border-b-0">
+          <div className="flex-1">
+            <div className="font-medium">{item.product_name}</div>
+            
+            {item.size && (
+              <div className="text-sm text-muted-foreground">
+                Tamanho: {item.size.name}
+              </div>
+            )}
+            
+            {/* Exibir variações */}
+            {item.variations && item.variations.length > 0 && (
+              <div className="text-sm text-gray-500 mt-1">
+                <span className="font-medium">Variações:</span>{" "}
+                {item.variations.map((v, i) => (
+                  <span key={i}>
+                    {v.group}: {v.name} {v.price > 0 && `(+${formatPrice(v.price)})`}
+                    {i < item.variations.length - 1 ? ', ' : ''}
+                  </span>
+                ))}
+              </div>
+            )}
+            
+            <div className="text-sm text-muted-foreground">
+              {item.quantity}x {formatPrice(item.unit_price)} = {formatPrice(item.quantity * item.unit_price)}
+            </div>
+            
+            {item.adicionais && item.adicionais.length > 0 && (
+              <div className="text-sm text-gray-500 mt-1">
+                <span className="font-medium">Adicionais:</span>{" "}
+                {item.adicionais.map((a, i) => (
+                  <span key={i}>
+                    {a.name} (+{formatPrice(a.price)}){i < item.adicionais.length - 1 ? ', ' : ''}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+          
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => removeItemFromOrder(index)}
+            className="text-red-600 hover:text-red-700"
+          >
+            <X className="w-4 h-4" />
+          </Button>
+        </div>
+      ))}
+    </div>
   </div>
 )}
-
-                                  <div className="text-sm text-muted-foreground">
-                                    {item.quantity}x {formatPrice(item.unit_price)} = {formatPrice(item.quantity * item.unit_price)}
-                                  </div>
-                                  
-                                  {item.adicionais && item.adicionais.length > 0 && (
-                                    <div className="text-sm text-gray-500 mt-1">
-                                      <span className="font-medium">Adicionais:</span>{" "}
-                                      {item.adicionais.map((a, i) => (
-                                        <span key={i}>
-                                          {a.name} (+{formatPrice(a.price)}){i < item.adicionais.length - 1 ? ', ' : ''}
-                                        </span>
-                                      ))}
-                                    </div>
-                                  )}
-                                </div>
-                                
-                                <Button
-                                  type="button"
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => removeItemFromOrder(index)}
-                                  className="text-red-600 hover:text-red-700"
-                                >
-                                  <X className="w-4 h-4" />
-                                </Button>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
 
                       {/* Resumo Financeiro */}
                       {orderItems.length > 0 && (
