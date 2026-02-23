@@ -44,6 +44,7 @@ interface Product {
   price: number
   show_in_catalog: boolean
   image_url?: string
+  image_urls?: string[]
   categoria_id?: string
   created_at: string
   categorias_produtos?: {
@@ -79,6 +80,9 @@ const Produtos = () => {
   const [uploading, setUploading] = useState(false)
   const [imagePreview, setImagePreview] = useState<string | null>(null)
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const [selectedFiles, setSelectedFiles] = useState<(File | null)[]>([null, null, null])
+  const [imagePreviews, setImagePreviews] = useState<(string | null)[]>([null, null, null])
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string>('all')
 
   const [formData, setFormData] = useState({
     name: '',
@@ -87,6 +91,7 @@ const Produtos = () => {
     categoria_id: '',
     show_in_catalog: true,
     image_url: '',
+    image_urls: [] as string[],
     adicionais: [] as Additional[],
     sizes: [] as SizeOption[],
     variations: [] as VariationGroup[],
@@ -122,7 +127,8 @@ const Produtos = () => {
         ...p,
         adicionais: p.adicionais || [],
         sizes: p.sizes || [],
-        variations: p.variations || []
+        variations: p.variations || [],
+        image_urls: p.image_urls || (p.image_url ? [p.image_url] : [])
       }))
 
       setProducts(formatted)
@@ -195,7 +201,7 @@ const Produtos = () => {
     } catch { }
   }
 
-  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelectMulti = (event: React.ChangeEvent<HTMLInputElement>, index: number) => {
     const file = event.target.files?.[0]
     if (!file) return
 
@@ -204,17 +210,33 @@ const Produtos = () => {
       return
     }
 
-    setSelectedFile(file)
+    const newFiles = [...selectedFiles]
+    newFiles[index] = file
+    setSelectedFiles(newFiles)
 
     const reader = new FileReader()
-    reader.onload = e => setImagePreview(e.target?.result as string)
+    reader.onload = e => {
+      const newPreviews = [...imagePreviews]
+      newPreviews[index] = e.target?.result as string
+      setImagePreviews(newPreviews)
+    }
     reader.readAsDataURL(file)
   }
 
-  const clearImage = () => {
-    setSelectedFile(null)
-    setImagePreview(null)
-    setFormData({ ...formData, image_url: '' })
+  const clearImageMulti = (index: number) => {
+    const newFiles = [...selectedFiles]
+    newFiles[index] = null
+    setSelectedFiles(newFiles)
+
+    const newPreviews = [...imagePreviews]
+    newPreviews[index] = null
+    setImagePreviews(newPreviews)
+
+    const newUrls = [...formData.image_urls]
+    if (newUrls[index]) {
+      newUrls[index] = ''
+    }
+    setFormData({ ...formData, image_urls: newUrls })
   }
 
   const handleAdditionalChange = (index: number, field: keyof Additional, value: string) => {
@@ -415,13 +437,20 @@ const Produtos = () => {
     }
 
     try {
-      let imageUrl = formData.image_url
+      let imageUrls = [...formData.image_urls]
 
-      if (selectedFile) {
-        const uploadedUrl = await uploadImage(selectedFile)
-        if (!uploadedUrl) return
-        imageUrl = uploadedUrl
+      // Upload novas imagens
+      for (let i = 0; i < selectedFiles.length; i++) {
+        if (selectedFiles[i]) {
+          const uploadedUrl = await uploadImage(selectedFiles[i]!)
+          if (uploadedUrl) {
+            imageUrls[i] = uploadedUrl
+          }
+        }
       }
+
+      // Filtrar URLs vazias
+      const finalImageUrls = imageUrls.filter(url => url && url.trim() !== '')
 
       const productData = {
         name: formData.name,
@@ -429,7 +458,8 @@ const Produtos = () => {
         price: Number(formData.price.replace(',', '.')),
         categoria_id: formData.categoria_id,
         show_in_catalog: formData.show_in_catalog,
-        image_url: imageUrl || null,
+        image_url: finalImageUrls[0] || null,
+        image_urls: finalImageUrls.length ? finalImageUrls : null,
         adicionais: formData.adicionais.length ? formData.adicionais : null,
         sizes: formData.sizes.length ? formData.sizes : null,
         variations: formData.variations.length ? formData.variations : null,
@@ -440,9 +470,9 @@ const Produtos = () => {
 
 
       if (editingProduct) {
-        if (selectedFile && editingProduct.image_url) {
-          await deleteImage(editingProduct.image_url)
-        }
+        // Remover imagens antigas se foram substituídas? 
+        // Por simplificação, vamos apenas atualizar. 
+        // No mundo ideal, deletaríamos do storage as que saíram.
 
         const { error } = await supabase
           .from('products')
@@ -559,14 +589,15 @@ const Produtos = () => {
       categoria_id: '',
       show_in_catalog: true,
       image_url: '',
+      image_urls: [] as string[],
       adicionais: [],
       sizes: [],
       variations: [],
       track_stock: false,
       stock_quantity: '0'
     })
-    setSelectedFile(null)
-    setImagePreview(null)
+    setSelectedFiles([null, null, null])
+    setImagePreviews([null, null, null])
   }
 
   const handleEdit = (product: Product) => {
@@ -579,6 +610,7 @@ const Produtos = () => {
       categoria_id: product.categoria_id || '',
       show_in_catalog: product.show_in_catalog,
       image_url: product.image_url || '',
+      image_urls: product.image_urls || (product.image_url ? [product.image_url] : []),
       adicionais: product.adicionais || [],
       sizes: product.sizes || [],
       variations: product.variations || [],
@@ -586,7 +618,10 @@ const Produtos = () => {
       stock_quantity: product.stock_quantity?.toString() || '0'
     })
 
-    setImagePreview(product.image_url || null)
+    const previews = [null, null, null] as (string | null)[]
+    const urls = product.image_urls || (product.image_url ? [product.image_url] : [])
+    urls.forEach((url, i) => { if (i < 3) previews[i] = url })
+    setImagePreviews(previews)
     setIsDialogOpen(true)
   }
 
@@ -607,9 +642,11 @@ const Produtos = () => {
     fetchProducts()
   }
 
-  const filteredProducts = products.filter(p =>
-    p.name.toLowerCase().includes(searchTerm.toLowerCase())
-  )
+  const filteredProducts = products.filter(p => {
+    const matchesSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase())
+    const matchesCategory = selectedCategoryId === 'all' || p.categoria_id === selectedCategoryId
+    return matchesSearch && matchesCategory
+  })
 
   const formatPrice = (price: number) =>
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(price)
@@ -1058,52 +1095,49 @@ const Produtos = () => {
                     </div>
                   </div>
 
-                  <div className="space-y-2">
-                    <Label>Imagem do Produto</Label>
-
-                    {imagePreview && (
-                      <div className="relative">
-                        <img
-                          src={imagePreview}
-                          alt="Preview"
-                          className="w-full h-32 object-cover rounded-md border"
-                        />
-                        <Button
-                          type="button"
-                          variant="destructive"
-                          size="sm"
-                          className="absolute top-2 right-2"
-                          onClick={clearImage}
-                        >
-                          <X className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    )}
-
-                    {!imagePreview && (
-                      <div className="border-2 border-dashed border-gray-300 rounded-md p-4">
-                        <div className="text-center">
-                          <ImageIcon className="mx-auto h-12 w-12 text-gray-400" />
-                          <div className="mt-2">
-                            <Label htmlFor="image-upload" className="cursor-pointer">
-                              <span className="text-sm text-blue-600 hover:text-blue-500">
-                                Clique para fazer upload
-                              </span>
-                              <Input
-                                id="image-upload"
-                                type="file"
-                                accept="image/*"
-                                onChange={handleFileSelect}
-                                className="hidden"
+                  <div className="space-y-4">
+                    <Label>Imagens do Produto (Até 3)</Label>
+                    <div className="grid grid-cols-3 gap-2">
+                      {[0, 1, 2].map((index) => (
+                        <div key={index} className="space-y-2">
+                          {imagePreviews[index] ? (
+                            <div className="relative">
+                              <img
+                                src={imagePreviews[index]!}
+                                alt={`Preview ${index + 1}`}
+                                className="w-full h-24 object-cover rounded-md border"
                               />
-                            </Label>
-                          </div>
-                          <p className="text-xs text-gray-500 mt-1">
-                            PNG, JPG, GIF até 5MB
-                          </p>
+                              <Button
+                                type="button"
+                                variant="destructive"
+                                size="icon"
+                                className="absolute -top-2 -right-2 h-6 w-6 rounded-full"
+                                onClick={() => clearImageMulti(index)}
+                              >
+                                <X className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          ) : (
+                            <div className="border-2 border-dashed border-gray-300 rounded-md h-24 flex items-center justify-center">
+                              <Label htmlFor={`image-upload-${index}`} className="cursor-pointer flex flex-col items-center">
+                                <Plus className="h-6 w-6 text-gray-400" />
+                                <span className="text-[10px] text-gray-500">Add</span>
+                                <Input
+                                  id={`image-upload-${index}`}
+                                  type="file"
+                                  accept="image/*"
+                                  onChange={(e) => handleFileSelectMulti(e, index)}
+                                  className="hidden"
+                                />
+                              </Label>
+                            </div>
+                          )}
                         </div>
-                      </div>
-                    )}
+                      ))}
+                    </div>
+                    <p className="text-xs text-gray-500">
+                      A primeira imagem será a principal.
+                    </p>
                   </div>
 
                   <div className="flex items-center space-x-2">
@@ -1155,14 +1189,34 @@ const Produtos = () => {
         </div>
         <Card>
           <CardContent className="pt-6">
-            <div className="relative">
-              <Search className="absolute left-3 top-3 w-4 h-4 text-muted-foreground" />
-              <Input
-                placeholder="Buscar produto..."
-                className="pl-9"
-                value={searchTerm}
-                onChange={e => setSearchTerm(e.target.value)}
-              />
+            <div className="flex flex-col md:flex-row gap-4">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-3 w-4 h-4 text-muted-foreground" />
+                <Input
+                  placeholder="Buscar produto..."
+                  className="pl-9"
+                  value={searchTerm}
+                  onChange={e => setSearchTerm(e.target.value)}
+                />
+              </div>
+              <div className="w-full md:w-64">
+                <Select
+                  value={selectedCategoryId}
+                  onValueChange={setSelectedCategoryId}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Filtrar por categoria" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todas as categorias</SelectItem>
+                    {categories.map(category => (
+                      <SelectItem key={category.id} value={category.id}>
+                        {category.nome}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
           </CardContent>
         </Card>

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -19,17 +19,32 @@ export const UserForm = ({ isOpen, onClose, onSubmit, initialData, mode }: UserF
   const [loading, setLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [formData, setFormData] = useState({
-    email: initialData?.email || '',
+    email: '',
     password: '',
-    full_name: initialData?.full_name || '',
-    plano: initialData?.plano || 'Mensal',
-    data_pagamento: initialData?.data_pagamento ?
-      new Date(initialData.data_pagamento).toISOString().split('T')[0] :
-      new Date().toISOString().split('T')[0],
-    vencimento: initialData?.vencimento ?
-      new Date(initialData.vencimento).toISOString().split('T')[0] :
-      new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+    full_name: '',
+    plano: 'Mensal',
+    data_pagamento: new Date().toISOString().split('T')[0],
+    vencimento: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
   })
+
+  // Sincronizar dados quando o formulário abrir ou os dados iniciais mudarem
+  useEffect(() => {
+    if (isOpen) {
+      setFormData({
+        email: initialData?.email || '',
+        password: '', // Sempre começa vazio para segurança
+        full_name: initialData?.full_name || '',
+        plano: initialData?.plano || 'Mensal',
+        data_pagamento: initialData?.data_pagamento ?
+          new Date(initialData.data_pagamento).toISOString().split('T')[0] :
+          new Date().toISOString().split('T')[0],
+        vencimento: initialData?.vencimento ?
+          new Date(initialData.vencimento).toISOString().split('T')[0] :
+          new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+      })
+      setShowPassword(false)
+    }
+  }, [isOpen, initialData])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -168,40 +183,45 @@ export const UserForm = ({ isOpen, onClose, onSubmit, initialData, mode }: UserF
             )}
           </div>
 
-          {mode === 'create' && (
-            <div className="space-y-2">
-              <Label htmlFor="password">Senha *</Label>
-              <div className="flex gap-2">
-                <div className="relative flex-1">
-                  <Input
-                    id="password"
-                    type={showPassword ? "text" : "password"}
-                    value={formData.password}
-                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                    placeholder="Senha do usuário"
-                    required
-                  />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="absolute right-0 top-0 h-full px-3"
-                    onClick={() => setShowPassword(!showPassword)}
-                  >
-                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                  </Button>
-                </div>
+          <div className="space-y-2">
+            <Label htmlFor="password">
+              {mode === 'create' ? 'Senha *' : 'Nova Senha (deixe em branco para não alterar)'}
+            </Label>
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <Input
+                  id="password"
+                  type={showPassword ? "text" : "password"}
+                  value={formData.password}
+                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                  placeholder={mode === 'create' ? "Senha do usuário" : "Nova senha opcional"}
+                  required={mode === 'create'}
+                />
                 <Button
                   type="button"
-                  variant="outline"
-                  onClick={generatePassword}
+                  variant="ghost"
                   size="sm"
+                  className="absolute right-0 top-0 h-full px-3"
+                  onClick={() => setShowPassword(!showPassword)}
                 >
-                  Gerar
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </Button>
               </div>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={generatePassword}
+                size="sm"
+              >
+                Gerar
+              </Button>
             </div>
-          )}
+            {mode === 'edit' && formData.password && (
+              <p className="text-xs text-blue-600 bg-blue-50 p-2 rounded">
+                ℹ️ A senha será atualizada ao salvar.
+              </p>
+            )}
+          </div>
 
           <div className="space-y-2">
             <Label htmlFor="plano">Plano *</Label>

@@ -25,6 +25,7 @@ interface CreateUserData {
 
 interface UpdateUserData {
   email: string // Garantir que email seja sempre enviado
+  password?: string
   full_name?: string
   plano?: string
   data_pagamento?: string
