@@ -27,6 +27,8 @@ import Pagamento from "./pages/Pagamento";
 import Admin from "./pages/Admin";
 import NotFound from "./pages/NotFound";
 import FinalizarPedido from "./pages/Finalizar";
+import TrialConta from "./pages/trialConta";
+
 
 const queryClient = new QueryClient();
 
@@ -41,27 +43,29 @@ const App = () => (
             <Routes>
               {/* Página principal - Landing page de vendas */}
               <Route path="/" element={<Login />} />
-              
+
               {/* Rotas públicas */}
               <Route path="/catalogo/:userId" element={<CatalogoPublico />} />
-              <Route path="/finalizar" element={<FinalizarPedido />} />  
+              <Route path="/finalizar" element={<FinalizarPedido />} />
               <Route path="/cakto/success" element={<CaktoSuccess />} />
               <Route path="/cakto/webhook-test" element={<CaktoWebhookTest />} />
               <Route path="/cakto/setup" element={<CaktoSetup />} />
-              
+
               {/* Rota de pagamento (para usuários com assinatura expirada) */}
               <Route path="/pagamento" element={<Pagamento />} />
-              
+
               {/* Rota administrativa */}
               <Route path="/admin" element={
                 <ProtectedAdminRoute>
                   <Admin />
                 </ProtectedAdminRoute>
               } />
-              
+
               {/* Rotas de autenticação */}
               <Route path="/login" element={<Login />} />
-              
+              <Route path="/trial" element={<TrialConta />} />
+
+
               {/* Rotas protegidas */}
               <Route path="/dashboard" element={
                 <ProtectedRoute>

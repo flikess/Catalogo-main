@@ -7,14 +7,14 @@ import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { ResponsiveTable } from '@/components/ui/responsive-table'
-import { 
-  Plus, 
-  Search, 
-  Edit, 
-  Trash2, 
-  Users, 
-  UserCheck, 
-  UserX, 
+import {
+  Plus,
+  Search,
+  Edit,
+  Trash2,
+  Users,
+  UserCheck,
+  UserX,
   Crown,
   Calendar,
   Mail,
@@ -76,23 +76,28 @@ const Admin = () => {
   }
 
   const getStatusBadge = (status: string) => {
-    return status === 'ativo' 
+    return status === 'ativo'
       ? { label: 'Ativo', color: 'bg-green-100 text-green-800' }
       : { label: 'Inativo', color: 'bg-red-100 text-red-800' }
   }
 
   const getPlanoBadge = (plano: string) => {
-    if (!plano) return { label: 'Sem plano', color: 'bg-gray-100 text-gray-800' }
-    return plano === 'Anual'
-      ? { label: 'Anual', color: 'bg-purple-100 text-purple-800' }
-      : { label: 'Mensal', color: 'bg-blue-100 text-blue-800' }
+    if (!plano) return { label: 'Pendente', color: 'bg-gray-100 text-gray-800' }
+    const p = plano.toLowerCase()
+    if (p === 'trial') return { label: 'Trial', color: 'bg-amber-100 text-amber-800' }
+    if (p === 'anual') return { label: 'Anual', color: 'bg-purple-100 text-purple-800' }
+    if (p === 'mensal') return { label: 'Mensal', color: 'bg-blue-100 text-blue-800' }
+    return { label: plano, color: 'bg-gray-100 text-gray-800' }
   }
 
   // Estatísticas
   const totalUsers = users.length
   const activeUsers = users.filter(u => u.status === 'ativo').length
   const inactiveUsers = users.filter(u => u.status === 'inativo').length
-  const annualUsers = users.filter(u => u.plano === 'Anual').length
+  const annualUsers = users.filter(u => u.plano?.toLowerCase() === 'anual').length
+  const trialUsers = users.filter(u => u.plano?.toLowerCase() === 'trial').length
+
+
 
   const tableColumns = [
     {
@@ -222,7 +227,8 @@ const Admin = () => {
         )}
 
         {/* Estatísticas */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
+
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium flex items-center gap-2">
@@ -268,6 +274,18 @@ const Admin = () => {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-purple-600">{annualUsers}</div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium flex items-center gap-2">
+                <RefreshCw className="w-4 h-4 text-amber-600" />
+                Usuários Trial
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-amber-600">{trialUsers}</div>
             </CardContent>
           </Card>
         </div>

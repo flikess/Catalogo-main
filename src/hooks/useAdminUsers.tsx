@@ -49,7 +49,7 @@ export const useAdminUsers = () => {
       console.log('🔍 Iniciando busca de usuários para admin...')
       console.log('👤 Usuário atual:', user?.email)
       console.log('🎭 Role do usuário:', user?.user_metadata?.role)
-      
+
       // Verificar se é super admin no frontend
       if (user?.user_metadata?.role !== 'super_admin') {
         console.error('❌ Usuário não é super admin')
@@ -71,7 +71,7 @@ export const useAdminUsers = () => {
           hint: rpcError.hint,
           code: rpcError.code
         })
-        
+
         // Tentar fallback
         console.log('🔄 Tentando busca direta como fallback...')
         await fetchUsersDirectly()
@@ -111,7 +111,7 @@ export const useAdminUsers = () => {
   const fetchUsersDirectly = async () => {
     try {
       console.log('🔄 Executando busca direta...')
-      
+
       // Verificar se é super admin novamente
       if (user?.user_metadata?.role !== 'super_admin') {
         console.error('❌ Usuário não é super admin para busca direta')
@@ -150,9 +150,13 @@ export const useAdminUsers = () => {
         const assinatura = assinaturas?.find(a => a.user_id === profile.id)
         const vencimento = assinatura?.vencimento ? new Date(assinatura.vencimento) : null
         const hoje = new Date()
-        
+        const diffTime = vencimento ? vencimento.getTime() - hoje.getTime() : -999;
+
+        const daysUntilExpiration = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
         let status: 'ativo' | 'inativo' = 'inativo'
-        if (vencimento && vencimento > hoje) {
+        // Seguindo a lógica do sistema: Ativo se não venceu há mais de 2 dias
+        if (vencimento && daysUntilExpiration >= -2) {
           status = 'ativo'
         }
 
@@ -167,6 +171,7 @@ export const useAdminUsers = () => {
           created_at: profile.created_at,
         }
       }) || []
+
 
       setUsers(combinedUsers)
       console.log(`✅ ${combinedUsers.length} usuários carregados via query direta`)
@@ -205,14 +210,14 @@ export const useAdminUsers = () => {
   const createUser = async (userData: CreateUserData) => {
     try {
       console.log('➕ Criando usuário via Edge Function:', userData.email)
-      
+
       // Verificar se é super admin
       if (user?.user_metadata?.role !== 'super_admin') {
         throw new Error('Apenas super admins podem criar usuários')
       }
 
       const result = await callAdminFunction('create', userData)
-      
+
       if (result.success) {
         showSuccess('Usuário criado com sucesso!')
         console.log('🎉 Usuário criado:', result.user)
@@ -232,7 +237,7 @@ export const useAdminUsers = () => {
     try {
       console.log('✏️ Atualizando usuário via Edge Function:', userId)
       console.log('📋 Dados enviados:', userData)
-      
+
       // Verificar se é super admin
       if (user?.user_metadata?.role !== 'super_admin') {
         throw new Error('Apenas super admins podem editar usuários')
@@ -244,7 +249,7 @@ export const useAdminUsers = () => {
       }
 
       const result = await callAdminFunction('update', { userId, userData })
-      
+
       if (result.success) {
         showSuccess('Usuário atualizado com sucesso!')
         console.log('🎉 Usuário atualizado')
@@ -262,14 +267,14 @@ export const useAdminUsers = () => {
   const deleteUser = async (userId: string) => {
     try {
       console.log('🗑️ Deletando usuário via Edge Function:', userId)
-      
+
       // Verificar se é super admin
       if (user?.user_metadata?.role !== 'super_admin') {
         throw new Error('Apenas super admins podem deletar usuários')
       }
-      
+
       const result = await callAdminFunction('delete', { userId })
-      
+
       if (result.success) {
         showSuccess('Usuário deletado com sucesso!')
         console.log('🎉 Usuário deletado')

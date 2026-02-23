@@ -23,47 +23,47 @@ export const UserForm = ({ isOpen, onClose, onSubmit, initialData, mode }: UserF
     password: '',
     full_name: initialData?.full_name || '',
     plano: initialData?.plano || 'Mensal',
-    data_pagamento: initialData?.data_pagamento ? 
-      new Date(initialData.data_pagamento).toISOString().split('T')[0] : 
+    data_pagamento: initialData?.data_pagamento ?
+      new Date(initialData.data_pagamento).toISOString().split('T')[0] :
       new Date().toISOString().split('T')[0],
-    vencimento: initialData?.vencimento ? 
-      new Date(initialData.vencimento).toISOString().split('T')[0] : 
+    vencimento: initialData?.vencimento ?
+      new Date(initialData.vencimento).toISOString().split('T')[0] :
       new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
   })
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    
+
     console.log('📝 Submetendo formulário:', { mode, formData })
-    
+
     // Validações
     if (!formData.full_name.trim()) {
       showError('Nome completo é obrigatório')
       return
     }
-    
+
     if (!formData.email.trim()) {
       showError('E-mail é obrigatório')
       return
     }
-    
+
     // Validar formato de e-mail
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
     if (!emailRegex.test(formData.email)) {
       showError('E-mail deve ter um formato válido')
       return
     }
-    
+
     if (mode === 'create' && !formData.password.trim()) {
       showError('Senha é obrigatória para novos usuários')
       return
     }
-    
+
     if (!formData.data_pagamento) {
       showError('Data de pagamento é obrigatória')
       return
     }
-    
+
     if (!formData.vencimento) {
       showError('Data de vencimento é obrigatória')
       return
@@ -103,27 +103,30 @@ export const UserForm = ({ isOpen, onClose, onSubmit, initialData, mode }: UserF
     const data = new Date(dataPagamento)
     if (plano === 'Anual') {
       data.setDate(data.getDate() + 365)
+    } else if (plano === 'Trial') {
+      data.setDate(data.getDate() + 2)
     } else {
       data.setDate(data.getDate() + 30)
     }
     return data.toISOString().split('T')[0]
+
   }
 
   const handlePlanoChange = (plano: string) => {
     const novoVencimento = calculateVencimento(plano, formData.data_pagamento)
-    setFormData({ 
-      ...formData, 
-      plano, 
-      vencimento: novoVencimento 
+    setFormData({
+      ...formData,
+      plano,
+      vencimento: novoVencimento
     })
   }
 
   const handleDataPagamentoChange = (data: string) => {
     const novoVencimento = calculateVencimento(formData.plano, data)
-    setFormData({ 
-      ...formData, 
-      data_pagamento: data, 
-      vencimento: novoVencimento 
+    setFormData({
+      ...formData,
+      data_pagamento: data,
+      vencimento: novoVencimento
     })
   }
 
@@ -135,7 +138,7 @@ export const UserForm = ({ isOpen, onClose, onSubmit, initialData, mode }: UserF
             {mode === 'create' ? 'Criar Novo Usuário' : 'Editar Usuário'}
           </DialogTitle>
         </DialogHeader>
-        
+
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="full_name">Nome Completo *</Label>
@@ -209,6 +212,8 @@ export const UserForm = ({ isOpen, onClose, onSubmit, initialData, mode }: UserF
               <SelectContent>
                 <SelectItem value="Mensal">Mensal</SelectItem>
                 <SelectItem value="Anual">Anual</SelectItem>
+                <SelectItem value="Trial">Trial</SelectItem>
+
               </SelectContent>
             </Select>
           </div>

@@ -1,10 +1,16 @@
 import { useState, useEffect } from 'react'
 import { Layout } from '@/components/layout/Layout'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { DollarSign, Users, ShoppingCart, Package, TrendingUp, Calendar } from 'lucide-react'
+import { DollarSign, Users, ShoppingCart, Package, TrendingUp, Calendar, AlertCircle, Zap } from 'lucide-react'
+
 import { supabase } from '@/integrations/supabase/client'
 import { useAuth } from '@/components/auth/AuthProvider'
+import { useSubscription } from '@/hooks/useSubscription'
+import { useNavigate } from 'react-router-dom'
+
+
 
 interface DashboardStats {
   totalClients: number
@@ -26,6 +32,9 @@ interface RecentOrder {
 
 const Dashboard = () => {
   const { user } = useAuth()
+  const { subscriptionStatus } = useSubscription()
+  const navigate = useNavigate()
+
   const [stats, setStats] = useState<DashboardStats>({
     totalClients: 0,
     totalProducts: 0,
@@ -149,7 +158,7 @@ const Dashboard = () => {
 
       const { data, error } = await supabase
         .from('orders')
-        .select('id, client_name, total_amount, status, delivery_date')
+        .select('id, client_name, total_amount, status, delivery_date, created_at')
         .eq('user_id', user?.id)
         .not('delivery_date', 'is', null)
         .gte('delivery_date', today.toISOString().split('T')[0])
@@ -225,8 +234,40 @@ const Dashboard = () => {
             Visão geral do seu negócio
           </p>
         </div>
-        
+
+        {/* Trial Expiration Alert */}
+        {subscriptionStatus.plano === 'Trial' && subscriptionStatus.isExpiringSoon && (
+          <Card className="border-amber-200 bg-amber-50 shadow-sm overflow-hidden relative">
+            <div className="absolute top-0 left-0 w-1 h-full bg-amber-500" />
+            <CardContent className="p-4 sm:p-6">
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div className="flex items-center gap-4">
+                  <div className="p-2 bg-amber-100 rounded-full">
+                    <AlertCircle className="w-5 h-5 text-amber-600" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-amber-900">
+                      Sua assinatura Trial vence em {subscriptionStatus.daysUntilExpiration === 0 ? 'hoje' : subscriptionStatus.daysUntilExpiration === 1 ? 'amanhã' : `${subscriptionStatus.daysUntilExpiration} dias`}
+                    </h3>
+                    <p className="text-sm text-amber-800">
+                      Renove agora para manter o acesso a todas as funcionalidades do sistema sem interrupções.
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  onClick={() => navigate('/pagamento')}
+                  className="w-full sm:w-auto bg-amber-600 hover:bg-amber-700 text-white border-0"
+                >
+                  <Zap className="w-4 h-4 mr-2 fill-white" />
+                  Renovar Agora
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Stats Cards */}
+
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-6">
           <Card className="hover:shadow-md transition-shadow">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -242,7 +283,7 @@ const Dashboard = () => {
               </p>
             </CardContent>
           </Card>
-          
+
           <Card className="hover:shadow-md transition-shadow">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Total de Clientes</CardTitle>
@@ -257,7 +298,7 @@ const Dashboard = () => {
               </p>
             </CardContent>
           </Card>
-          
+
           <Card className="hover:shadow-md transition-shadow">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Pedidos Hoje</CardTitle>
@@ -272,7 +313,7 @@ const Dashboard = () => {
               </p>
             </CardContent>
           </Card>
-          
+
           <Card className="hover:shadow-md transition-shadow">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Produtos</CardTitle>
@@ -328,7 +369,7 @@ const Dashboard = () => {
               )}
             </CardContent>
           </Card>
-          
+
           {/* Upcoming Deliveries */}
           <Card>
             <CardHeader>

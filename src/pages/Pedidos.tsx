@@ -43,6 +43,7 @@ interface VariationSelection {
 
 interface OrderItem {
   id: string;
+  product_id?: string;
   product_name: string;
   quantity: number;
   unit_price: number;
@@ -145,14 +146,14 @@ const Pedidos = () => {
   });
   const [orderItems, setOrderItems] = useState<OrderItemForm[]>([]);
   const [newItem, setNewItem] = useState<OrderItemForm>({
-  product_id: '',
-  product_name: '',
-  quantity: 1,
-  unit_price: 0,
-  adicionais: [],
-  size: null,
-  variations: [] // NOVO
-});
+    product_id: '',
+    product_name: '',
+    quantity: 1,
+    unit_price: 0,
+    adicionais: [],
+    size: null,
+    variations: [] // NOVO
+  });
 
   useEffect(() => {
     fetchOrders();
@@ -160,13 +161,13 @@ const Pedidos = () => {
     fetchProducts();
   }, []);
 
-const fetchOrders = async () => {
-  try {
-    console.log('🔍 Fetching orders for user:', user?.id);
-    
-    const { data, error } = await supabase
-      .from('orders')
-      .select(`
+  const fetchOrders = async () => {
+    try {
+      console.log('🔍 Fetching orders for user:', user?.id);
+
+      const { data, error } = await supabase
+        .from('orders')
+        .select(`
         *,
         client_id,
         order_items (
@@ -179,65 +180,65 @@ const fetchOrders = async () => {
           variations
         )
       `)
-      .eq('user_id', user?.id)
-      .order('created_at', { ascending: false });
+        .eq('user_id', user?.id)
+        .order('created_at', { ascending: false });
 
-    if (error) {
-      console.error('❌ Supabase error:', error);
-      throw error;
+      if (error) {
+        console.error('❌ Supabase error:', error);
+        throw error;
+      }
+
+      console.log('📦 Raw orders data:', data);
+      console.log('📦 Raw order_items sample:', data?.[0]?.order_items);
+
+      const parsedData = (data || []).map(order => {
+        console.log('🔄 Parsing order:', order.id);
+
+        return {
+          ...order,
+          order_items: order.order_items?.map(item => {
+            console.log('  - Parsing item:', item.id, 'Variations raw:', item.variations);
+
+            return {
+              ...item,
+              adicionais: typeof item.adicionais === 'string'
+                ? JSON.parse(item.adicionais)
+                : item.adicionais || [],
+              size: typeof (item as any).size === 'string'
+                ? JSON.parse((item as any).size)
+                : (item as any).size || null,
+              variations: (() => {
+                try {
+                  if (Array.isArray(item.variations)) {
+                    console.log('    ✅ Variations is array:', item.variations);
+                    return item.variations;
+                  }
+                  if (typeof item.variations === 'string') {
+                    const parsed = JSON.parse(item.variations);
+                    console.log('    ✅ Parsed variations from string:', parsed);
+                    return parsed;
+                  }
+                  console.log('    ⚠️ No variations found, returning []');
+                  return [];
+                } catch (e) {
+                  console.error('    ❌ Error parsing variations:', e, 'Value:', item.variations);
+                  return [];
+                }
+              })()
+            };
+          })
+        };
+      });
+
+      console.log('✅ Parsed orders:', parsedData);
+      setOrders(parsedData);
+    } catch (error) {
+      console.error('❌ Error fetching orders:', error);
+      showError('Erro ao carregar pedidos');
+    } finally {
+      setLoading(false);
     }
-
-    console.log('📦 Raw orders data:', data);
-    console.log('📦 Raw order_items sample:', data?.[0]?.order_items);
-
-    const parsedData = (data || []).map(order => {
-      console.log('🔄 Parsing order:', order.id);
-      
-      return {
-        ...order,
-        order_items: order.order_items?.map(item => {
-          console.log('  - Parsing item:', item.id, 'Variations raw:', item.variations);
-          
-          return {
-            ...item,
-            adicionais: typeof item.adicionais === 'string'
-              ? JSON.parse(item.adicionais)
-              : item.adicionais || [],
-            size: typeof (item as any).size === 'string'
-              ? JSON.parse((item as any).size)
-              : (item as any).size || null,
-            variations: (() => {
-              try {
-                if (Array.isArray(item.variations)) {
-                  console.log('    ✅ Variations is array:', item.variations);
-                  return item.variations;
-                }
-                if (typeof item.variations === 'string') {
-                  const parsed = JSON.parse(item.variations);
-                  console.log('    ✅ Parsed variations from string:', parsed);
-                  return parsed;
-                }
-                console.log('    ⚠️ No variations found, returning []');
-                return [];
-              } catch (e) {
-                console.error('    ❌ Error parsing variations:', e, 'Value:', item.variations);
-                return [];
-              }
-            })()
-          };
-        })
-      };
-    });
-
-    console.log('✅ Parsed orders:', parsedData);
-    setOrders(parsedData);
-  } catch (error) {
-    console.error('❌ Error fetching orders:', error);
-    showError('Erro ao carregar pedidos');
-  } finally {
-    setLoading(false);
-  }
-};
+  };
 
   const fetchClients = async () => {
     try {
@@ -254,20 +255,20 @@ const fetchOrders = async () => {
     }
   };
 
-const fetchProducts = async () => {
-  try {
-    const { data, error } = await supabase
-      .from('products')
-      .select('id, name, price, adicionais, sizes, variations') // 👈 ADICIONE variations
-      .eq('user_id', user?.id)
-      .order('name');
+  const fetchProducts = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('products')
+        .select('id, name, price, adicionais, sizes, variations') // 👈 ADICIONE variations
+        .eq('user_id', user?.id)
+        .order('name');
 
-    if (error) throw error;
-    setProducts(data || []);
-  } catch (error) {
-    console.error('Error fetching products:', error);
-  }
-};
+      if (error) throw error;
+      setProducts(data || []);
+    } catch (error) {
+      console.error('Error fetching products:', error);
+    }
+  };
 
   const addItemToOrder = () => {
     if (!newItem.product_name || newItem.quantity <= 0 || newItem.unit_price <= 0) {
@@ -298,7 +299,7 @@ const fetchProducts = async () => {
     setOrderItems(updatedItems);
   };
 
-    const resetVariationsForNewProduct = () => {
+  const resetVariationsForNewProduct = () => {
     setNewItem(prev => ({
       ...prev,
       variations: [],
@@ -307,15 +308,15 @@ const fetchProducts = async () => {
     }));
   };
 
-const calculateSubtotal = () => {
-  return orderItems.reduce((sum, item) => {
-    const additionalPrice = item.adicionais?.reduce((a, b) => a + b.price, 0) || 0;
-    const variationsPrice = item.variations?.reduce((a, b) => a + b.price, 0) || 0; // NOVO
-    const base = item.size ? item.size.price : item.unit_price;
+  const calculateSubtotal = () => {
+    return orderItems.reduce((sum, item) => {
+      const additionalPrice = item.adicionais?.reduce((a, b) => a + b.price, 0) || 0;
+      const variationsPrice = item.variations?.reduce((a, b) => a + b.price, 0) || 0; // NOVO
+      const base = item.size ? item.size.price : item.unit_price;
 
-    return sum + item.quantity * (base + additionalPrice + variationsPrice); // ATUALIZADO
-  }, 0);
-};
+      return sum + item.quantity * (base + additionalPrice + variationsPrice); // ATUALIZADO
+    }, 0);
+  };
 
   const calculateDiscount = () => {
     const subtotal = calculateSubtotal()
@@ -331,12 +332,12 @@ const calculateSubtotal = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (orderItems.length === 0) {
       showError('Adicione pelo menos um produto ao pedido');
       return;
     }
-    
+
     try {
       const orderData = {
         client_id: formData.client_id || null,
@@ -373,25 +374,25 @@ const calculateSubtotal = () => {
         newOrder = data;
         showSuccess('Pedido criado com sucesso!');
 
-const orderItemsData = orderItems.map(item => {
-  const base = item.size ? item.size.price : item.unit_price;
-  const variationsPrice = item.variations?.reduce((a, b) => a + b.price, 0) || 0; // NOVO
+        const orderItemsData = orderItems.map(item => {
+          const base = item.size ? item.size.price : item.unit_price;
+          const variationsPrice = item.variations?.reduce((a, b) => a + b.price, 0) || 0; // NOVO
 
-  return {
-    order_id: newOrder!.id,
-    product_id: item.product_id || null,
-    product_name: item.product_name,
-    quantity: item.quantity,
-    unit_price: base,
-    total_price: (base + 
-      (item.adicionais?.reduce((a, b) => a + b.price, 0) || 0) +
-      variationsPrice // NOVO
-    ) * item.quantity,
-    adicionais: item.adicionais?.length ? item.adicionais : null,
-    size: item.size || null,
-    variations: item.variations?.length ? item.variations : null // NOVO
-  };
-});
+          return {
+            order_id: newOrder!.id,
+            product_id: item.product_id || null,
+            product_name: item.product_name,
+            quantity: item.quantity,
+            unit_price: base,
+            total_price: (base +
+              (item.adicionais?.reduce((a, b) => a + b.price, 0) || 0) +
+              variationsPrice // NOVO
+            ) * item.quantity,
+            adicionais: item.adicionais?.length ? item.adicionais : null,
+            size: item.size || null,
+            variations: item.variations?.length ? item.variations : null // NOVO
+          };
+        });
 
 
         const { error: itemsError } = await supabase
@@ -399,6 +400,12 @@ const orderItemsData = orderItems.map(item => {
           .insert(orderItemsData);
 
         if (itemsError) throw itemsError;
+
+        // Se o pedido novo já for criado com status que deduz estoque
+        const stockDeducingStatuses = ['confirmado', 'producao', 'pronto', 'entregue'];
+        if (stockDeducingStatuses.includes(orderData.status)) {
+          await updateStock(newOrder.id, 'deduct');
+        }
       }
 
       setIsDialogOpen(false);
@@ -424,28 +431,28 @@ const orderItemsData = orderItems.map(item => {
       delivery_date: order.delivery_date ? order.delivery_date.split('T')[0] : '',
       notes: order.notes || ''
     });
-    
-if (order.order_items) {
-  const items: OrderItemForm[] = order.order_items.map(item => ({
-    product_id: item.product_id || '',
-    product_name: item.product_name,
-    quantity: item.quantity,
-    unit_price: item.unit_price,
-    adicionais: Array.isArray(item.adicionais)
-      ? item.adicionais
-      : (typeof item.adicionais === 'string'
-          ? JSON.parse(item.adicionais)
-          : []),
-    size: (item as any).size || null,
-    variations: Array.isArray((item as any).variations) // NOVO
-      ? (item as any).variations
-      : (typeof (item as any).variations === 'string'
-          ? JSON.parse((item as any).variations)
-          : [])
-  }));
-  setOrderItems(items);
-}
-   setIsDialogOpen(true);
+
+    if (order.order_items) {
+      const items: OrderItemForm[] = order.order_items.map(item => ({
+        product_id: item.product_id || '',
+        product_name: item.product_name,
+        quantity: item.quantity,
+        unit_price: item.unit_price,
+        adicionais: Array.isArray(item.adicionais)
+          ? item.adicionais
+          : (typeof item.adicionais === 'string'
+            ? JSON.parse(item.adicionais)
+            : []),
+        size: (item as any).size || null,
+        variations: Array.isArray((item as any).variations) // NOVO
+          ? (item as any).variations
+          : (typeof (item as any).variations === 'string'
+            ? JSON.parse((item as any).variations)
+            : [])
+      }));
+      setOrderItems(items);
+    }
+    setIsDialogOpen(true);
   };
 
   const handleView = (orderId: string) => {
@@ -469,6 +476,14 @@ if (order.order_items) {
       }
 
       showSuccess('Pedido excluído com sucesso!');
+
+      // Se o pedido estava em um status que deduz estoque, devolve ao excluir
+      const stockDeducingStatuses = ['confirmado', 'producao', 'pronto', 'entregue'];
+      const orderToDelete = orders.find(o => o.id === orderId);
+      if (orderToDelete && stockDeducingStatuses.includes(orderToDelete.status)) {
+        await updateStock(orderId, 'return');
+      }
+
       fetchOrders();
     } catch (error: any) {
       console.error('Error deleting order:', error);
@@ -478,9 +493,14 @@ if (order.order_items) {
 
   const updateOrderStatus = async (orderId: string, newStatus: string) => {
     try {
+      const oldOrder = orders.find(o => o.id === orderId);
+      const oldStatus = oldOrder?.status;
+
+      if (oldStatus === newStatus) return;
+
       const { data, error } = await supabase
         .from('orders')
-        .update({ 
+        .update({
           status: newStatus,
           updated_at: new Date().toISOString()
         })
@@ -489,9 +509,23 @@ if (order.order_items) {
 
       if (error) throw error;
 
-      setOrders(prevOrders => 
-        prevOrders.map(order => 
-          order.id === orderId 
+      // --- LOGICA DE ESTOQUE ---
+      const stockDeducingStatuses = ['confirmado', 'producao', 'pronto', 'entregue'];
+      const wasDeducted = stockDeducingStatuses.includes(oldStatus || '');
+      const willBeDeducted = stockDeducingStatuses.includes(newStatus);
+
+      if (!wasDeducted && willBeDeducted) {
+        // Saiu de orcamento/cancelado para confirmado+ -> DIMINUIR ESTOQUE
+        await updateStock(orderId, 'deduct');
+      } else if (wasDeducted && !willBeDeducted) {
+        // Saiu de confirmado+ para orcamento/cancelado -> VOLTAR ESTOQUE
+        await updateStock(orderId, 'return');
+      }
+      // -------------------------
+
+      setOrders(prevOrders =>
+        prevOrders.map(order =>
+          order.id === orderId
             ? { ...order, status: newStatus }
             : order
         )
@@ -502,6 +536,49 @@ if (order.order_items) {
     } catch (error: any) {
       console.error('Erro ao atualizar status:', error);
       showError(error.message || 'Erro ao atualizar status');
+    }
+  };
+
+  const updateStock = async (orderId: string, type: 'deduct' | 'return') => {
+    try {
+      // 1. Buscar os itens do pedido e seus produtos
+      const { data: orderItems, error: itemsError } = await supabase
+        .from('order_items')
+        .select(`
+          quantity,
+          product_id
+        `)
+        .eq('order_id', orderId);
+
+      if (itemsError) throw itemsError;
+      if (!orderItems || orderItems.length === 0) return;
+
+      // 2. Para cada item, verificar se o produto controla estoque e atualizar
+      for (const item of orderItems) {
+        if (!item.product_id) continue;
+
+        // Buscar dados atuais do produto (estoque e se controla)
+        const { data: product, error: prodError } = await supabase
+          .from('products')
+          .select('track_stock, stock_quantity')
+          .eq('id', item.product_id)
+          .single();
+
+        if (prodError || !product || !product.track_stock) continue;
+
+        const currentStock = product.stock_quantity || 0;
+        const quantity = item.quantity;
+        const newStock = type === 'deduct'
+          ? currentStock - quantity
+          : currentStock + quantity;
+
+        await supabase
+          .from('products')
+          .update({ stock_quantity: Math.max(0, newStock) })
+          .eq('id', item.product_id);
+      }
+    } catch (error) {
+      console.error('Erro ao processar movimentação de estoque:', error);
     }
   };
 
@@ -608,7 +685,7 @@ if (order.order_items) {
         </body>
       </html>
     `;
-    
+
     const printWindow = window.open('', '_blank');
     if (printWindow) {
       printWindow.document.write(printContent);
@@ -617,33 +694,33 @@ if (order.order_items) {
     }
   };
 
- const resetForm = () => {
-  setFormData({
-    client_id: '',
-    client_name: '',
-    discount_percentage: '0',
-    delivery_fee: '0',
-    payment_method: '',
-    status: 'orcamento',
-    delivery_date: '',
-    notes: ''
-  });
-  setOrderItems([]);
-  setNewItem({
-    product_id: '',
-    product_name: '',
-    quantity: 1,
-    unit_price: 0,
-    adicionais: [],
-    size: null,
-    variations: [] // NOVO
-  });
-};
+  const resetForm = () => {
+    setFormData({
+      client_id: '',
+      client_name: '',
+      discount_percentage: '0',
+      delivery_fee: '0',
+      payment_method: '',
+      status: 'orcamento',
+      delivery_date: '',
+      notes: ''
+    });
+    setOrderItems([]);
+    setNewItem({
+      product_id: '',
+      product_name: '',
+      quantity: 1,
+      unit_price: 0,
+      adicionais: [],
+      size: null,
+      variations: [] // NOVO
+    });
+  };
 
   const filteredOrders = orders.filter(order => {
     const matchesSearch = order.client_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         order.id.toLowerCase().includes(searchTerm.toLowerCase());
-    
+      order.id.toLowerCase().includes(searchTerm.toLowerCase());
+
     let matchesStatus = true;
     if (quickFilter !== 'all') {
       const filter = quickFilters.find(f => f.key === quickFilter);
@@ -653,7 +730,7 @@ if (order.order_items) {
     } else if (statusFilter !== 'all') {
       matchesStatus = order.status === statusFilter;
     }
-    
+
     return matchesSearch && matchesStatus;
   });
 
@@ -739,8 +816,8 @@ if (order.order_items) {
               </SelectTrigger>
               <SelectContent>
                 {statusOptions.map((status) => (
-                  <SelectItem 
-                    key={status.value} 
+                  <SelectItem
+                    key={status.value}
                     value={status.value}
                     className="cursor-pointer"
                   >
@@ -803,7 +880,7 @@ if (order.order_items) {
                 <Edit className="w-4 h-4 mr-2" />
                 Editar
               </DropdownMenuItem>
-              <DropdownMenuItem 
+              <DropdownMenuItem
                 onClick={(e) => handleDelete(row.id, e)}
                 className="text-destructive"
               >
@@ -823,7 +900,7 @@ if (order.order_items) {
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <h1 className="text-xl sm:text-2xl font-bold text-foreground">Pedidos</h1>
-          
+
           {/* Action Buttons */}
           <div className="flex flex-wrap gap-2">
             {/* Quick Filter Buttons */}
@@ -840,7 +917,7 @@ if (order.order_items) {
                 </Button>
               ))}
             </div>
-            
+
             {/* Export Dropdown */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -886,24 +963,24 @@ if (order.order_items) {
                     <div className="space-y-2">
                       <Label htmlFor="client_name">Cliente *</Label>
                       <Combobox
-                        options={clients.map(client => ({ 
-                          value: client.id, 
-                          label: client.name 
+                        options={clients.map(client => ({
+                          value: client.id,
+                          label: client.name
                         }))}
                         value={formData.client_id}
                         onChange={(value) => {
                           const selectedClient = clients.find(c => c.id === value);
-                          setFormData({ 
-                            ...formData, 
+                          setFormData({
+                            ...formData,
                             client_id: value,
-                            client_name: selectedClient?.name || '' 
+                            client_name: selectedClient?.name || ''
                           });
                         }}
                         placeholder="Selecione ou digite um cliente..."
                         emptyMessage="Nenhum cliente encontrado."
                       />
                     </div>
-                    
+
                     <div className="space-y-2">
                       <Label htmlFor="delivery_date">Data de Entrega</Label>
                       <Input
@@ -928,22 +1005,22 @@ if (order.order_items) {
                       <div className="grid grid-cols-1 md:grid-cols-5 gap-2 p-4 bg-muted/30 rounded-lg">
                         <div className="space-y-2">
                           <Label>Produto</Label>
-                        <Select 
-  value={newItem.product_id} 
-  onValueChange={(value) => {
-    const product = products.find(p => p.id === value);
-    resetVariationsForNewProduct(); // NOVO
-    setNewItem({
-      ...newItem,
-      product_id: value,
-      product_name: product?.name || '',
-      unit_price: product?.price || 0,
-      adicionais: [],
-      size: null,
-      variations: [] // explícito
-    });
-  }}
->
+                          <Select
+                            value={newItem.product_id}
+                            onValueChange={(value) => {
+                              const product = products.find(p => p.id === value);
+                              resetVariationsForNewProduct(); // NOVO
+                              setNewItem({
+                                ...newItem,
+                                product_id: value,
+                                product_name: product?.name || '',
+                                unit_price: product?.price || 0,
+                                adicionais: [],
+                                size: null,
+                                variations: [] // explícito
+                              });
+                            }}
+                          >
                             <SelectTrigger>
                               <SelectValue placeholder="Selecione..." />
                             </SelectTrigger>
@@ -956,117 +1033,117 @@ if (order.order_items) {
                             </SelectContent>
                           </Select>
                           {newItem.product_id &&
-  products.find(p => p.id === newItem.product_id)?.sizes?.length > 0 && (
+                            products.find(p => p.id === newItem.product_id)?.sizes?.length > 0 && (
 
-  <div className="space-y-2">
-    <Label>Tamanho / Variação</Label>
+                              <div className="space-y-2">
+                                <Label>Tamanho / Variação</Label>
 
-    <Select
-      value={newItem.size?.name || ''}
-      onValueChange={(value) => {
-        const product = products.find(p => p.id === newItem.product_id)
-        const size = product?.sizes?.find(s => s.name === value)
+                                <Select
+                                  value={newItem.size?.name || ''}
+                                  onValueChange={(value) => {
+                                    const product = products.find(p => p.id === newItem.product_id)
+                                    const size = product?.sizes?.find(s => s.name === value)
 
-        if (!size) return
+                                    if (!size) return
 
-        setNewItem({
-          ...newItem,
-          size,
-          unit_price: size.price
-        })
-      }}
-    >
-      <SelectTrigger>
-        <SelectValue placeholder="Selecione..." />
-      </SelectTrigger>
+                                    setNewItem({
+                                      ...newItem,
+                                      size,
+                                      unit_price: size.price
+                                    })
+                                  }}
+                                >
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="Selecione..." />
+                                  </SelectTrigger>
 
-      <SelectContent>
-        {products
-          .find(p => p.id === newItem.product_id)
-          ?.sizes?.map((s, i) => (
-            <SelectItem key={i} value={s.name}>
-              {s.name} (+{formatPrice(s.price)})
-            </SelectItem>
-          ))}
-      </SelectContent>
-    </Select>
-  </div>
-)}
-{/* NOVA SEÇÃO - Variações (Cores, Sabores, etc) */}
-{newItem.product_id && 
-  products.find(p => p.id === newItem.product_id)?.variations?.length > 0 && (
-  <div className="space-y-4 mt-4 border-t pt-4">
-    {products
-      .find(p => p.id === newItem.product_id)
-      ?.variations?.map((group, groupIndex) => {
-        // Encontra a variação atualmente selecionada para este grupo
-        const selectedVariation = newItem.variations?.find(
-          v => v.group === group.name
-        );
-        
-        return (
-          <div key={groupIndex} className="space-y-2">
-            <Label className="font-medium">
-              {group.name}
-            </Label>
-            
-            <Select
-              value={selectedVariation?.name || ''}
-              onValueChange={(value) => {
-                // Encontra a opção selecionada
-                const option = group.options.find(opt => opt.name === value);
-                if (!option) return;
-                
-                let updatedVariations = [...(newItem.variations || [])];
-                
-                // Remove qualquer opção já selecionada deste grupo
-                updatedVariations = updatedVariations.filter(
-                  v => v.group !== group.name
-                );
-                
-                // Adiciona a nova seleção
-                updatedVariations.push({
-                  group: group.name,
-                  name: option.name,
-                  price: option.price || 0
-                });
-                
-                setNewItem({
-                  ...newItem,
-                  variations: updatedVariations
-                });
-              }}
-            >
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder={`Selecione ${group.name.toLowerCase()}...`} />
-              </SelectTrigger>
-              <SelectContent>
-                {group.options.map((option, optIndex) => (
-                  <SelectItem key={optIndex} value={option.name}>
-                    <div className="flex items-center justify-between w-full gap-4">
-                      <span>{option.name}</span>
-                      {option.price && option.price > 0 && (
-                        <Badge variant="secondary" className="ml-2">
-                          +{formatPrice(option.price)}
-                        </Badge>
-                      )}
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            
-            {/* Mostrar preço adicional se houver */}
-            {selectedVariation && selectedVariation.price > 0 && (
-              <p className="text-xs text-muted-foreground mt-1">
-                Adicional: {formatPrice(selectedVariation.price)}
-              </p>
-            )}
-          </div>
-        );
-      })}
-  </div>
-)}
+                                  <SelectContent>
+                                    {products
+                                      .find(p => p.id === newItem.product_id)
+                                      ?.sizes?.map((s, i) => (
+                                        <SelectItem key={i} value={s.name}>
+                                          {s.name} (+{formatPrice(s.price)})
+                                        </SelectItem>
+                                      ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                            )}
+                          {/* NOVA SEÇÃO - Variações (Cores, Sabores, etc) */}
+                          {newItem.product_id &&
+                            products.find(p => p.id === newItem.product_id)?.variations?.length > 0 && (
+                              <div className="space-y-4 mt-4 border-t pt-4">
+                                {products
+                                  .find(p => p.id === newItem.product_id)
+                                  ?.variations?.map((group, groupIndex) => {
+                                    // Encontra a variação atualmente selecionada para este grupo
+                                    const selectedVariation = newItem.variations?.find(
+                                      v => v.group === group.name
+                                    );
+
+                                    return (
+                                      <div key={groupIndex} className="space-y-2">
+                                        <Label className="font-medium">
+                                          {group.name}
+                                        </Label>
+
+                                        <Select
+                                          value={selectedVariation?.name || ''}
+                                          onValueChange={(value) => {
+                                            // Encontra a opção selecionada
+                                            const option = group.options.find(opt => opt.name === value);
+                                            if (!option) return;
+
+                                            let updatedVariations = [...(newItem.variations || [])];
+
+                                            // Remove qualquer opção já selecionada deste grupo
+                                            updatedVariations = updatedVariations.filter(
+                                              v => v.group !== group.name
+                                            );
+
+                                            // Adiciona a nova seleção
+                                            updatedVariations.push({
+                                              group: group.name,
+                                              name: option.name,
+                                              price: option.price || 0
+                                            });
+
+                                            setNewItem({
+                                              ...newItem,
+                                              variations: updatedVariations
+                                            });
+                                          }}
+                                        >
+                                          <SelectTrigger className="w-full">
+                                            <SelectValue placeholder={`Selecione ${group.name.toLowerCase()}...`} />
+                                          </SelectTrigger>
+                                          <SelectContent>
+                                            {group.options.map((option, optIndex) => (
+                                              <SelectItem key={optIndex} value={option.name}>
+                                                <div className="flex items-center justify-between w-full gap-4">
+                                                  <span>{option.name}</span>
+                                                  {option.price && option.price > 0 && (
+                                                    <Badge variant="secondary" className="ml-2">
+                                                      +{formatPrice(option.price)}
+                                                    </Badge>
+                                                  )}
+                                                </div>
+                                              </SelectItem>
+                                            ))}
+                                          </SelectContent>
+                                        </Select>
+
+                                        {/* Mostrar preço adicional se houver */}
+                                        {selectedVariation && selectedVariation.price > 0 && (
+                                          <p className="text-xs text-muted-foreground mt-1">
+                                            Adicional: {formatPrice(selectedVariation.price)}
+                                          </p>
+                                        )}
+                                      </div>
+                                    );
+                                  })}
+                              </div>
+                            )}
 
                           {/* Seção de Adicionais */}
                           {newItem.product_id && products.find(p => p.id === newItem.product_id)?.adicionais?.length > 0 && (
@@ -1134,65 +1211,65 @@ if (order.order_items) {
                           </Button>
                         </div>
                       </div>
-{/* Lista de Produtos */}
-{orderItems.length > 0 && (
-  <div className="space-y-2">
-    <Label>Produtos Adicionados:</Label>
-    <div className="border rounded-lg">
-      {orderItems.map((item, index) => (
-        <div key={index} className="flex items-center justify-between p-3 border-b last:border-b-0">
-          <div className="flex-1">
-            <div className="font-medium">{item.product_name}</div>
-            
-            {item.size && (
-              <div className="text-sm text-muted-foreground">
-                Tamanho: {item.size.name}
-              </div>
-            )}
-            
-            {/* Exibir variações */}
-            {item.variations && item.variations.length > 0 && (
-              <div className="text-sm text-gray-500 mt-1">
-                <span className="font-medium">Variações:</span>{" "}
-                {item.variations.map((v, i) => (
-                  <span key={i}>
-                    {v.group}: {v.name} {v.price > 0 && `(+${formatPrice(v.price)})`}
-                    {i < item.variations.length - 1 ? ', ' : ''}
-                  </span>
-                ))}
-              </div>
-            )}
-            
-            <div className="text-sm text-muted-foreground">
-              {item.quantity}x {formatPrice(item.unit_price)} = {formatPrice(item.quantity * item.unit_price)}
-            </div>
-            
-            {item.adicionais && item.adicionais.length > 0 && (
-              <div className="text-sm text-gray-500 mt-1">
-                <span className="font-medium">Adicionais:</span>{" "}
-                {item.adicionais.map((a, i) => (
-                  <span key={i}>
-                    {a.name} (+{formatPrice(a.price)}){i < item.adicionais.length - 1 ? ', ' : ''}
-                  </span>
-                ))}
-              </div>
-            )}
-          </div>
-          
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => removeItemFromOrder(index)}
-            className="text-red-600 hover:text-red-700"
-          >
-            <X className="w-4 h-4" />
-          </Button>
-        </div>
-      ))}
-    </div>
-  </div>
-)}
+                      {/* Lista de Produtos */}
+                      {orderItems.length > 0 && (
+                        <div className="space-y-2">
+                          <Label>Produtos Adicionados:</Label>
+                          <div className="border rounded-lg">
+                            {orderItems.map((item, index) => (
+                              <div key={index} className="flex items-center justify-between p-3 border-b last:border-b-0">
+                                <div className="flex-1">
+                                  <div className="font-medium">{item.product_name}</div>
+
+                                  {item.size && (
+                                    <div className="text-sm text-muted-foreground">
+                                      Tamanho: {item.size.name}
+                                    </div>
+                                  )}
+
+                                  {/* Exibir variações */}
+                                  {item.variations && item.variations.length > 0 && (
+                                    <div className="text-sm text-gray-500 mt-1">
+                                      <span className="font-medium">Variações:</span>{" "}
+                                      {item.variations.map((v, i) => (
+                                        <span key={i}>
+                                          {v.group}: {v.name} {v.price > 0 && `(+${formatPrice(v.price)})`}
+                                          {i < item.variations.length - 1 ? ', ' : ''}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  )}
+
+                                  <div className="text-sm text-muted-foreground">
+                                    {item.quantity}x {formatPrice(item.unit_price)} = {formatPrice(item.quantity * item.unit_price)}
+                                  </div>
+
+                                  {item.adicionais && item.adicionais.length > 0 && (
+                                    <div className="text-sm text-gray-500 mt-1">
+                                      <span className="font-medium">Adicionais:</span>{" "}
+                                      {item.adicionais.map((a, i) => (
+                                        <span key={i}>
+                                          {a.name} (+{formatPrice(a.price)}){i < item.adicionais.length - 1 ? ', ' : ''}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => removeItemFromOrder(index)}
+                                  className="text-red-600 hover:text-red-700"
+                                >
+                                  <X className="w-4 h-4" />
+                                </Button>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
 
                       {/* Resumo Financeiro */}
                       {orderItems.length > 0 && (
@@ -1237,7 +1314,7 @@ if (order.order_items) {
                         placeholder="0"
                       />
                     </div>
-                    
+
                     <div className="space-y-2">
                       <Label htmlFor="delivery_fee">Taxa de Entrega</Label>
                       <Input
@@ -1268,7 +1345,7 @@ if (order.order_items) {
                         </SelectContent>
                       </Select>
                     </div>
-                    
+
                     <div className="space-y-2">
                       <Label htmlFor="status">Status</Label>
                       <Select value={formData.status} onValueChange={(value) => setFormData({ ...formData, status: value })}>
@@ -1285,7 +1362,7 @@ if (order.order_items) {
                       </Select>
                     </div>
                   </div>
-                  
+
                   <div className="space-y-2">
                     <Label htmlFor="notes">Observações</Label>
                     <Textarea
@@ -1296,14 +1373,14 @@ if (order.order_items) {
                       rows={3}
                     />
                   </div>
-                  
+
                   <div className="flex gap-2">
                     <Button type="submit" className="flex-1">
                       {editingOrder ? 'Atualizar' : 'Criar'}
                     </Button>
-                    <Button 
-                      type="button" 
-                      variant="outline" 
+                    <Button
+                      type="button"
+                      variant="outline"
                       onClick={() => setIsDialogOpen(false)}
                     >
                       Cancelar
@@ -1360,8 +1437,8 @@ if (order.order_items) {
               onRowClick={(order) => handleView(order.id)}
               loading={loading}
               emptyMessage={
-                searchTerm || quickFilter !== 'all' || statusFilter !== 'all' 
-                  ? 'Nenhum pedido encontrado' 
+                searchTerm || quickFilter !== 'all' || statusFilter !== 'all'
+                  ? 'Nenhum pedido encontrado'
                   : 'Nenhum pedido cadastrado'
               }
             />

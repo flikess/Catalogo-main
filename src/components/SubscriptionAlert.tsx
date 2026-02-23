@@ -4,8 +4,11 @@ import { Button } from '@/components/ui/button'
 import { AlertTriangle, X, Crown } from 'lucide-react'
 import { useSubscription } from '@/hooks/useSubscription'
 import { useAuth } from '@/components/auth/AuthProvider'
+import { useNavigate } from 'react-router-dom'
+
 
 export const SubscriptionAlert = () => {
+  const navigate = useNavigate()
   const { user } = useAuth()
   const { subscriptionStatus, formatDaysMessage } = useSubscription()
   const [isVisible, setIsVisible] = useState(false)
@@ -32,13 +35,10 @@ export const SubscriptionAlert = () => {
   }
 
   const handleRenew = () => {
-    // Redirecionar para checkout da Cakto
-    const checkoutUrl = subscriptionStatus.plano === 'Anual' 
-      ? 'https://pay.cakto.com.br/confeitaria-pro-anual' // Substitua pela URL real
-      : 'https://pay.cakto.com.br/confeitaria-pro-mensal' // Substitua pela URL real
-    
-    window.open(checkoutUrl, '_blank')
+    navigate('/pagamento')
+    setIsVisible(false)
   }
+
 
   const handleDismiss = () => {
     setIsVisible(false)
@@ -52,21 +52,21 @@ export const SubscriptionAlert = () => {
           <div className="flex items-center gap-2">
             <Crown className="h-4 w-4 text-yellow-600" />
             <span className="font-medium text-yellow-800">
-              ⚠️ Sua assinatura {subscriptionStatus.plano} vence {formatDaysMessage(subscriptionStatus.daysUntilExpiration)}. 
+              ⚠️ Sua assinatura {subscriptionStatus.plano} vence {formatDaysMessage(subscriptionStatus.daysUntilExpiration)}.
               Renove para não perder acesso!
             </span>
           </div>
           <div className="flex items-center gap-2 ml-4">
-            <Button 
-              size="sm" 
+            <Button
+              size="sm"
               onClick={handleRenew}
               className="bg-yellow-600 hover:bg-yellow-700 text-white"
             >
               Renovar Agora
             </Button>
-            <Button 
-              variant="ghost" 
-              size="sm" 
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={handleDismiss}
               className="text-yellow-600 hover:text-yellow-700"
             >

@@ -51,7 +51,7 @@ const Pagamento = () => {
       mensal: 'https://pay.cakto.com.br/fk98ct3',
       anual: 'https://pay.cakto.com.br/xc5mxv4'
     }
-    
+
     window.open(checkoutUrls[planType], '_blank')
   }
 
@@ -125,10 +125,10 @@ const Pagamento = () => {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="text-center">
-                <div className="text-3xl font-bold text-blue-600">R$ 19,90</div>
+                <div className="text-3xl font-bold text-blue-600">R$ 29,99</div>
                 <div className="text-sm text-gray-500">por mês</div>
               </div>
-              
+
               <ul className="space-y-2 text-sm">
                 <li className="flex items-center gap-2">
                   <CheckCircle className="w-4 h-4 text-green-600" />
@@ -151,9 +151,9 @@ const Pagamento = () => {
                   Suporte técnico
                 </li>
               </ul>
-              
-              <Button 
-                onClick={() => handleRenewPlan('mensal')} 
+
+              <Button
+                onClick={() => handleRenewPlan('mensal')}
                 className="w-full bg-blue-600 hover:bg-blue-700"
               >
                 Renovar Mensal
@@ -176,13 +176,13 @@ const Pagamento = () => {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="text-center">
-                <div className="text-3xl font-bold text-green-600">R$ 97,90</div>
+                <div className="text-3xl font-bold text-green-600">R$ 149,99</div>
                 <div className="text-sm text-gray-500">por ano</div>
                 <div className="text-xs text-green-600 font-medium">
-                  Economize R$ 140,90 (59% de desconto)
+                  Economize R$ 199 em relação ao plano mensal.
                 </div>
               </div>
-              
+
               <ul className="space-y-2 text-sm">
                 <li className="flex items-center gap-2">
                   <CheckCircle className="w-4 h-4 text-green-600" />
@@ -205,9 +205,9 @@ const Pagamento = () => {
                   Sem preocupação por 1 ano
                 </li>
               </ul>
-              
-              <Button 
-                onClick={() => handleRenewPlan('anual')} 
+
+              <Button
+                onClick={() => handleRenewPlan('anual')}
                 className="w-full bg-green-600 hover:bg-green-700"
               >
                 Renovar Anual
@@ -224,7 +224,7 @@ const Pagamento = () => {
                 ✨ Após a renovação
               </h3>
               <p className="text-sm text-blue-800">
-                Seu acesso será restaurado automaticamente e você poderá continuar 
+                Seu acesso será restaurado automaticamente e você poderá continuar
                 gerenciando sua Loja sem interrupções.
               </p>
             </div>
@@ -233,8 +233,8 @@ const Pagamento = () => {
 
         {/* Botão Sair do Sistema */}
         <div className="text-center">
-          <Button 
-            variant="outline" 
+          <Button
+            variant="outline"
             onClick={handleLogout}
             className="flex items-center gap-2 text-gray-600 hover:text-gray-800"
           >

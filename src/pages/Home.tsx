@@ -136,9 +136,13 @@ const Home: React.FC = () => {
               <Button variant="outline" onClick={() => navigate('/login')}>
                 Entrar
               </Button>
+              <Button onClick={() => navigate('/trial')} className="ml-2 bg-gradient-to-r from-purple-600 to-pink-600">
+                Teste Grátis
+              </Button>
               <Button onClick={scrollToPlanos} className="ml-2 bg-gradient-to-r from-pink-500 to-purple-600">
                 Assinar Agora
               </Button>
+
             </nav>
 
             <div className="md:hidden">
@@ -174,11 +178,15 @@ const Home: React.FC = () => {
               </p>
 
               <div className="flex flex-col sm:flex-row gap-3">
-                <Button size="lg" className="inline-flex items-center justify-center bg-gradient-to-r from-pink-500 to-purple-600" onClick={scrollToPlanos}>
-                  <Crown className="w-5 h-5 mr-2" /> Assinar Agora
+                <Button size="lg" className="inline-flex items-center justify-center bg-gradient-to-r from-purple-600 to-pink-600 shadow-lg shadow-purple-200" onClick={() => navigate('/trial')}>
+                  <Zap className="w-5 h-5 mr-2" /> Começar Teste Grátis
                 </Button>
-                <Button variant="outline" size="lg" onClick={() => navigate('/login')}>Já tenho conta</Button>
+                <Button variant="outline" size="lg" onClick={scrollToPlanos}>
+                  <Crown className="w-5 h-5 mr-2" /> Ver Planos
+                </Button>
+                <Button variant="ghost" size="lg" onClick={() => navigate('/login')}>Já tenho conta</Button>
               </div>
+
 
               <p className="text-sm text-gray-500 mt-4">✅ Sem compromisso • ✅ Cancele quando quiser • ✅ Suporte incluído</p>
             </div>

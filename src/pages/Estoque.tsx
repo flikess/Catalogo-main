@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { ResponsiveTable } from '@/components/ui/responsive-table'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Plus, Search, Edit, Trash2, AlertTriangle, Package, TrendingUp, TrendingDown, Tag, List } from 'lucide-react'
+import { Plus, Search, Edit, Trash2, AlertTriangle, Package, TrendingUp, TrendingDown, Tag, List, ShoppingBag } from 'lucide-react'
 import { supabase } from '@/integrations/supabase/client'
 import { useAuth } from '@/components/auth/AuthProvider'
 import { showSuccess, showError } from '@/utils/toast'
@@ -41,6 +41,16 @@ interface StockMovement {
   created_at: string
 }
 
+interface Product {
+  id: string
+  name: string
+  track_stock: boolean
+  stock_quantity: number
+  categorias_produtos?: {
+    nome: string
+  }
+}
+
 interface StockCategory {
   id: string
   name: string
@@ -63,6 +73,7 @@ const Estoque = () => {
   const { user } = useAuth()
   const [stockItems, setStockItems] = useState<StockItem[]>([])
   const [stockCategories, setStockCategories] = useState<StockCategory[]>([])
+  const [products, setProducts] = useState<Product[]>([])
   const [movements, setMovements] = useState<StockMovement[]>([])
   const [loading, setLoading] = useState(true)
   const [loadingCategories, setLoadingCategories] = useState(false)
@@ -98,6 +109,7 @@ const Estoque = () => {
   useEffect(() => {
     fetchStockItems()
     fetchStockCategories()
+    fetchProducts()
     fetchMovements()
   }, [])
 
@@ -143,6 +155,38 @@ const Estoque = () => {
     }
   }
 
+  const fetchProducts = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('products')
+        .select(`
+          id,
+          name,
+          track_stock,
+          stock_quantity,
+          categorias_produtos (
+            nome
+          )
+        `)
+        .eq('user_id', user?.id)
+        .eq('track_stock', true)
+        .order('name')
+
+      if (error) throw error
+
+      const formattedData = (data || []).map((p: any) => ({
+        ...p,
+        categorias_produtos: Array.isArray(p.categorias_produtos)
+          ? p.categorias_produtos[0]
+          : p.categorias_produtos
+      }))
+
+      setProducts(formattedData)
+    } catch (error) {
+      console.error('Error fetching products for stock:', error)
+    }
+  }
+
   const fetchMovements = async () => {
     try {
       const { data, error } = await supabase
@@ -164,12 +208,12 @@ const Estoque = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    
+
     if (!formData.category_id) {
       showError('Por favor, selecione uma categoria')
       return
     }
-    
+
     try {
       const itemData = {
         name: formData.name,
@@ -217,12 +261,12 @@ const Estoque = () => {
 
   const handleCategorySubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    
+
     if (!categoryFormData.name.trim()) {
       showError('Nome da categoria é obrigatório')
       return
     }
-    
+
     try {
       if (editingCategory) {
         // Atualizar categoria existente
@@ -263,12 +307,12 @@ const Estoque = () => {
 
   const handleMovement = async (e: React.FormEvent) => {
     e.preventDefault()
-    
+
     if (!selectedItem) return
 
     try {
       const quantity = parseFloat(movementData.quantity)
-      
+
       // Registrar movimentação
       const { error: movementError } = await supabase
         .from('stock_movements')
@@ -283,13 +327,13 @@ const Estoque = () => {
       if (movementError) throw movementError
 
       // Atualizar quantidade em estoque
-      const newQuantity = movementData.type === 'entrada' 
+      const newQuantity = movementData.type === 'entrada'
         ? selectedItem.quantity + quantity
         : selectedItem.quantity - quantity
 
       const { error: updateError } = await supabase
         .from('stock_items')
-        .update({ 
+        .update({
           quantity: Math.max(0, newQuantity),
           updated_at: new Date().toISOString()
         })
@@ -302,6 +346,7 @@ const Estoque = () => {
       setSelectedItem(null)
       resetMovementForm()
       fetchStockItems()
+      fetchProducts()
       fetchMovements()
     } catch (error) {
       console.error('Error recording movement:', error)
@@ -404,13 +449,20 @@ const Estoque = () => {
   }
 
   const filteredItems = stockItems.filter(item =>
-    item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    item.supplier?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     item.stock_categories?.name.toLowerCase().includes(searchTerm.toLowerCase())
   )
 
-  const lowStockItems = stockItems.filter(item => 
+  const filteredProducts = products.filter(product =>
+    product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    product.categorias_produtos?.nome.toLowerCase().includes(searchTerm.toLowerCase())
+  )
+
+  const lowStockItems = stockItems.filter(item =>
     item.quantity <= item.minimum_stock && item.minimum_stock > 0
+  )
+
+  const lowStockProducts = products.filter(product =>
+    product.stock_quantity <= 5 // Alerta arbitrário para produtos (abaixo de 5 unidades)
   )
 
   const formatPrice = (price: number) => {
@@ -523,8 +575,8 @@ const Estoque = () => {
           <h1 className="text-2xl font-bold text-gray-900">Controle de Estoque</h1>
           <div className="flex gap-2">
             {/* Botão Listar Categorias */}
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               onClick={() => setIsCategoriesListOpen(true)}
             >
               <List className="w-4 h-4 mr-2" />
@@ -559,7 +611,7 @@ const Estoque = () => {
                       required
                     />
                   </div>
-                  
+
                   <div className="space-y-2">
                     <Label htmlFor="category_description">Descrição</Label>
                     <Textarea
@@ -570,14 +622,14 @@ const Estoque = () => {
                       rows={2}
                     />
                   </div>
-                  
+
                   <DialogFooter>
                     <Button type="submit">
                       {editingCategory ? 'Atualizar' : 'Criar'}
                     </Button>
-                    <Button 
-                      type="button" 
-                      variant="outline" 
+                    <Button
+                      type="button"
+                      variant="outline"
                       onClick={() => setIsCategoryDialogOpen(false)}
                     >
                       Cancelar
@@ -615,8 +667,8 @@ const Estoque = () => {
 
                   <div className="space-y-2">
                     <Label htmlFor="category_id">Categoria *</Label>
-                    <Select 
-                      value={formData.category_id} 
+                    <Select
+                      value={formData.category_id}
                       onValueChange={(value) => setFormData({ ...formData, category_id: value })}
                       required
                     >
@@ -632,7 +684,7 @@ const Estoque = () => {
                       </SelectContent>
                     </Select>
                   </div>
-                  
+
                   <div className="space-y-2">
                     <Label htmlFor="description">Descrição</Label>
                     <Textarea
@@ -643,7 +695,7 @@ const Estoque = () => {
                       rows={2}
                     />
                   </div>
-                  
+
                   <div className="grid grid-cols-2 gap-2">
                     <div className="space-y-2">
                       <Label htmlFor="quantity">Quantidade *</Label>
@@ -657,7 +709,7 @@ const Estoque = () => {
                         required
                       />
                     </div>
-                    
+
                     <div className="space-y-2">
                       <Label htmlFor="unit">Unidade</Label>
                       <Select value={formData.unit} onValueChange={(value) => setFormData({ ...formData, unit: value })}>
@@ -672,7 +724,7 @@ const Estoque = () => {
                       </Select>
                     </div>
                   </div>
-                  
+
                   <div className="grid grid-cols-2 gap-2">
                     <div className="space-y-2">
                       <Label htmlFor="minimum_stock">Estoque Mínimo</Label>
@@ -685,7 +737,7 @@ const Estoque = () => {
                         onChange={(e) => setFormData({ ...formData, minimum_stock: e.target.value })}
                       />
                     </div>
-                    
+
                     <div className="space-y-2">
                       <Label htmlFor="cost_per_unit">Custo Unitário</Label>
                       <Input
@@ -698,7 +750,7 @@ const Estoque = () => {
                       />
                     </div>
                   </div>
-                  
+
                   <div className="space-y-2">
                     <Label htmlFor="supplier">Fornecedor</Label>
                     <Input
@@ -708,14 +760,14 @@ const Estoque = () => {
                       placeholder="Nome do fornecedor"
                     />
                   </div>
-                  
+
                   <DialogFooter>
                     <Button type="submit">
                       {editingItem ? 'Atualizar' : 'Criar'}
                     </Button>
-                    <Button 
-                      type="button" 
-                      variant="outline" 
+                    <Button
+                      type="button"
+                      variant="outline"
                       onClick={() => setIsDialogOpen(false)}
                     >
                       Cancelar
@@ -733,7 +785,7 @@ const Estoque = () => {
             <DialogHeader>
               <DialogTitle>Categorias de Estoque</DialogTitle>
             </DialogHeader>
-            
+
             {loadingCategories ? (
               <div className="flex justify-center py-8">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
@@ -784,8 +836,8 @@ const Estoque = () => {
                     )}
                   </TableBody>
                 </Table>
-                
-                <Button 
+
+                <Button
                   onClick={() => {
                     setIsCategoriesListOpen(false)
                     setIsCategoryDialogOpen(true)
@@ -801,21 +853,35 @@ const Estoque = () => {
         </Dialog>
 
         {/* Alertas de estoque baixo */}
-        {lowStockItems.length > 0 && (
+        {(lowStockItems.length > 0 || lowStockProducts.length > 0) && (
           <Card className="border-red-200 bg-red-50">
             <CardHeader>
               <CardTitle className="flex items-center text-red-800">
                 <AlertTriangle className="w-5 h-5 mr-2" />
-                Alertas de Estoque Baixo ({lowStockItems.length})
+                Alertas de Estoque Baixo ({lowStockItems.length + lowStockProducts.length})
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-2">
                 {lowStockItems.map(item => (
-                  <div key={item.id} className="flex justify-between items-center p-2 bg-white rounded border">
-                    <span className="font-medium">{item.name}</span>
-                    <span className="text-red-600">
+                  <div key={item.id} className="flex justify-between items-center p-2 bg-white rounded border shadow-sm">
+                    <div className="flex items-center">
+                      <Package className="w-4 h-4 mr-2 text-muted-foreground" />
+                      <span className="font-medium">{item.name}</span>
+                    </div>
+                    <span className="text-red-600 font-semibold">
                       {item.quantity} {item.unit} (mín: {item.minimum_stock})
+                    </span>
+                  </div>
+                ))}
+                {lowStockProducts.map(product => (
+                  <div key={product.id} className="flex justify-between items-center p-2 bg-white rounded border shadow-sm">
+                    <div className="flex items-center">
+                      <ShoppingBag className="w-4 h-4 mr-2 text-primary" />
+                      <span className="font-medium">{product.name} (Produto Final)</span>
+                    </div>
+                    <span className="text-red-600 font-semibold">
+                      {product.stock_quantity} un (crítico: 5)
                     </span>
                   </div>
                 ))}
@@ -842,15 +908,78 @@ const Estoque = () => {
         {/* Stock Items Table */}
         <Card>
           <CardHeader>
-            <CardTitle>Itens do Estoque ({filteredItems.length})</CardTitle>
+            <CardTitle className="flex items-center gap-2">
+              <Package className="w-5 h-5" />
+              Insumos / Matéria Prima ({filteredItems.length})
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <ResponsiveTable
               data={filteredItems}
               columns={tableColumns}
               loading={loading}
-              emptyMessage={searchTerm ? 'Nenhum item encontrado' : 'Nenhum item cadastrado'}
+              emptyMessage={searchTerm ? 'Nenhum item encontrado' : 'Nenhum item de insumo cadastrado'}
             />
+          </CardContent>
+        </Card>
+
+        {/* Products Stock Table */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <ShoppingBag className="w-5 h-5" />
+              Produtos Finais com Controle ({filteredProducts.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Produto</TableHead>
+                  <TableHead>Categoria</TableHead>
+                  <TableHead>Estoque Atual</TableHead>
+                  <TableHead className="text-right">Ações</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredProducts.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
+                      {searchTerm ? 'Nenhum produto encontrado' : 'Nenhum produto com controle de estoque ativo'}
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  filteredProducts.map(product => (
+                    <TableRow key={product.id}>
+                      <TableCell className="font-medium">{product.name}</TableCell>
+                      <TableCell>
+                        <Badge variant="secondary">
+                          {product.categorias_produtos?.nome || 'Sem categoria'}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <span className={`font-bold ${product.stock_quantity <= 5 ? 'text-red-600' : 'text-green-600'}`}>
+                          {product.stock_quantity} unidades
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            // Redireciona para edição do produto se necessário ou abre modal
+                            window.location.href = `/produtos?edit=${product.id}`
+                          }}
+                        >
+                          <Edit className="w-4 h-4 mr-2" />
+                          Ajustar
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
           </CardContent>
         </Card>
 
@@ -885,7 +1014,7 @@ const Estoque = () => {
                   </SelectContent>
                 </Select>
               </div>
-              
+
               <div className="space-y-2">
                 <Label htmlFor="movement_quantity">Quantidade *</Label>
                 <Input
@@ -899,7 +1028,7 @@ const Estoque = () => {
                   required
                 />
               </div>
-              
+
               <div className="space-y-2">
                 <Label htmlFor="reason">Motivo</Label>
                 <Input
@@ -909,7 +1038,7 @@ const Estoque = () => {
                   placeholder="Ex: Compra, Uso em produção, Perda"
                 />
               </div>
-              
+
               <div className="space-y-2">
                 <Label htmlFor="notes">Observações</Label>
                 <Textarea
@@ -920,14 +1049,14 @@ const Estoque = () => {
                   rows={2}
                 />
               </div>
-              
+
               <DialogFooter>
                 <Button type="submit">
                   Registrar {movementData.type === 'entrada' ? 'Entrada' : 'Saída'}
                 </Button>
-                <Button 
-                  type="button" 
-                  variant="outline" 
+                <Button
+                  type="button"
+                  variant="outline"
                   onClick={() => {
                     setIsMovementDialogOpen(false)
                     resetMovementForm()

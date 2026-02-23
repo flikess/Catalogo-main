@@ -52,6 +52,8 @@ interface Product {
   adicionais?: Additional[]
   sizes?: SizeOption[]
   variations?: VariationGroup[]
+  track_stock: boolean
+  stock_quantity?: number
 }
 
 
@@ -87,7 +89,9 @@ const Produtos = () => {
     image_url: '',
     adicionais: [] as Additional[],
     sizes: [] as SizeOption[],
-    variations: [] as VariationGroup[]
+    variations: [] as VariationGroup[],
+    track_stock: false,
+    stock_quantity: '0'
   })
 
   const [categoryFormData, setCategoryFormData] = useState({
@@ -188,7 +192,7 @@ const Produtos = () => {
       await supabase.storage
         .from('product-images')
         .remove([filePath])
-    } catch {}
+    } catch { }
   }
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -214,31 +218,31 @@ const Produtos = () => {
   }
 
   const handleAdditionalChange = (index: number, field: keyof Additional, value: string) => {
-  const newList = [...formData.adicionais]
+    const newList = [...formData.adicionais]
 
-  if (field === 'price') {
-    // Remove tudo que não seja número e vírgula
-    let numeric = value.replace(/\D/g, '')
-    if (!numeric) {
-      newList[index][field] = 0
-    } else {
-      numeric = numeric.replace(/^0+/, '')
-      if (numeric.length <= 2) {
-        newList[index][field] = parseFloat('0.' + numeric.padStart(2, '0'))
+    if (field === 'price') {
+      // Remove tudo que não seja número e vírgula
+      let numeric = value.replace(/\D/g, '')
+      if (!numeric) {
+        newList[index][field] = 0
       } else {
-        const integerPart = numeric.slice(0, -2)
-        const decimalPart = numeric.slice(-2)
-        newList[index][field] = parseFloat(integerPart + '.' + decimalPart)
+        numeric = numeric.replace(/^0+/, '')
+        if (numeric.length <= 2) {
+          newList[index][field] = parseFloat('0.' + numeric.padStart(2, '0'))
+        } else {
+          const integerPart = numeric.slice(0, -2)
+          const decimalPart = numeric.slice(-2)
+          newList[index][field] = parseFloat(integerPart + '.' + decimalPart)
+        }
       }
+    } else {
+      newList[index][field] = value
     }
-  } else {
-    newList[index][field] = value
+
+    setFormData({ ...formData, adicionais: newList })
   }
 
-  setFormData({ ...formData, adicionais: newList })
-}
 
-  
   const addAdditional = () => {
     setFormData({
       ...formData,
@@ -264,33 +268,33 @@ const Produtos = () => {
     })
   }
 
- const updateSize = (index: number, field: keyof SizeOption, value: string) => {
-  const list = [...formData.sizes]
+  const updateSize = (index: number, field: keyof SizeOption, value: string) => {
+    const list = [...formData.sizes]
 
-  if (field === 'price') {
-    let numeric = value.replace(/\D/g, '')
-
-    if (!numeric) {
-      list[index].price = null
-    } else {
-      numeric = numeric.replace(/^0+/, '')
+    if (field === 'price') {
+      let numeric = value.replace(/\D/g, '')
 
       if (!numeric) {
         list[index].price = null
-      } else if (numeric.length <= 2) {
-        list[index].price = Number('0.' + numeric.padStart(2, '0'))
       } else {
-        const integerPart = numeric.slice(0, -2)
-        const decimalPart = numeric.slice(-2)
-        list[index].price = Number(integerPart + '.' + decimalPart)
-      }
-    }
-  } else {
-    list[index].name = value
-  }
+        numeric = numeric.replace(/^0+/, '')
 
-  setFormData({ ...formData, sizes: list })
-}
+        if (!numeric) {
+          list[index].price = null
+        } else if (numeric.length <= 2) {
+          list[index].price = Number('0.' + numeric.padStart(2, '0'))
+        } else {
+          const integerPart = numeric.slice(0, -2)
+          const decimalPart = numeric.slice(-2)
+          list[index].price = Number(integerPart + '.' + decimalPart)
+        }
+      }
+    } else {
+      list[index].name = value
+    }
+
+    setFormData({ ...formData, sizes: list })
+  }
 
 
 
@@ -305,102 +309,102 @@ const Produtos = () => {
    VARIAÇÕES
 ======================= */
 
-const addVariationGroup = () => {
-  setFormData({
-    ...formData,
-    variations: [
-      ...formData.variations,
-      { name: '', options: [] }
-    ]
-  })
-}
+  const addVariationGroup = () => {
+    setFormData({
+      ...formData,
+      variations: [
+        ...formData.variations,
+        { name: '', options: [] }
+      ]
+    })
+  }
 
-const updateVariationGroupName = (index: number, value: string) => {
-  const list = [...formData.variations]
-  list[index].name = value
-  setFormData({ ...formData, variations: list })
-}
+  const updateVariationGroupName = (index: number, value: string) => {
+    const list = [...formData.variations]
+    list[index].name = value
+    setFormData({ ...formData, variations: list })
+  }
 
-const removeVariationGroup = (index: number) => {
-  setFormData({
-    ...formData,
-    variations: formData.variations.filter((_, i) => i !== index)
-  })
-}
+  const removeVariationGroup = (index: number) => {
+    setFormData({
+      ...formData,
+      variations: formData.variations.filter((_, i) => i !== index)
+    })
+  }
 
-const addVariationOption = (groupIndex: number) => {
-  const list = [...formData.variations]
-  list[groupIndex].options.push({ name: '', price: null })
-  setFormData({ ...formData, variations: list })
-}
+  const addVariationOption = (groupIndex: number) => {
+    const list = [...formData.variations]
+    list[groupIndex].options.push({ name: '', price: null })
+    setFormData({ ...formData, variations: list })
+  }
 
-const removeVariationOption = (groupIndex: number, optionIndex: number) => {
-  const list = [...formData.variations]
-  list[groupIndex].options = list[groupIndex].options.filter(
-    (_, i) => i !== optionIndex
-  )
-  setFormData({ ...formData, variations: list })
-}
+  const removeVariationOption = (groupIndex: number, optionIndex: number) => {
+    const list = [...formData.variations]
+    list[groupIndex].options = list[groupIndex].options.filter(
+      (_, i) => i !== optionIndex
+    )
+    setFormData({ ...formData, variations: list })
+  }
 
-const updateVariationOption = (
-  groupIndex: number,
-  optionIndex: number,
-  field: 'name' | 'price',
-  value: string
-) => {
-  const list = [...formData.variations]
+  const updateVariationOption = (
+    groupIndex: number,
+    optionIndex: number,
+    field: 'name' | 'price',
+    value: string
+  ) => {
+    const list = [...formData.variations]
 
-  if (field === 'price') {
-    let numeric = value.replace(/\D/g, '')
-
-    if (!numeric) {
-      list[groupIndex].options[optionIndex].price = null
-    } else {
-      numeric = numeric.replace(/^0+/, '')
+    if (field === 'price') {
+      let numeric = value.replace(/\D/g, '')
 
       if (!numeric) {
         list[groupIndex].options[optionIndex].price = null
-      } else if (numeric.length <= 2) {
-        list[groupIndex].options[optionIndex].price =
-          Number('0.' + numeric.padStart(2, '0'))
       } else {
-        const int = numeric.slice(0, -2)
-        const dec = numeric.slice(-2)
-        list[groupIndex].options[optionIndex].price =
-          Number(int + '.' + dec)
+        numeric = numeric.replace(/^0+/, '')
+
+        if (!numeric) {
+          list[groupIndex].options[optionIndex].price = null
+        } else if (numeric.length <= 2) {
+          list[groupIndex].options[optionIndex].price =
+            Number('0.' + numeric.padStart(2, '0'))
+        } else {
+          const int = numeric.slice(0, -2)
+          const dec = numeric.slice(-2)
+          list[groupIndex].options[optionIndex].price =
+            Number(int + '.' + dec)
+        }
       }
+    } else {
+      list[groupIndex].options[optionIndex].name = value
     }
-  } else {
-    list[groupIndex].options[optionIndex].name = value
+
+    setFormData({ ...formData, variations: list })
   }
 
-  setFormData({ ...formData, variations: list })
-}
 
-  
-const handlePriceChange = (value: string) => {
-   // Remove tudo que não seja número
-  let numeric = value.replace(/\D/g, '')
+  const handlePriceChange = (value: string) => {
+    // Remove tudo que não seja número
+    let numeric = value.replace(/\D/g, '')
 
-  if (!numeric) {
-    setFormData({ ...formData, price: '' })
-    return
+    if (!numeric) {
+      setFormData({ ...formData, price: '' })
+      return
+    }
+
+    let formatted = ''
+
+    if (numeric.length <= 2) {
+      // 1 ou 2 dígitos: apenas exibe como número inteiro
+      formatted = numeric
+    } else {
+      // Mais de 2 dígitos: insere vírgula antes dos dois últimos
+      const integerPart = numeric.slice(0, -2)
+      const decimalPart = numeric.slice(-2)
+      formatted = integerPart + ',' + decimalPart
+    }
+
+    setFormData({ ...formData, price: formatted })
   }
-
-  let formatted = ''
-
-  if (numeric.length <= 2) {
-    // 1 ou 2 dígitos: apenas exibe como número inteiro
-    formatted = numeric
-  } else {
-    // Mais de 2 dígitos: insere vírgula antes dos dois últimos
-    const integerPart = numeric.slice(0, -2)
-    const decimalPart = numeric.slice(-2)
-    formatted = integerPart + ',' + decimalPart
-  }
-
-  setFormData({ ...formData, price: formatted })
-}
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -419,18 +423,20 @@ const handlePriceChange = (value: string) => {
         imageUrl = uploadedUrl
       }
 
-     const productData = {
-  name: formData.name,
-  description: formData.description || null,
-  price: Number(formData.price.replace(',', '.')),
-  categoria_id: formData.categoria_id,
-  show_in_catalog: formData.show_in_catalog,
-  image_url: imageUrl || null,
-  adicionais: formData.adicionais.length ? formData.adicionais : null,
-  sizes: formData.sizes.length ? formData.sizes : null,
-  variations: formData.variations.length ? formData.variations : null,
-  updated_at: new Date().toISOString()
-}
+      const productData = {
+        name: formData.name,
+        description: formData.description || null,
+        price: Number(formData.price.replace(',', '.')),
+        categoria_id: formData.categoria_id,
+        show_in_catalog: formData.show_in_catalog,
+        image_url: imageUrl || null,
+        adicionais: formData.adicionais.length ? formData.adicionais : null,
+        sizes: formData.sizes.length ? formData.sizes : null,
+        variations: formData.variations.length ? formData.variations : null,
+        track_stock: formData.track_stock,
+        stock_quantity: formData.track_stock ? Number(formData.stock_quantity) : null,
+        updated_at: new Date().toISOString()
+      }
 
 
       if (editingProduct) {
@@ -471,12 +477,12 @@ const handlePriceChange = (value: string) => {
 
   const handleCategorySubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    
+
     if (!categoryFormData.nome.trim()) {
       showError('Nome da categoria é obrigatório')
       return
     }
-    
+
     try {
       if (editingCategory) {
         const { error } = await supabase
@@ -511,7 +517,7 @@ const handlePriceChange = (value: string) => {
     }
   }
 
-   const handleEditCategory = (category: Category) => {
+  const handleEditCategory = (category: Category) => {
     setEditingCategory(category)
     setCategoryFormData({
       nome: category.nome
@@ -555,7 +561,9 @@ const handlePriceChange = (value: string) => {
       image_url: '',
       adicionais: [],
       sizes: [],
-      variations: []
+      variations: [],
+      track_stock: false,
+      stock_quantity: '0'
     })
     setSelectedFile(null)
     setImagePreview(null)
@@ -573,7 +581,9 @@ const handlePriceChange = (value: string) => {
       image_url: product.image_url || '',
       adicionais: product.adicionais || [],
       sizes: product.sizes || [],
-      variations: product.variations || []
+      variations: product.variations || [],
+      track_stock: product.track_stock || false,
+      stock_quantity: product.stock_quantity?.toString() || '0'
     })
 
     setImagePreview(product.image_url || null)
@@ -664,88 +674,88 @@ const handlePriceChange = (value: string) => {
   ]
 
   return (
-    
-      <Layout>
+
+    <Layout>
       <div className="space-y-6">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <h1 className="text-2xl font-bold text-gray-900">Produtos</h1>
           <div className="flex gap-2">
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               onClick={() => setIsCategoriesListOpen(true)}
             >
               <List className="w-4 h-4 mr-2" />
               Categorias
             </Button>
             <Dialog open={isCategoriesListOpen} onOpenChange={setIsCategoriesListOpen}>
-          <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>Categorias de Produtos</DialogTitle>
-            </DialogHeader>
-            
-            {loadingCategories ? (
-              <div className="flex justify-center py-8">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Nome</TableHead>
-                      <TableHead className="text-right">Ações</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {categories.length === 0 ? (
-                      <TableRow>
-                        <TableCell colSpan={2} className="text-center py-8 text-muted-foreground">
-                          Nenhuma categoria cadastrada
-                        </TableCell>
-                      </TableRow>
-                    ) : (
-                      categories.map(category => (
-                        <TableRow key={category.id}>
-                          <TableCell className="font-medium">{category.nome}</TableCell>
-                          <TableCell className="text-right">
-                            <div className="flex gap-2 justify-end">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleEditCategory(category)}
-                              >
-                                <Edit className="w-4 h-4" />
-                              </Button>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleDeleteCategory(category.id)}
-                                className="text-destructive hover:text-destructive"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </Button>
-                            </div>
-                          </TableCell>
+              <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle>Categorias de Produtos</DialogTitle>
+                </DialogHeader>
+
+                {loadingCategories ? (
+                  <div className="flex justify-center py-8">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Nome</TableHead>
+                          <TableHead className="text-right">Ações</TableHead>
                         </TableRow>
-                      ))
-                    )}
-                  </TableBody>
-                </Table>
-                
-                <Button 
-                  onClick={() => {
-                    setIsCategoriesListOpen(false)
-                    setIsCategoryDialogOpen(true)
-                  }}
-                  className="w-full"
-                >
-                  <Plus className="w-4 h-4 mr-2" />
-                  Adicionar Nova Categoria
-                </Button>
-              </div>
-            )}
-          </DialogContent>
-        </Dialog>
+                      </TableHeader>
+                      <TableBody>
+                        {categories.length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={2} className="text-center py-8 text-muted-foreground">
+                              Nenhuma categoria cadastrada
+                            </TableCell>
+                          </TableRow>
+                        ) : (
+                          categories.map(category => (
+                            <TableRow key={category.id}>
+                              <TableCell className="font-medium">{category.nome}</TableCell>
+                              <TableCell className="text-right">
+                                <div className="flex gap-2 justify-end">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleEditCategory(category)}
+                                  >
+                                    <Edit className="w-4 h-4" />
+                                  </Button>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleDeleteCategory(category.id)}
+                                    className="text-destructive hover:text-destructive"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </Button>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          ))
+                        )}
+                      </TableBody>
+                    </Table>
+
+                    <Button
+                      onClick={() => {
+                        setIsCategoriesListOpen(false)
+                        setIsCategoryDialogOpen(true)
+                      }}
+                      className="w-full"
+                    >
+                      <Plus className="w-4 h-4 mr-2" />
+                      Adicionar Nova Categoria
+                    </Button>
+                  </div>
+                )}
+              </DialogContent>
+            </Dialog>
 
             <Dialog open={isCategoryDialogOpen} onOpenChange={setIsCategoryDialogOpen}>
               <DialogTrigger asChild>
@@ -774,14 +784,14 @@ const handlePriceChange = (value: string) => {
                       required
                     />
                   </div>
-                  
+
                   <DialogFooter>
                     <Button type="submit">
                       {editingCategory ? 'Atualizar' : 'Criar'}
                     </Button>
-                    <Button 
-                      type="button" 
-                      variant="outline" 
+                    <Button
+                      type="button"
+                      variant="outline"
                       onClick={() => setIsCategoryDialogOpen(false)}
                     >
                       Cancelar
@@ -790,22 +800,22 @@ const handlePriceChange = (value: string) => {
                 </form>
               </DialogContent>
             </Dialog>
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-            <DialogTrigger asChild>
-              <Button onClick={() => { resetForm(); setEditingProduct(null) }}>
-                <Plus className="w-4 h-4 mr-2" />
-                Novo Produto
-              </Button>
-            </DialogTrigger>
+            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+              <DialogTrigger asChild>
+                <Button onClick={() => { resetForm(); setEditingProduct(null) }}>
+                  <Plus className="w-4 h-4 mr-2" />
+                  Novo Produto
+                </Button>
+              </DialogTrigger>
 
-            <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
-              <DialogHeader>
-                <DialogTitle>
-                  {editingProduct ? 'Editar Produto' : 'Novo Produto'}
-                </DialogTitle>
-              </DialogHeader>
+              <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle>
+                    {editingProduct ? 'Editar Produto' : 'Novo Produto'}
+                  </DialogTitle>
+                </DialogHeader>
 
-              <form onSubmit={handleSubmit} className="space-y-4">
+                <form onSubmit={handleSubmit} className="space-y-4">
 
                   <div className="space-y-2">
                     <Label htmlFor="name">Nome *</Label>
@@ -820,8 +830,8 @@ const handlePriceChange = (value: string) => {
 
                   <div className="space-y-2">
                     <Label htmlFor="categoria_id">Categoria *</Label>
-                    <Select 
-                      value={formData.categoria_id} 
+                    <Select
+                      value={formData.categoria_id}
                       onValueChange={(value) => setFormData({ ...formData, categoria_id: value })}
                       required
                     >
@@ -837,7 +847,7 @@ const handlePriceChange = (value: string) => {
                       </SelectContent>
                     </Select>
                   </div>
-                  
+
                   <div className="space-y-2">
                     <Label htmlFor="description">Descrição</Label>
                     <Textarea
@@ -848,163 +858,163 @@ const handlePriceChange = (value: string) => {
                       rows={3}
                     />
                   </div>
-                  
+
                   <div className="space-y-2">
                     <Label htmlFor="price">Preço *</Label>
-              <Input
-  id="price"
-  type="text"
-  placeholder="0,00"
-  value={formData.price}
-  onChange={(e) => handlePriceChange(e.target.value)}
-  required
-/>
+                    <Input
+                      id="price"
+                      type="text"
+                      placeholder="0,00"
+                      value={formData.price}
+                      onChange={(e) => handlePriceChange(e.target.value)}
+                      required
+                    />
 
                   </div>
-                       <div className="space-y-2">
-                  <Label>Tamanhos / variações</Label>
+                  <div className="space-y-2">
+                    <Label>Tamanhos / variações</Label>
 
-                  {formData.sizes.map((s, i) => (
-                    <div key={i} className="flex gap-2">
-                      <Input
-                        placeholder="Ex: P, M, G"
-                        value={s.name}
-                        onChange={e => updateSize(i, 'name', e.target.value)}
-                      />
+                    {formData.sizes.map((s, i) => (
+                      <div key={i} className="flex gap-2">
+                        <Input
+                          placeholder="Ex: P, M, G"
+                          value={s.name}
+                          onChange={e => updateSize(i, 'name', e.target.value)}
+                        />
 
-  <Input
-  type="text"
-  placeholder="Preço (opcional)"
-  value={
-    s.price === null || s.price === undefined
-      ? ''
-      : s.price.toFixed(2).replace('.', ',')
-  }
-  onChange={e => updateSize(i, 'price', e.target.value)}
-  className="w-32"
-/>
-
-
+                        <Input
+                          type="text"
+                          placeholder="Preço (opcional)"
+                          value={
+                            s.price === null || s.price === undefined
+                              ? ''
+                              : s.price.toFixed(2).replace('.', ',')
+                          }
+                          onChange={e => updateSize(i, 'price', e.target.value)}
+                          className="w-32"
+                        />
 
 
-                      <Button type="button" variant="outline" onClick={() => removeSize(i)}>
-                        <X className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  ))}
 
-                  <Button type="button" variant="outline" onClick={addSize} className="w-full">
-                    <Plus className="w-4 h-4 mr-2" />
-                    Adicionar tamanho
-                  </Button>
 
-                  <p className="text-xs text-muted-foreground">
-                    Se o preço ficar vazio, será usado o preço base.
-                  </p>
-                </div>
-                {/* Variações */}
-<div className="space-y-2">
-  <Label>Variações (ex: Cor, Acabamento, Recheio fixo)</Label>
+                        <Button type="button" variant="outline" onClick={() => removeSize(i)}>
+                          <X className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    ))}
 
-  {formData.variations.map((group, gIndex) => (
-    <div
-      key={gIndex}
-      className="border rounded-md p-3 space-y-3"
-    >
-      <div className="flex gap-2">
-        <Input
-          placeholder="Nome da variação (ex: Cor)"
-          value={group.name}
-          onChange={e =>
-            updateVariationGroupName(gIndex, e.target.value)
-          }
-        />
+                    <Button type="button" variant="outline" onClick={addSize} className="w-full">
+                      <Plus className="w-4 h-4 mr-2" />
+                      Adicionar tamanho
+                    </Button>
 
-        <Button
-          type="button"
-          variant="outline"
-          onClick={() => removeVariationGroup(gIndex)}
-        >
-          <X className="w-4 h-4" />
-        </Button>
-      </div>
+                    <p className="text-xs text-muted-foreground">
+                      Se o preço ficar vazio, será usado o preço base.
+                    </p>
+                  </div>
+                  {/* Variações */}
+                  <div className="space-y-2">
+                    <Label>Variações (ex: Cor, Acabamento, Recheio fixo)</Label>
 
-      <div className="space-y-2">
-        {group.options.map((opt, oIndex) => (
-          <div key={oIndex} className="flex gap-2">
-            <Input
-              placeholder="Opção (ex: Preta)"
-              value={opt.name}
-              onChange={e =>
-                updateVariationOption(
-                  gIndex,
-                  oIndex,
-                  'name',
-                  e.target.value
-                )
-              }
-            />
+                    {formData.variations.map((group, gIndex) => (
+                      <div
+                        key={gIndex}
+                        className="border rounded-md p-3 space-y-3"
+                      >
+                        <div className="flex gap-2">
+                          <Input
+                            placeholder="Nome da variação (ex: Cor)"
+                            value={group.name}
+                            onChange={e =>
+                              updateVariationGroupName(gIndex, e.target.value)
+                            }
+                          />
 
-            <Input
-              type="text"
-              placeholder="Preço extra"
-              value={
-                opt.price === null || opt.price === undefined
-                  ? ''
-                  : opt.price.toFixed(2).replace('.', ',')
-              }
-              onChange={e =>
-                updateVariationOption(
-                  gIndex,
-                  oIndex,
-                  'price',
-                  e.target.value
-                )
-              }
-              className="w-32"
-            />
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => removeVariationGroup(gIndex)}
+                          >
+                            <X className="w-4 h-4" />
+                          </Button>
+                        </div>
 
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() =>
-                removeVariationOption(gIndex, oIndex)
-              }
-            >
-              <Trash2 className="w-4 h-4" />
-            </Button>
-          </div>
-        ))}
+                        <div className="space-y-2">
+                          {group.options.map((opt, oIndex) => (
+                            <div key={oIndex} className="flex gap-2">
+                              <Input
+                                placeholder="Opção (ex: Preta)"
+                                value={opt.name}
+                                onChange={e =>
+                                  updateVariationOption(
+                                    gIndex,
+                                    oIndex,
+                                    'name',
+                                    e.target.value
+                                  )
+                                }
+                              />
 
-        <Button
-          type="button"
-          variant="outline"
-          onClick={() => addVariationOption(gIndex)}
-          className="w-full"
-        >
-          <Plus className="w-4 h-4 mr-2" />
-          Adicionar opção
-        </Button>
-      </div>
-    </div>
-  ))}
+                              <Input
+                                type="text"
+                                placeholder="Preço extra"
+                                value={
+                                  opt.price === null || opt.price === undefined
+                                    ? ''
+                                    : opt.price.toFixed(2).replace('.', ',')
+                                }
+                                onChange={e =>
+                                  updateVariationOption(
+                                    gIndex,
+                                    oIndex,
+                                    'price',
+                                    e.target.value
+                                  )
+                                }
+                                className="w-32"
+                              />
 
-  <Button
-    type="button"
-    variant="outline"
-    onClick={addVariationGroup}
-    className="w-full"
-  >
-    <Plus className="w-4 h-4 mr-2" />
-    Adicionar variação
-  </Button>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() =>
+                                  removeVariationOption(gIndex, oIndex)
+                                }
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </div>
+                          ))}
 
-  <p className="text-xs text-muted-foreground">
-    Cada variação pode ter preço adicional (ex: cor preta +10).
-  </p>
-</div>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => addVariationOption(gIndex)}
+                            className="w-full"
+                          >
+                            <Plus className="w-4 h-4 mr-2" />
+                            Adicionar opção
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
 
-                  
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={addVariationGroup}
+                      className="w-full"
+                    >
+                      <Plus className="w-4 h-4 mr-2" />
+                      Adicionar variação
+                    </Button>
+
+                    <p className="text-xs text-muted-foreground">
+                      Cada variação pode ter preço adicional (ex: cor preta +10).
+                    </p>
+                  </div>
+
+
                   {/* Seção de Adicionais */}
                   <div className="space-y-2">
                     <Label>Adicionais</Label>
@@ -1017,13 +1027,13 @@ const handlePriceChange = (value: string) => {
                             onChange={(e) => handleAdditionalChange(index, 'name', e.target.value)}
                             className="flex-1"
                           />
-                     <Input
-  type="text"
-  placeholder="Preço"
-  value={additional.price === 0 ? '' : additional.price.toFixed(2).replace('.', ',')}
-  onChange={(e) => handleAdditionalChange(index, 'price', e.target.value)}
-  className="w-32"
-/>
+                          <Input
+                            type="text"
+                            placeholder="Preço"
+                            value={additional.price === 0 ? '' : additional.price.toFixed(2).replace('.', ',')}
+                            onChange={(e) => handleAdditionalChange(index, 'price', e.target.value)}
+                            className="w-32"
+                          />
 
                           <Button
                             type="button"
@@ -1047,15 +1057,15 @@ const handlePriceChange = (value: string) => {
                       </Button>
                     </div>
                   </div>
-                  
+
                   <div className="space-y-2">
                     <Label>Imagem do Produto</Label>
-                    
+
                     {imagePreview && (
                       <div className="relative">
-                        <img 
-                          src={imagePreview} 
-                          alt="Preview" 
+                        <img
+                          src={imagePreview}
+                          alt="Preview"
                           className="w-full h-32 object-cover rounded-md border"
                         />
                         <Button
@@ -1069,7 +1079,7 @@ const handlePriceChange = (value: string) => {
                         </Button>
                       </div>
                     )}
-                    
+
                     {!imagePreview && (
                       <div className="border-2 border-dashed border-gray-300 rounded-md p-4">
                         <div className="text-center">
@@ -1095,7 +1105,7 @@ const handlePriceChange = (value: string) => {
                       </div>
                     )}
                   </div>
-                  
+
                   <div className="flex items-center space-x-2">
                     <Switch
                       id="show_in_catalog"
@@ -1104,18 +1114,44 @@ const handlePriceChange = (value: string) => {
                     />
                     <Label htmlFor="show_in_catalog">Mostrar no catálogo</Label>
                   </div>
-                  
-                  
-                  
-                <DialogFooter>
-                  <Button type="submit">
-                    {editingProduct ? 'Atualizar' : 'Criar'}
-                  </Button>
-                </DialogFooter>
-              </form>
-            </DialogContent>
-          </Dialog>
-        </div>
+
+                  <div className="space-y-4 pt-2 border-t">
+                    <div className="flex items-center space-x-2">
+                      <Switch
+                        id="track_stock"
+                        checked={formData.track_stock}
+                        onCheckedChange={(checked) => setFormData({ ...formData, track_stock: checked })}
+                      />
+                      <Label htmlFor="track_stock">Controlar estoque deste produto</Label>
+                    </div>
+
+                    {formData.track_stock && (
+                      <div className="space-y-2 pl-7">
+                        <Label htmlFor="stock_quantity">Quantidade em estoque</Label>
+                        <Input
+                          id="stock_quantity"
+                          type="number"
+                          min="0"
+                          value={formData.stock_quantity}
+                          onChange={(e) => setFormData({ ...formData, stock_quantity: e.target.value })}
+                          placeholder="0"
+                          className="w-32"
+                        />
+                      </div>
+                    )}
+                  </div>
+
+
+
+                  <DialogFooter>
+                    <Button type="submit">
+                      {editingProduct ? 'Atualizar' : 'Criar'}
+                    </Button>
+                  </DialogFooter>
+                </form>
+              </DialogContent>
+            </Dialog>
+          </div>
         </div>
         <Card>
           <CardContent className="pt-6">

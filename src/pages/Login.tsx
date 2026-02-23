@@ -42,7 +42,7 @@ const Login = () => {
       })
 
       if (error) throw error
-      
+
       showSuccess('Login realizado com sucesso!')
     } catch (error: any) {
       showError(error.message || 'Erro ao fazer login')
@@ -55,15 +55,15 @@ const Login = () => {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-pink-50 to-purple-50 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full space-y-8">
         {/* Botão Voltar */}
-       
+
 
         <div className="text-center">
           <div className="flex items-center justify-center gap-2 mb-4">
-             <img
-      src="/logomob.png"
-      alt="Logo"
-      className="w-full h-full object-cover"
-    />
+            <img
+              src="/logomob.png"
+              alt="Logo"
+              className="w-full h-full object-cover"
+            />
           </div>
           <h2 className="text-3xl font-extrabold text-gray-900">
             Entrar na sua conta
@@ -72,7 +72,7 @@ const Login = () => {
             Acesse seu painel de controle
           </p>
         </div>
-        
+
         <Card className="shadow-lg">
           <CardHeader>
             <CardTitle className="text-center">Login</CardTitle>
@@ -91,7 +91,7 @@ const Login = () => {
                   className="w-full"
                 />
               </div>
-              
+
               <div className="space-y-2">
                 <Label htmlFor="password">Senha</Label>
                 <Input
@@ -104,10 +104,10 @@ const Login = () => {
                   className="w-full"
                 />
               </div>
-              
-              <Button 
-                type="submit" 
-                className="w-full bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700" 
+
+              <Button
+                type="submit"
+                className="w-full bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700"
                 disabled={loading}
               >
                 {loading ? 'Entrando...' : 'Entrar'}
@@ -117,14 +117,15 @@ const Login = () => {
             <div className="mt-6 text-center">
               <p className="text-sm text-gray-600">
                 Ainda não tem conta?{' '}
-                <Button 
-                  variant="link" 
-                  className="p-0 h-auto text-purple-600 hover:text-purple-700"
-                  onClick={() => navigate('/')}
+                <Button
+                  variant="link"
+                  className="p-0 h-auto text-purple-600 hover:text-purple-700 font-semibold"
+                  onClick={() => navigate('/trial')}
                 >
-                  Criar conta
+                  Teste Grátis por 2 dias
+
                 </Button>
-              
+
               </p>
             </div>
           </CardContent>
