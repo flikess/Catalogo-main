@@ -2,7 +2,10 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { useState } from 'react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
-import { MessageCircle, ArrowLeft, Phone, Mail, MapPin } from 'lucide-react'
+import { MessageCircle, ArrowLeft, Phone, Mail, MapPin, Truck, Store, CreditCard, Banknote, QrCode, Link as LinkIcon } from 'lucide-react'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Label } from '@/components/ui/label'
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { supabase } from '@/integrations/supabase/client'
 import { toast } from 'sonner'
 
@@ -47,7 +50,8 @@ const FinalizarPedido = () => {
     celular: '',
     endereco: '',
     dataEntrega: '',
-    horaRetirada: ''
+    querEntrega: true,
+    metodoPagamento: 'pix'
   })
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -69,103 +73,108 @@ const FinalizarPedido = () => {
     return typeof item.size === 'string' ? item.size : item.size.name
   }
 
-const getUnitPrice = (item: CartItem) => {
-  const sizePrice =
-    item.selectedSize?.price ??
-    (typeof item.size === 'object' ? item.size?.price : undefined)
+  const getUnitPrice = (item: CartItem) => {
+    const sizePrice =
+      item.selectedSize?.price ??
+      (typeof item.size === 'object' ? item.size?.price : undefined)
 
-  // se o tamanho não tiver preço ou for 0 → usa o preço base
-  if (!sizePrice || sizePrice <= 0) {
-    return item.price
+    // se o tamanho não tiver preço ou for 0 → usa o preço base
+    if (!sizePrice || sizePrice <= 0) {
+      return item.price
+    }
+
+    return sizePrice
   }
 
-  return sizePrice
-}
 
-
-const getTotalPrice = (item: CartItem) => {
-  return getItemUnitWithAdditionals(item) * item.quantity
-}
+  const getTotalPrice = (item: CartItem) => {
+    return getItemUnitWithAdditionals(item) * item.quantity
+  }
 
   const getAdditionalsTotal = (item: CartItem) => {
-  return item.selectedAdditionais?.reduce((sum, a) => sum + a.price, 0) || 0
-}
+    return item.selectedAdditionais?.reduce((sum, a) => sum + a.price, 0) || 0
+  }
 
-const getVariationsTotal = (item: CartItem) => {
-  return item.selectedVariations?.reduce(
-    (sum, v) => sum + (v.price || 0),
-    0
-  ) || 0
-}
+  const getVariationsTotal = (item: CartItem) => {
+    return item.selectedVariations?.reduce(
+      (sum, v) => sum + (v.price || 0),
+      0
+    ) || 0
+  }
 
-const getItemUnitWithAdditionals = (item: CartItem) => {
-  return (
-    getUnitPrice(item) +
-    getAdditionalsTotal(item) +
-    getVariationsTotal(item)
-  )
-}
+  const getItemUnitWithAdditionals = (item: CartItem) => {
+    return (
+      getUnitPrice(item) +
+      getAdditionalsTotal(item) +
+      getVariationsTotal(item)
+    )
+  }
 
 
-      const finalTotal = cart.reduce((sum, item) => {
-  return sum + getTotalPrice(item)
-}, 0)
+  const finalTotal = cart.reduce((sum, item) => {
+    return sum + getTotalPrice(item)
+  }, 0)
 
   // --- GERA MENSAGEM WHATSAPP ---
- const generateWhatsAppMessage = () => {
-  const itemsText = cart
-    .map(item => {
-      const lines: string[] = []
+  const generateWhatsAppMessage = () => {
+    const itemsText = cart
+      .map(item => {
+        const lines: string[] = []
 
-      lines.push(`• ${item.name}`)
+        lines.push(`• ${item.name}`)
 
-      const size = getSizeName(item)
-      if (size) {
-        lines.push(`   Tamanho: ${size}`)
-      }
+        const size = getSizeName(item)
+        if (size) {
+          lines.push(`   Tamanho: ${size}`)
+        }
 
-      if (item.selectedAdditionais?.length > 0) {
-        lines.push(`   Adicionais:`)
-        item.selectedAdditionais.forEach(a => {
-          lines.push(`     - ${a.name} (+${formatPrice(a.price)})`)
-        })
-      }
-      if (item.selectedVariations?.length > 0) {
-  lines.push(`   Variações:`)
+        if (item.selectedAdditionais?.length > 0) {
+          lines.push(`   Adicionais:`)
+          item.selectedAdditionais.forEach(a => {
+            lines.push(`     - ${a.name} (+${formatPrice(a.price)})`)
+          })
+        }
+        if (item.selectedVariations?.length > 0) {
+          lines.push(`   Variações:`)
 
-  item.selectedVariations.forEach(v => {
-    lines.push(`     - ${v.group}: ${v.name}`)
-  })
-}
+          item.selectedVariations.forEach(v => {
+            lines.push(`     - ${v.group}: ${v.name}`)
+          })
+        }
 
 
 
-      lines.push(`   Quantidade: ${item.quantity}`)
-      lines.push(`   Unitário: ${formatPrice(getItemUnitWithAdditionals(item))}`)
-      lines.push(`   Subtotal: ${formatPrice(getTotalPrice(item))}`)
+        lines.push(`   Quantidade: ${item.quantity}`)
+        lines.push(`   Unitário: ${formatPrice(getItemUnitWithAdditionals(item))}`)
+        lines.push(`   Subtotal: ${formatPrice(getTotalPrice(item))}`)
 
-      return lines.join('%0A')
-    })
-    .join('%0A%0A')
+        return lines.join('\n')
+      })
+      .join('\n\n')
 
-  return (
-    `Olá, *${bakerySettings.bakery_name || 'Loja'}*!%0A%0A` +
-    `📋 *Resumo do pedido*%0A%0A` +
-    `${itemsText}%0A%0A` +
-    `💰 *Total do pedido:* ${formatPrice(finalTotal)}%0A%0A` +
-    `👤 *Dados do cliente*%0A` +
-    `Nome: ${form.nome}%0A` +
-    `Telefone: ${form.celular}%0A` +
-    `Endereço: ${form.endereco}%0A` +
-    `Data de entrega: ${form.dataEntrega}%0A` +
-    `Hora: ${form.horaRetirada}`
-  )
-}
+    return (
+      `Olá, *${bakerySettings.bakery_name || 'Loja'}*! \n\n` +
+      `\u{1F4CB} *Resumo do pedido*\n\n` +
+      `${itemsText}\n\n` +
+      `\u{1F4B0} *Total do pedido:* ${formatPrice(finalTotal)}\n\n` +
+      `\u{1F464} *Dados do cliente*\n` +
+      `Nome: ${form.nome}\n` +
+      `Telefone: ${form.celular}\n` +
+      `Tipo: ${form.querEntrega ? 'Entrega' : 'Retirada na Loja'}\n` +
+      (form.querEntrega ? `Endereço: ${form.endereco}\n` : '') +
+      `Data: ${form.dataEntrega}\n` +
+      `Pagamento: ${form.metodoPagamento.toUpperCase()}`
+    )
+  }
 
 
   // --- SUBMIT PEDIDO ---
   const handleSubmit = async () => {
-    const camposObrigatorios = ['nome', 'celular', 'endereco', 'dataEntrega', 'horaRetirada']
+    const camposObrigatorios = ['nome', 'celular', 'dataEntrega']
+    if (form.querEntrega) {
+      camposObrigatorios.push('endereco')
+    }
+
     const camposVazios = camposObrigatorios.filter(campo => !form[campo as keyof typeof form])
     if (camposVazios.length > 0) {
       toast.error('Por favor, preencha todos os campos obrigatórios.')
@@ -207,7 +216,7 @@ const getItemUnitWithAdditionals = (item: CartItem) => {
         clienteId = novoCliente.id
       }
 
-  
+
       // Cria pedido
       const { data: pedido, error: erroPedido } = await supabase
         .from('orders')
@@ -217,7 +226,8 @@ const getItemUnitWithAdditionals = (item: CartItem) => {
           client_name: form.nome,
           total_amount: finalTotal,
           delivery_date: form.dataEntrega,
-          notes: `Endereço: ${form.endereco} | Retirada: ${form.horaRetirada}`,
+          payment_method: form.metodoPagamento,
+          notes: `Tipo: ${form.querEntrega ? 'Entrega' : 'Retirada'} | Pagamento: ${form.metodoPagamento} | ${form.querEntrega ? 'Endereço: ' + form.endereco : ''}`,
           status: 'orcamento'
         })
         .select()
@@ -225,21 +235,21 @@ const getItemUnitWithAdditionals = (item: CartItem) => {
       if (erroPedido) throw erroPedido
 
       // Cria itens do pedido
-const itens = cart.map(item => ({
-  order_id: pedido.id,
-  product_id: item.id,
-  product_name: item.name,
-  quantity: item.quantity,
-  unit_price: getItemUnitWithAdditionals(item),
-total_price: getTotalPrice(item),
+      const itens = cart.map(item => ({
+        order_id: pedido.id,
+        product_id: item.id,
+        product_name: item.name,
+        quantity: item.quantity,
+        unit_price: getItemUnitWithAdditionals(item),
+        total_price: getTotalPrice(item),
 
 
-  adicionais: item.selectedAdditionais,
+        adicionais: item.selectedAdditionais,
 
-  variations: item.selectedVariations, // 👈 NOVO
+        variations: item.selectedVariations, // 👈 NOVO
 
-  size: getSizeName(item)
-}))
+        size: getSizeName(item)
+      }))
 
 
 
@@ -248,10 +258,11 @@ total_price: getTotalPrice(item),
       if (erroItens) throw erroItens
 
       // Abrir WhatsApp
+      const message = generateWhatsAppMessage()
       const telefoneLoja = bakerySettings.phone?.replace(/\D/g, '')
       const link = telefoneLoja
-        ? `https://wa.me/55${telefoneLoja}?text=${generateWhatsAppMessage()}`
-        : `https://wa.me/?text=${generateWhatsAppMessage()}`
+        ? `https://wa.me/55${telefoneLoja}?text=${encodeURIComponent(message)}`
+        : `https://wa.me/?text=${encodeURIComponent(message)}`
 
       toast.success('Pedido enviado com sucesso! Redirecionando...', {
         description: 'Você será redirecionado para o catálogo.',
@@ -302,9 +313,58 @@ total_price: getTotalPrice(item),
           <div className="space-y-4">
             <Input name="nome" placeholder="Seu nome completo" value={form.nome} onChange={handleChange} required />
             <Input name="celular" placeholder="WhatsApp com DDD" value={form.celular} onChange={handleChange} required />
-            <Input name="endereco" placeholder="Endereço completo" value={form.endereco} onChange={handleChange} required />
+
+            <div className="flex items-center space-x-2 py-2">
+              <Checkbox
+                id="querEntrega"
+                checked={form.querEntrega}
+                onCheckedChange={(checked) => setForm(prev => ({ ...prev, querEntrega: checked === true }))}
+              />
+              <Label htmlFor="querEntrega" className="flex items-center gap-2 cursor-pointer">
+                {form.querEntrega ? <Truck className="w-4 h-4 text-green-600" /> : <Store className="w-4 h-4 text-blue-600" />}
+                Deseja entrega?
+              </Label>
+            </div>
+
+            {form.querEntrega && (
+              <Input name="endereco" placeholder="Endereço completo" value={form.endereco} onChange={handleChange} required />
+            )}
+
+            <div className="space-y-3 pt-2">
+              <Label className="text-base font-semibold">Forma de Pagamento</Label>
+              <RadioGroup
+                value={form.metodoPagamento}
+                onValueChange={(value) => setForm(prev => ({ ...prev, metodoPagamento: value }))}
+                className="grid grid-cols-2 gap-4"
+              >
+                <div className="flex items-center space-x-2 border p-3 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors">
+                  <RadioGroupItem value="dinheiro" id="dinheiro" />
+                  <Label htmlFor="dinheiro" className="flex items-center gap-2 cursor-pointer">
+                    <Banknote className="w-4 h-4 text-green-600" /> Dinheiro
+                  </Label>
+                </div>
+                <div className="flex items-center space-x-2 border p-3 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors">
+                  <RadioGroupItem value="pix" id="pix" />
+                  <Label htmlFor="pix" className="flex items-center gap-2 cursor-pointer">
+                    <QrCode className="w-4 h-4 text-purple-600" /> Pix
+                  </Label>
+                </div>
+                <div className="flex items-center space-x-2 border p-3 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors">
+                  <RadioGroupItem value="cartao" id="cartao" />
+                  <Label htmlFor="cartao" className="flex items-center gap-2 cursor-pointer">
+                    <CreditCard className="w-4 h-4 text-blue-600" /> Cartão
+                  </Label>
+                </div>
+                <div className="flex items-center space-x-2 border p-3 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors">
+                  <RadioGroupItem value="link" id="link" />
+                  <Label htmlFor="link" className="flex items-center gap-2 cursor-pointer">
+                    <LinkIcon className="w-4 h-4 text-orange-600" /> Link
+                  </Label>
+                </div>
+              </RadioGroup>
+            </div>
+
             <Input name="dataEntrega" type="date" placeholder="Data de entrega" value={form.dataEntrega} onChange={handleChange} required />
-            <Input name="horaRetirada" type="time" placeholder="Hora de retirada" value={form.horaRetirada} onChange={handleChange} required />
           </div>
 
           <Button onClick={handleSubmit} className="w-full mt-6 bg-green-600 hover:bg-green-700">
@@ -340,41 +400,41 @@ total_price: getTotalPrice(item),
                         )}
 
 
-{item.selectedVariations?.length > 0 && (
-  <div className="mt-1 text-xs text-gray-500 space-y-0.5">
-    {item.selectedVariations.map((v, index) => (
-      <p key={index}>
-        {v.group}: {v.name}
-      </p>
-    ))}
-  </div>
-)}
+                        {item.selectedVariations?.length > 0 && (
+                          <div className="mt-1 text-xs text-gray-500 space-y-0.5">
+                            {item.selectedVariations.map((v, index) => (
+                              <p key={index}>
+                                {v.group}: {v.name}
+                              </p>
+                            ))}
+                          </div>
+                        )}
 
 
 
                         <p className="text-sm text-gray-500">
-  {item.quantity}x {formatPrice(getItemUnitWithAdditionals(item))}
-</p>
+                          {item.quantity}x {formatPrice(getItemUnitWithAdditionals(item))}
+                        </p>
 
-{getSizeName(item) && (
-  <p className="text-xs text-gray-500">
-    Tamanho: {getSizeName(item)}
-  </p>
-)}
+                        {getSizeName(item) && (
+                          <p className="text-xs text-gray-500">
+                            Tamanho: {getSizeName(item)}
+                          </p>
+                        )}
 
-{item.selectedAdditionais?.length > 0 && (
-  <div className="mt-1 text-xs text-gray-500 space-y-0.5">
-    {item.selectedAdditionais.map((a, index) => (
-      <p key={index}>
-        + {a.name} ({formatPrice(a.price)})
-      </p>
-    ))}
-  </div>
-)}
+                        {item.selectedAdditionais?.length > 0 && (
+                          <div className="mt-1 text-xs text-gray-500 space-y-0.5">
+                            {item.selectedAdditionais.map((a, index) => (
+                              <p key={index}>
+                                + {a.name} ({formatPrice(a.price)})
+                              </p>
+                            ))}
+                          </div>
+                        )}
 
-<p className="text-xs text-gray-600 mt-1">
-  Subtotal: {formatPrice(getTotalPrice(item))}
-</p>
+                        <p className="text-xs text-gray-600 mt-1">
+                          Subtotal: {formatPrice(getTotalPrice(item))}
+                        </p>
 
                       </div>
                       <p className="font-semibold">{formatPrice(getTotalPrice(item))}</p>

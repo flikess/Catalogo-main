@@ -4,11 +4,30 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { ResponsiveTable } from '@/components/ui/responsive-table'
-import { Search, Eye, EyeOff, ExternalLink, Copy, MessageCircle, Image as ImageIcon, BarChart2, Calendar, Star } from 'lucide-react'
+import { Search, Eye, EyeOff, ExternalLink, Copy, MessageCircle, Image as ImageIcon, BarChart2, Calendar, Star, GripVertical } from 'lucide-react'
 import { supabase } from '@/integrations/supabase/client'
 import { useAuth } from '@/components/auth/AuthProvider'
 import { showSuccess, showError } from '@/utils/toast'
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  MouseSensor,
+  TouchSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core'
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+  rectSortingStrategy,
+  useSortable,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
+import { cn } from '@/lib/utils'
 
 interface Product {
   id: string
@@ -19,6 +38,14 @@ interface Product {
   is_featured: boolean
   image_url?: string
   created_at: string
+  categoria_id?: string
+  display_order?: number
+}
+
+interface Category {
+  id: string
+  nome: string
+  products: Product[]
 }
 
 interface BakerySettings {
@@ -45,12 +72,30 @@ interface TopProduct {
 const Catalogos = () => {
   const { user } = useAuth()
   const [products, setProducts] = useState<Product[]>([])
+  const [categories, setCategories] = useState<Category[]>([])
   const [bakerySettings, setBakerySettings] = useState<BakerySettings>({})
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [showOnlyVisible, setShowOnlyVisible] = useState(false)
   const [viewStats, setViewStats] = useState<ViewStats>({ today: 0, week: 0, month: 0, total: 0 })
   const [topProducts, setTopProducts] = useState<TopProduct[]>([])
+
+  const sensors = useSensors(
+    useSensor(MouseSensor, {
+      activationConstraint: {
+        distance: 10,
+      },
+    }),
+    useSensor(TouchSensor, {
+      activationConstraint: {
+        delay: 250,
+        tolerance: 5,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  )
 
   useEffect(() => {
     fetchProducts()
@@ -60,20 +105,226 @@ const Catalogos = () => {
 
   const fetchProducts = async () => {
     try {
-      const { data, error } = await supabase
+      // Primeiro busca categorias
+      const { data: categoriesData, error: categoriesError } = await supabase
+        .from('categorias_produtos')
+        .select('id, nome')
+        .eq('user_id', user?.id)
+        .order('nome')
+
+      if (categoriesError) throw categoriesError
+
+      // Depois busca produtos
+      const { data: productsData, error: productsError } = await supabase
         .from('products')
         .select('*')
         .eq('user_id', user?.id)
-        .order('name')
+        .order('display_order', { ascending: true })
+        .order('name', { ascending: true })
 
-      if (error) throw error
-      setProducts(data || [])
+      if (productsError) throw productsError
+
+      const allProducts = productsData || []
+      setProducts(allProducts)
+
+      // Agrupar produtos por categorias
+      const grouped: Category[] = (categoriesData || []).map(cat => ({
+        ...cat,
+        products: allProducts.filter(p => p.categoria_id === cat.id)
+      }))
+
+      // Adicionar categoria 'Outros' para produtos sem categoria
+      const noCategoryProducts = allProducts.filter(p => !p.categoria_id)
+      if (noCategoryProducts.length > 0) {
+        grouped.push({
+          id: 'outros',
+          nome: 'Outros',
+          products: noCategoryProducts
+        })
+      }
+
+      setCategories(grouped)
     } catch (error) {
-      console.error('Error fetching products:', error)
-      showError('Erro ao carregar produtos')
+      console.error('Error fetching data:', error)
+      showError('Erro ao carregar dados')
     } finally {
       setLoading(false)
     }
+  }
+
+  const handleDragEnd = async (event: DragEndEvent, categoryId: string) => {
+    const { active, over } = event
+
+    if (over && active.id !== over.id) {
+      let productsToUpdate: Product[] = []
+
+      setCategories((prev) => {
+        const categoryIndex = prev.findIndex(c => c.id === categoryId)
+        if (categoryIndex === -1) return prev
+
+        const newCategories = [...prev]
+        const category = { ...newCategories[categoryIndex] }
+        const oldIndex = category.products.findIndex(p => p.id === active.id)
+        const newIndex = category.products.findIndex(p => p.id === over.id)
+
+        category.products = arrayMove(category.products, oldIndex, newIndex)
+        productsToUpdate = category.products
+        newCategories[categoryIndex] = category
+        return newCategories
+      })
+
+      if (productsToUpdate.length > 0) {
+        try {
+          // Usamos updates individuais para evitar problemas com colunas obrigatórias no upsert
+          const updatePromises = productsToUpdate.map((p, index) =>
+            supabase
+              .from('products')
+              .update({ display_order: index })
+              .eq('id', p.id)
+          )
+
+          const results = await Promise.all(updatePromises)
+
+          const firstError = results.find(r => r.error)?.error
+          if (firstError) throw firstError
+
+          showSuccess('Ordem salva!')
+        } catch (error: any) {
+          console.error('Error saving order:', error)
+          showError(`Erro: ${error.message || 'Erro ao sincronizar ordem'}`)
+        }
+      }
+    }
+  }
+
+  const SortableProductCard = ({ product }: { product: Product }) => {
+    const {
+      attributes,
+      listeners,
+      setNodeRef,
+      transform,
+      transition,
+      isDragging,
+    } = useSortable({ id: product.id })
+
+    const style = {
+      transform: CSS.Transform.toString(transform),
+      transition,
+      zIndex: isDragging ? 50 : undefined,
+      opacity: isDragging ? 0.5 : undefined,
+    }
+
+    return (
+      <Card
+        ref={setNodeRef}
+        style={style}
+        className={cn(
+          "group relative overflow-hidden transition-all hover:shadow-md h-full flex flex-col",
+          !product.show_in_catalog && "opacity-60",
+          product.is_featured && "border-yellow-300 bg-yellow-50/30 shadow-sm"
+        )}
+      >
+        <div className="aspect-square relative overflow-hidden bg-gray-100 flex-shrink-0">
+          {product.image_url ? (
+            <img
+              src={product.image_url}
+              alt={product.name}
+              className="h-full w-full object-cover transition-transform group-hover:scale-105"
+            />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center text-gray-400">
+              <ImageIcon className="h-10 w-10" />
+            </div>
+          )}
+
+          <div
+            {...attributes}
+            {...listeners}
+            className="absolute top-2 left-2 p-2 bg-white/95 backdrop-blur-sm rounded-md cursor-grab active:cursor-grabbing shadow-md z-10 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
+            style={{ touchAction: 'none' }}
+          >
+            <GripVertical className="h-4 w-4 text-gray-700" />
+          </div>
+
+          <div className="absolute top-2 right-2 flex gap-1 z-10 transition-all duration-200">
+            <Button
+              variant="secondary"
+              size="icon"
+              className="h-8 w-8 bg-white/90 backdrop-blur-sm shadow-sm hover:bg-white"
+              onClick={() => toggleProductFeatured(product)}
+            >
+              <Star className={cn("h-4 w-4", product.is_featured ? "fill-yellow-400 text-yellow-400" : "text-gray-400")} />
+            </Button>
+            <Button
+              variant="secondary"
+              size="icon"
+              className="h-8 w-8 bg-white/90 backdrop-blur-sm shadow-sm hover:bg-white"
+              onClick={() => toggleProductVisibility(product)}
+            >
+              {product.show_in_catalog ? (
+                <Eye className="h-4 w-4 text-blue-500" />
+              ) : (
+                <EyeOff className="h-4 w-4 text-gray-400" />
+              )}
+            </Button>
+          </div>
+        </div>
+
+        <CardContent className="p-3 flex-grow flex flex-col justify-between">
+          <h4 className="font-semibold text-sm line-clamp-2 mb-1 min-h-[40px] leading-tight">{product.name}</h4>
+          <div className="flex items-center justify-between mt-auto pt-2 border-t border-gray-100">
+            <span className="text-sm font-bold text-green-600">{formatPrice(product.price)}</span>
+            <div className="flex gap-1">
+              {!product.show_in_catalog && (
+                <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 bg-gray-50 text-gray-500 uppercase font-bold border-gray-200">Oculto</Badge>
+              )}
+              {product.is_featured && (
+                <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 bg-yellow-50 text-yellow-700 border-yellow-200 uppercase font-bold">Destaque</Badge>
+              )}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  const CategorySection = ({ category }: { category: Category }) => {
+    const filteredProductsInCategory = category.products.filter(p =>
+      p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      p.description?.toLowerCase().includes(searchTerm.toLowerCase())
+    ).filter(p => !showOnlyVisible || p.show_in_catalog)
+
+    if (filteredProductsInCategory.length === 0) return null
+
+    return (
+      <div className="space-y-4 mb-10">
+        <div className="flex items-center justify-between border-b border-gray-100 pb-2">
+          <h3 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+            {category.nome}
+            <Badge variant="secondary" className="bg-gray-100 text-gray-600 text-xs py-0">
+              {filteredProductsInCategory.length} {filteredProductsInCategory.length === 1 ? 'item' : 'itens'}
+            </Badge>
+          </h3>
+        </div>
+
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragEnd={(e) => handleDragEnd(e, category.id)}
+        >
+          <SortableContext
+            items={filteredProductsInCategory.map((p) => p.id)}
+            strategy={rectSortingStrategy}
+          >
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+              {filteredProductsInCategory.map((product) => (
+                <SortableProductCard key={product.id} product={product} />
+              ))}
+            </div>
+          </SortableContext>
+        </DndContext>
+      </div>
+    )
   }
 
   const fetchBakerySettings = async () => {
@@ -134,7 +385,7 @@ const Catalogos = () => {
     try {
       const { error } = await supabase
         .from('products')
-        .update({ 
+        .update({
           show_in_catalog: !product.show_in_catalog,
           updated_at: new Date().toISOString()
         })
@@ -199,7 +450,7 @@ const Catalogos = () => {
 
   const filteredProducts = products.filter(product => {
     const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         product.description?.toLowerCase().includes(searchTerm.toLowerCase())
+      product.description?.toLowerCase().includes(searchTerm.toLowerCase())
     const matchesVisibility = !showOnlyVisible || product.show_in_catalog
     return matchesSearch && matchesVisibility
   })
@@ -218,8 +469,8 @@ const Catalogos = () => {
       render: (value: string, row: Product) => (
         <div className="flex items-center space-x-3">
           {row.image_url ? (
-            <img 
-              src={row.image_url} 
+            <img
+              src={row.image_url}
               alt={row.name}
               className="w-12 h-12 object-cover rounded-md flex-shrink-0"
               onError={(e) => {
@@ -245,9 +496,9 @@ const Catalogos = () => {
       label: 'Visibilidade',
       render: (value: boolean, row: Product) => (
         <div className="flex flex-col items-center gap-2">
-          <Badge 
-            className={value 
-              ? 'bg-green-100 text-green-800' 
+          <Badge
+            className={value
+              ? 'bg-green-100 text-green-800'
               : 'bg-gray-100 text-gray-800'
             }
           >
@@ -309,7 +560,7 @@ const Catalogos = () => {
               <MessageCircle className="w-4 h-4 mr-2" />
               WhatsApp
             </Button>
-            <Button 
+            <Button
               onClick={() => window.open(generateCatalogUrl(), '_blank')}
               size="sm"
             >
@@ -419,33 +670,52 @@ const Catalogos = () => {
         </Card>
 
         <Card>
-          <CardHeader>
-            <CardTitle>Gerenciar Produtos no Catálogo ({filteredProducts.length})</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-col sm:flex-row gap-4 mb-4">
-              <div className="flex-1 relative">
-                <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                <Input
-                  placeholder="Buscar produtos..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle>Gerenciar Catálogo</CardTitle>
+            <div className="flex items-center gap-2">
               <Button
                 variant={showOnlyVisible ? "default" : "outline"}
+                size="sm"
                 onClick={() => setShowOnlyVisible(!showOnlyVisible)}
               >
-                {showOnlyVisible ? 'Mostrar Todos' : 'Apenas Visíveis'}
+                {showOnlyVisible ? (
+                  <><Eye className="w-4 h-4 mr-2" /> Visíveis</>
+                ) : (
+                  <><EyeOff className="w-4 h-4 mr-2" /> Todos</>
+                )}
               </Button>
             </div>
-            <ResponsiveTable
-              data={filteredProducts}
-              columns={tableColumns}
-              loading={loading}
-              emptyMessage={searchTerm ? 'Nenhum produto encontrado' : 'Nenhum produto cadastrado'}
-            />
+          </CardHeader>
+          <CardContent>
+            <div className="relative mb-8">
+              <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+              <Input
+                placeholder="Buscar produtos no catálogo..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10 h-11 shadow-sm"
+              />
+            </div>
+
+            {loading ? (
+              <div className="flex flex-col items-center justify-center py-20 gap-4">
+                <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary"></div>
+                <p className="text-gray-500 animate-pulse">Carregando catálogo visual...</p>
+              </div>
+            ) : categories.length > 0 ? (
+              <div className="space-y-2">
+                {categories.map(category => (
+                  <CategorySection key={category.id} category={category} />
+                ))}
+              </div>
+            ) : (
+              <Card className="bg-gray-50 border-dashed border-2">
+                <CardContent className="py-12 text-center">
+                  <ImageIcon className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                  <p className="text-gray-500">Nenhum produto encontrado para organizar.</p>
+                </CardContent>
+              </Card>
+            )}
           </CardContent>
         </Card>
       </div>

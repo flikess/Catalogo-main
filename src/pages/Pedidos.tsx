@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { ResponsiveTable } from '@/components/ui/responsive-table';
 import { Combobox } from '@/components/ui/combobox';
-import { Plus, Search, Edit, Trash2, Eye, Calendar, User, Package, Download, FileText, Printer, MoreVertical, X, ShoppingCart } from 'lucide-react';
+import { Plus, Search, Edit, Trash2, Eye, Calendar, User, Package, Download, FileText, Printer, MoreVertical, X, ShoppingCart, MapPin, Truck, CreditCard } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/components/auth/AuthProvider';
@@ -756,6 +756,45 @@ const Pedidos = () => {
     return statusOption?.label || status;
   };
 
+  const parseNotes = (notes?: string) => {
+    if (!notes) return { tipo: 'Retirada', pagamento: '-', endereco: '' };
+
+    const isDelivery = notes.includes('Tipo: Entrega');
+    const pagMatch = notes.match(/Pagamento: ([^|]+)/);
+    const endMatch = notes.match(/Endereço: (.*)/);
+
+    return {
+      tipo: isDelivery ? 'Entrega' : 'Retirada',
+      pagamento: pagMatch ? pagMatch[1].trim() : '-',
+      endereco: endMatch ? endMatch[1].trim() : ''
+    };
+  };
+
+  const updateDeliveryFee = async (order: Order, feeString: string) => {
+    const fee = parseFloat(feeString) || 0;
+    try {
+      const subtotalAndDiscount = order.total_amount - (order.delivery_fee || 0);
+      const newTotal = subtotalAndDiscount + fee;
+
+      const { error } = await supabase
+        .from('orders')
+        .update({
+          delivery_fee: fee,
+          total_amount: newTotal,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', order.id);
+
+      if (error) throw error;
+
+      setOrders(prev => prev.map(o => o.id === order.id ? { ...o, delivery_fee: fee, total_amount: newTotal } : o));
+      showSuccess('Taxa de entrega atualizada');
+    } catch (error) {
+      console.error(error);
+      showError('Erro ao atualizar taxa');
+    }
+  };
+
   const tableColumns = [
     {
       key: 'id',
@@ -795,6 +834,62 @@ const Pedidos = () => {
           )}
         </div>
       )
+    },
+    {
+      key: 'delivery_info',
+      label: 'Entrega / Endereço',
+      render: (_: any, row: Order) => {
+        const info = parseNotes(row.notes);
+        const isDelivery = info.tipo === 'Entrega';
+
+        return (
+          <div className="flex flex-col gap-1 min-w-[150px]">
+            <div className="flex items-center gap-1">
+              {isDelivery ? (
+                <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 gap-1">
+                  <Truck className="w-3 h-3" /> Entrega
+                </Badge>
+              ) : (
+                <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 gap-1">
+                  <Package className="w-3 h-3" /> Retirada
+                </Badge>
+              )}
+            </div>
+            {isDelivery && info.endereco && (
+              <div className="flex items-start gap-1 text-xs text-muted-foreground">
+                <MapPin className="w-3 h-3 mt-0.5 flex-shrink-0" />
+                <span className="line-clamp-2" title={info.endereco}>{info.endereco}</span>
+              </div>
+            )}
+            <div className="flex items-center gap-1 text-[10px] text-muted-foreground mt-0.5">
+              <CreditCard className="w-3 h-3" />
+              <span>Pagamento: <span className="font-semibold uppercase">{row.payment_method || info.pagamento}</span></span>
+            </div>
+            <div className="mt-2" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center gap-2">
+                <Label className="text-[10px] text-muted-foreground uppercase font-bold">Taxa R$</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  className="h-7 text-xs w-20 px-2"
+                  placeholder="0,00"
+                  defaultValue={row.delivery_fee}
+                  onBlur={(e) => {
+                    if (parseFloat(e.target.value) !== row.delivery_fee) {
+                      updateDeliveryFee(row, e.target.value);
+                    }
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      (e.target as HTMLInputElement).blur();
+                    }
+                  }}
+                />
+              </div>
+            </div>
+          </div>
+        );
+      }
     },
     {
       key: 'status',

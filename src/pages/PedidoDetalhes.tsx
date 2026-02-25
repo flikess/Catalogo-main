@@ -107,49 +107,49 @@ const PedidoDetalhes = () => {
   const [loading, setLoading] = useState(true)
   const [isAddItemDialogOpen, setIsAddItemDialogOpen] = useState(false)
 
- const [newItem, setNewItem] = useState<{
-  product_id: string
-  product_name: string
-  size: SizeOption | null
-  quantity: number
-  unit_price: number
-  selectedAdditionais: Additional[]
-  selectedVariations: VariationSelection[] // 👈 ADICIONE AQUI
-}>({
-  product_id: '',
-  product_name: '',
-  size: null,
-  quantity: 1,
-  unit_price: 0,
-  selectedAdditionais: [],
-  selectedVariations: [] // 👈 ADICIONE AQUI
-})
-
-const resetVariationsForNewProduct = () => {
-  setNewItem(prev => ({
-    ...prev,
-    selectedVariations: [],
+  const [newItem, setNewItem] = useState<{
+    product_id: string
+    product_name: string
+    size: SizeOption | null
+    quantity: number
+    unit_price: number
+    selectedAdditionais: Additional[]
+    selectedVariations: VariationSelection[] // 👈 ADICIONE AQUI
+  }>({
+    product_id: '',
+    product_name: '',
     size: null,
+    quantity: 1,
+    unit_price: 0,
     selectedAdditionais: [],
-    unit_price: 0
-  }))
-}
+    selectedVariations: [] // 👈 ADICIONE AQUI
+  })
+
+  const resetVariationsForNewProduct = () => {
+    setNewItem(prev => ({
+      ...prev,
+      selectedVariations: [],
+      size: null,
+      selectedAdditionais: [],
+      unit_price: 0
+    }))
+  }
 
 
   useEffect(() => {
-  if (!user || !id) return
+    if (!user || !id) return
 
-  fetchOrder()
-  fetchProducts()
-  fetchBakerySettings()
-}, [user, id])
+    fetchOrder()
+    fetchProducts()
+    fetchBakerySettings()
+  }, [user, id])
 
 
-const fetchOrder = async () => {
-  try {
-    const { data, error } = await supabase
-      .from('orders')
-      .select(`
+  const fetchOrder = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('orders')
+        .select(`
         *,
         order_items (
           id,
@@ -163,159 +163,159 @@ const fetchOrder = async () => {
           variations
         )
       `) // 👈 COMENTÁRIO AQUI, FORA DA STRING
-      .eq('id', id)
-      .eq('user_id', user?.id)
-      .single()
+        .eq('id', id)
+        .eq('user_id', user?.id)
+        .single()
 
-    if (error) throw error
+      if (error) throw error
 
-    // Parse variations
-    if (data.order_items) {
-      data.order_items = data.order_items.map((item: any) => ({
-        ...item,
-        variations: typeof item.variations === 'string'
-          ? JSON.parse(item.variations)
-          : item.variations || []
-      }))
+      // Parse variations
+      if (data.order_items) {
+        data.order_items = data.order_items.map((item: any) => ({
+          ...item,
+          variations: typeof item.variations === 'string'
+            ? JSON.parse(item.variations)
+            : item.variations || []
+        }))
+      }
+
+      setOrder(data)
+    } catch (error) {
+      console.error(error)
+      showError('Erro ao carregar pedido')
+      navigate('/pedidos')
+    } finally {
+      setLoading(false)
     }
-
-    setOrder(data)
-  } catch (error) {
-    console.error(error)
-    showError('Erro ao carregar pedido')
-    navigate('/pedidos')
-  } finally {
-    setLoading(false)
   }
-}
 
-const fetchProducts = async () => {
-  try {
-    const { data, error } = await supabase
-      .from('products')
-      .select('id, name, price, adicionais, sizes, variations') // 👈 NOVO
-      .eq('user_id', user?.id)
-      .order('name')
+  const fetchProducts = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('products')
+        .select('id, name, price, adicionais, sizes, variations') // 👈 NOVO
+        .eq('user_id', user?.id)
+        .order('name')
 
-    if (error) throw error
+      if (error) throw error
 
-    setProducts(data || [])
-  } catch (error) {
-    console.error(error)
+      setProducts(data || [])
+    } catch (error) {
+      console.error(error)
+    }
   }
-}
 
   const fetchBakerySettings = async () => {
-  try {
-    const { data, error } = await supabase
-      .from('bakery_settings')
-      .select('*')
-      .eq('id', user?.id)
-      .single()
+    try {
+      const { data, error } = await supabase
+        .from('bakery_settings')
+        .select('*')
+        .eq('id', user?.id)
+        .single()
 
-    if (error && error.code !== 'PGRST116') throw error
+      if (error && error.code !== 'PGRST116') throw error
 
-    if (data) setBakerySettings(data)
-  } catch (error) {
-    console.error(error)
-  }
-}
-
-
-const getItemVariationLabel = (item: OrderItem) => {
-  // Prioridade para variações
-  if (item.variations && item.variations.length > 0) {
-    return item.variations.map(v => `${v.group}: ${v.name}`).join(' | ');
+      if (data) setBakerySettings(data)
+    } catch (error) {
+      console.error(error)
+    }
   }
 
-  // fallback para o size antigo
-  if (!item.size) return null
 
-  if (typeof item.size === 'string') return item.size
+  const getItemVariationLabel = (item: OrderItem) => {
+    // Prioridade para variações
+    if (item.variations && item.variations.length > 0) {
+      return item.variations.map(v => `${v.group}: ${v.name}`).join(' | ');
+    }
 
-  if (typeof item.size === 'object' && (item.size as any).name) {
-    return (item.size as any).name
+    // fallback para o size antigo
+    if (!item.size) return null
+
+    if (typeof item.size === 'string') return item.size
+
+    if (typeof item.size === 'object' && (item.size as any).name) {
+      return (item.size as any).name
+    }
+
+    return null
   }
 
-  return null
-}
 
+  const handleAddItem = async () => {
+    const selectedProduct = products.find(p => p.id === newItem.product_id)
 
- const handleAddItem = async () => {
-  const selectedProduct = products.find(p => p.id === newItem.product_id)
+    const hasSizes = selectedProduct?.sizes && selectedProduct.sizes.length > 0
 
-  const hasSizes = selectedProduct?.sizes && selectedProduct.sizes.length > 0
+    if (
+      !order ||
+      !newItem.product_name ||
+      newItem.quantity <= 0 ||
+      newItem.unit_price <= 0 ||
+      (hasSizes && !newItem.size)
+    ) {
+      showError('Preencha todos os campos obrigatórios')
+      return
+    }
 
-  if (
-    !order ||
-    !newItem.product_name ||
-    newItem.quantity <= 0 ||
-    newItem.unit_price <= 0 ||
-    (hasSizes && !newItem.size)
-  ) {
-    showError('Preencha todos os campos obrigatórios')
-    return
-  }
+    try {
+      const additionaisTotal = newItem.selectedAdditionais.reduce(
+        (sum, add) => sum + add.price,
+        0
+      )
 
-  try {
-    const additionaisTotal = newItem.selectedAdditionais.reduce(
-      (sum, add) => sum + add.price,
-      0
-    )
-    
-    const variationsTotal = newItem.selectedVariations.reduce( // 👈 NOVO
-      (sum, v) => sum + v.price,
-      0
-    )
+      const variationsTotal = newItem.selectedVariations.reduce( // 👈 NOVO
+        (sum, v) => sum + v.price,
+        0
+      )
 
-    const totalPrice =
-      newItem.quantity * (newItem.unit_price + additionaisTotal + variationsTotal) // 👈 ATUALIZADO
+      const totalPrice =
+        newItem.quantity * (newItem.unit_price + additionaisTotal + variationsTotal) // 👈 ATUALIZADO
 
-    const { error } = await supabase.from('order_items').insert({
-      order_id: order.id,
-      product_id: newItem.product_id || null,
-      product_name: newItem.product_name,
-      size: newItem.size,
-      quantity: newItem.quantity,
-      unit_price: newItem.unit_price,
-      total_price: totalPrice,
-      adicionais: newItem.selectedAdditionais.length > 0
-        ? newItem.selectedAdditionais
-        : null,
-      variations: newItem.selectedVariations.length > 0 // 👈 NOVO
-        ? newItem.selectedVariations
-        : null
-    })
-
-    if (error) throw error
-
-    await supabase
-      .from('orders')
-      .update({
-        total_amount: (order.total_amount || 0) + totalPrice,
-        updated_at: new Date().toISOString()
+      const { error } = await supabase.from('order_items').insert({
+        order_id: order.id,
+        product_id: newItem.product_id || null,
+        product_name: newItem.product_name,
+        size: newItem.size,
+        quantity: newItem.quantity,
+        unit_price: newItem.unit_price,
+        total_price: totalPrice,
+        adicionais: newItem.selectedAdditionais.length > 0
+          ? newItem.selectedAdditionais
+          : null,
+        variations: newItem.selectedVariations.length > 0 // 👈 NOVO
+          ? newItem.selectedVariations
+          : null
       })
-      .eq('id', order.id)
 
-    showSuccess('Item adicionado com sucesso!')
+      if (error) throw error
 
-    setIsAddItemDialogOpen(false)
-    setNewItem({
-      product_id: '',
-      product_name: '',
-      size: null,
-      quantity: 1,
-      unit_price: 0,
-      selectedAdditionais: [],
-      selectedVariations: [] // 👈 NOVO
-    })
+      await supabase
+        .from('orders')
+        .update({
+          total_amount: (order.total_amount || 0) + totalPrice,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', order.id)
 
-    fetchOrder()
-  } catch (error) {
-    console.error(error)
-    showError('Erro ao adicionar item')
+      showSuccess('Item adicionado com sucesso!')
+
+      setIsAddItemDialogOpen(false)
+      setNewItem({
+        product_id: '',
+        product_name: '',
+        size: null,
+        quantity: 1,
+        unit_price: 0,
+        selectedAdditionais: [],
+        selectedVariations: [] // 👈 NOVO
+      })
+
+      fetchOrder()
+    } catch (error) {
+      console.error(error)
+      showError('Erro ao adicionar item')
+    }
   }
-}
 
   const handleRemoveItem = async (itemId: string, itemTotal: number) => {
     if (!confirm('Tem certeza que deseja remover este item?')) return
@@ -355,53 +355,88 @@ const getItemVariationLabel = (item: OrderItem) => {
     window.open(`https://wa.me/?text=${encoded}`, '_blank')
   }
 
-const generateWhatsAppMessage = () => {
-  if (!order) return ''
+  const parseNotes = (notes?: string) => {
+    if (!notes) return { tipo: 'Retirada', pagamento: '-', endereco: '' };
 
-  const itemsText =
-    order.order_items?.map((item, index) => {
-      const sizeLabel = getItemVariationLabel(item)
-        ? ` | Tamanho: ${getItemVariationLabel(item)}`
-        : ''
-      
-      const variationsText = item.variations && item.variations.length > 0
-        ? `\n   Variações: ${item.variations
-            .map(v => `${v.group}: ${v.name}${v.price > 0 ? ` (+${formatPrice(v.price)})` : ''}`)
-            .join(', ')}`
-        : ''
+    const isDelivery = notes.includes('Tipo: Entrega');
+    const pagMatch = notes.match(/Pagamento: ([^|]+)/);
+    const endMatch = notes.match(/Endereço: (.*)/);
 
-      const additionalsText =
-        item.adicionais && item.adicionais.length > 0
-          ? `\n   Adicionais: ${item.adicionais
-              .map(a => `${a.name} (+${formatPrice(a.price)})`)
-              .join(', ')}`
-          : ''
+    return {
+      tipo: isDelivery ? 'Entrega' : 'Retirada',
+      pagamento: pagMatch ? pagMatch[1].trim() : '-',
+      endereco: endMatch ? endMatch[1].trim() : ''
+    };
+  };
 
-      return (
-        `*${index + 1}. ${item.product_name}*${sizeLabel}\n` +
-        `   Quantidade: ${item.quantity}\n` +
-        `   Valor unitário: ${formatPrice(item.unit_price)}\n` +
-        variationsText +
-        additionalsText +
-        `\n   Subtotal: ${formatPrice(item.total_price)}`
-      )
-    }).join('\n\n') || ''
+  const generateWhatsAppMessage = () => {
+    if (!order) return ''
 
-  // ✅ ADICIONE O RETORNO DA MENSAGEM COMPLETA
-  return `Olá, ${order.client_name || 'cliente'}! 👋
+    const info = parseNotes(order.notes);
+    const bakeryName = bakerySettings.bakery_name || 'nossa loja';
 
-Segue o resumo do seu pedido:
+    const itemsText =
+      order.order_items?.map((item, index) => {
+        const variationLabel = getItemVariationLabel(item)
+        const variationsPart = variationLabel ? ` (${variationLabel})` : ''
 
-*Pedido nº ${order.id.slice(0, 8)}*
+        let itemDetails = `*${index + 1}. ${item.product_name}${variationsPart}*\n` +
+          `   ${item.quantity}x ${formatPrice(item.unit_price)} = ${formatPrice(item.total_price)}`
 
-${itemsText}
+        if (item.adicionais && item.adicionais.length > 0) {
+          itemDetails += `\n   _Adicionais: ${item.adicionais.map(a => a.name).join(', ')}_`
+        }
 
--------------------------
-*Total do pedido: ${formatPrice(calculateTotal())}*
+        return itemDetails
+      }).join('\n\n') || ''
 
-Qualquer dúvida, fico à disposição.
-Muito obrigado pela preferência!`
-}
+    const subtotal = calculateSubtotal()
+    const discount = calculateDiscount()
+    const deliveryFee = order.delivery_fee || 0
+    const total = calculateTotal()
+
+    let message = `Olá, *${order.client_name || 'cliente'}*! \u{1F44B}\n\n` +
+      `Aqui está o resumo do seu pedido na *${bakeryName}*:\n\n` +
+      `*Pedido nº ${order.id.slice(0, 8)}*\n` +
+      `--------------------------------\n\n` +
+      `${itemsText}\n\n` +
+      `--------------------------------\n`
+
+    if (discount > 0) {
+      message += `➕ *Subtotal:* ${formatPrice(subtotal)}\n`
+      message += `➖ *Desconto:* ${formatPrice(discount)}\n`
+    }
+
+    if (deliveryFee > 0) {
+      message += `\u{1F680} *Taxa de Entrega:* ${formatPrice(deliveryFee)}\n`
+    } else if (info.tipo === 'Entrega') {
+      message += `\u{1F680} *Taxa de Entrega:* A combinar\n`
+    }
+
+    message += `\u{1F4B0} *TOTAL: ${formatPrice(total)}*\n\n` +
+      `--------------------------------\n` +
+      `*DETALHES DO PEDIDO*\n` +
+      `\u{1F4CD} *Tipo:* ${info.tipo}\n`
+
+    if (info.tipo === 'Entrega' && info.endereco) {
+      message += `\u{1F3E0} *Endereço:* ${info.endereco}\n`
+    }
+
+    if (order.delivery_date) {
+      message += `\u{1F4C5} *Data:* ${formatDate(order.delivery_date)}\n`
+    }
+
+    const payment = order.payment_method || info.pagamento
+    if (payment && payment !== '-') {
+      message += `\u{1F4B3} *Pagamento:* ${payment.toUpperCase()}\n`
+    }
+
+    message += `\n--------------------------------\n` +
+      `Qualquer dúvida, estamos à disposição!\n` +
+      `Muito obrigado pela preferência! \u{2728}`
+
+    return message
+  }
 
   const formatPrice = (price: number) =>
     new Intl.NumberFormat('pt-BR', {
@@ -453,136 +488,136 @@ Muito obrigado pela preferência!`
 
   return (
     <Layout>
-      
-   <div
-  id="print-area"
-  className="hidden print:block text-[11px] font-mono"
->
-  <div className="text-center mb-2 leading-tight">
-    <div className="font-bold text-sm">
-      {bakerySettings.bakery_name || 'Minha Loja'}
-    </div>
 
-    {(bakerySettings.address_street || bakerySettings.address_city) && (
-      <div>
-        {[
-          bakerySettings.address_street,
-          bakerySettings.address_number,
-          bakerySettings.address_neighborhood,
-          bakerySettings.address_city,
-          bakerySettings.address_state
-        ]
-          .filter(Boolean)
-          .join(', ')}
-      </div>
-    )}
+      <div
+        id="print-area"
+        className="hidden print:block text-[11px] font-mono"
+      >
+        <div className="text-center mb-2 leading-tight">
+          <div className="font-bold text-sm">
+            {bakerySettings.bakery_name || 'Minha Loja'}
+          </div>
 
-    {bakerySettings.phone && (
-      <div>Tel: {bakerySettings.phone}</div>
-    )}
+          {(bakerySettings.address_street || bakerySettings.address_city) && (
+            <div>
+              {[
+                bakerySettings.address_street,
+                bakerySettings.address_number,
+                bakerySettings.address_neighborhood,
+                bakerySettings.address_city,
+                bakerySettings.address_state
+              ]
+                .filter(Boolean)
+                .join(', ')}
+            </div>
+          )}
 
-    {bakerySettings.email && (
-      <div>{bakerySettings.email}</div>
-    )}
-  </div>
+          {bakerySettings.phone && (
+            <div>Tel: {bakerySettings.phone}</div>
+          )}
 
-  <div className="border-t border-dashed my-2" />
+          {bakerySettings.email && (
+            <div>{bakerySettings.email}</div>
+          )}
+        </div>
 
-  <div>
-    Pedido: {order.id.slice(0, 8)}<br />
-    Data: {formatDate(order.created_at)}<br />
-    Cliente: {order.client_name}
-  </div>
+        <div className="border-t border-dashed my-2" />
 
-  <div className="border-t border-dashed my-2" />
-
-  <div>
-    {order.order_items?.map((item, i) => (
-      <div key={item.id} className="mb-2">
         <div>
-          {item.quantity}x {item.product_name}
+          Pedido: {order.id.slice(0, 8)}<br />
+          Data: {formatDate(order.created_at)}<br />
+          Cliente: {order.client_name}
         </div>
 
-        {/* TAMANHO */}
-        {getItemVariationLabel(item) && (
-          <div className="pl-2">
-            Tam: {getItemVariationLabel(item)}
-          </div>
-        )}
+        <div className="border-t border-dashed my-2" />
 
-        {/* 👇 VARIAÇÕES (COR, SABOR, ETC) - COLOQUE AQUI */}
-        {item.variations && item.variations.length > 0 && (
-          <div className="pl-2 text-xs">
-            {item.variations.map((v, idx) => (
-              <div key={idx}>
-                {v.group}: {v.name} {v.price > 0 && `(+${formatPrice(v.price)})`}
+        <div>
+          {order.order_items?.map((item, i) => (
+            <div key={item.id} className="mb-2">
+              <div>
+                {item.quantity}x {item.product_name}
               </div>
-            ))}
+
+              {/* TAMANHO */}
+              {getItemVariationLabel(item) && (
+                <div className="pl-2">
+                  Tam: {getItemVariationLabel(item)}
+                </div>
+              )}
+
+              {/* 👇 VARIAÇÕES (COR, SABOR, ETC) - COLOQUE AQUI */}
+              {item.variations && item.variations.length > 0 && (
+                <div className="pl-2 text-xs">
+                  {item.variations.map((v, idx) => (
+                    <div key={idx}>
+                      {v.group}: {v.name} {v.price > 0 && `(+${formatPrice(v.price)})`}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* ADICIONAIS */}
+              {item.adicionais?.map((a, idx) => (
+                <div key={idx} className="pl-2">
+                  + {a.name} ({formatPrice(a.price)})
+                </div>
+              ))}
+
+              <div className="flex justify-between">
+                <span>Subtotal</span>
+                <span>{formatPrice(item.total_price)}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="border-t border-dashed my-2" />
+
+        <div className="space-y-1">
+          <div className="flex justify-between">
+            <span>Subtotal</span>
+            <span>{formatPrice(calculateSubtotal())}</span>
+          </div>
+
+          {order.discount_percentage > 0 && (
+            <div className="flex justify-between">
+              <span>Desconto</span>
+              <span>-{formatPrice(calculateDiscount())}</span>
+            </div>
+          )}
+
+          {order.delivery_fee > 0 && (
+            <div className="flex justify-between">
+              <span>Entrega</span>
+              <span>{formatPrice(order.delivery_fee)}</span>
+            </div>
+          )}
+
+          <div className="border-t border-dashed my-1" />
+
+          <div className="flex justify-between font-bold text-sm">
+            <span>TOTAL</span>
+            <span>{formatPrice(calculateTotal())}</span>
+          </div>
+        </div>
+
+        <div className="border-t border-dashed my-2" />
+
+        {bakerySettings.pix_key && (
+          <div>
+            PIX: {bakerySettings.pix_key}
           </div>
         )}
 
-        {/* ADICIONAIS */}
-        {item.adicionais?.map((a, idx) => (
-          <div key={idx} className="pl-2">
-            + {a.name} ({formatPrice(a.price)})
-          </div>
-        ))}
-
-        <div className="flex justify-between">
-          <span>Subtotal</span>
-          <span>{formatPrice(item.total_price)}</span>
+        <div className="text-center mt-3">
+          Documento sem valor fiscal
         </div>
       </div>
-    ))}
-  </div>
 
-  <div className="border-t border-dashed my-2" />
+      <div className="space-y-6 print:hidden">
 
-  <div className="space-y-1">
-    <div className="flex justify-between">
-      <span>Subtotal</span>
-      <span>{formatPrice(calculateSubtotal())}</span>
-    </div>
-
-    {order.discount_percentage > 0 && (
-      <div className="flex justify-between">
-        <span>Desconto</span>
-        <span>-{formatPrice(calculateDiscount())}</span>
-      </div>
-    )}
-
-    {order.delivery_fee > 0 && (
-      <div className="flex justify-between">
-        <span>Entrega</span>
-        <span>{formatPrice(order.delivery_fee)}</span>
-      </div>
-    )}
-
-    <div className="border-t border-dashed my-1" />
-
-    <div className="flex justify-between font-bold text-sm">
-      <span>TOTAL</span>
-      <span>{formatPrice(calculateTotal())}</span>
-    </div>
-  </div>
-
-  <div className="border-t border-dashed my-2" />
-
-  {bakerySettings.pix_key && (
-    <div>
-      PIX: {bakerySettings.pix_key}
-    </div>
-  )}
-
-  <div className="text-center mt-3">
-    Documento sem valor fiscal
-  </div>
-</div>
-
-<div className="space-y-6 print:hidden">
-
-  {/* Header */}
-  <div className="flex justify-between items-center print:hidden">
+        {/* Header */}
+        <div className="flex justify-between items-center print:hidden">
 
           <div className="flex items-center gap-4">
             <Button variant="outline" onClick={() => navigate('/pedidos')}>
@@ -607,191 +642,191 @@ Muito obrigado pela preferência!`
                 Adicionar Item
               </Button>
             </DialogTrigger>
-         <DialogContent className="max-w-md">
-  <DialogHeader>
-    <DialogTitle>Adicionar Item ao Pedido</DialogTitle>
-  </DialogHeader>
-  <div className="space-y-4">
-    <div className="space-y-2">
-      <Label>Produto</Label>
-    <Select 
-  value={newItem.product_id} 
-  onValueChange={(value) => {
-    const product = products.find(p => p.id === value)
-    resetVariationsForNewProduct(); // 👈 ADICIONE AQUI
-   setNewItem({
-  ...newItem,
-  product_id: value,
-  product_name: product?.name || '',
-  unit_price: product?.price || 0,
-  size: null, // ✅ null é melhor que ''
-  selectedAdditionais: []
-})
-  }}
->
-        <SelectTrigger>
-          <SelectValue placeholder="Selecione um produto..." />
-        </SelectTrigger>
-        <SelectContent>
-          {products.map(product => (
-            <SelectItem key={product.id} value={product.id}>
-              {product.name} - {formatPrice(product.price)}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-    </div>
-{/* SEÇÃO DE TAMANHOS */}
-{newItem.product_id &&
-  products.find(p => p.id === newItem.product_id)?.sizes?.length > 0 && (
-    <div className="space-y-2">
-      <Label>Tamanho / Variação</Label>
-      <Select
-        value={newItem.size?.name || ''}
-        onValueChange={(value) => {
-          const product = products.find(p => p.id === newItem.product_id)
-          const size = product?.sizes?.find(s => s.name === value) || null
-          setNewItem({
-            ...newItem,
-            size,
-            unit_price: size?.price ?? newItem.unit_price
-          })
-        }}
-      >
-        <SelectTrigger>
-          <SelectValue placeholder="Selecione um tamanho..." />
-        </SelectTrigger>
-        <SelectContent>
-          {products
-            .find(p => p.id === newItem.product_id)
-            ?.sizes?.map((s, i) => (
-              <SelectItem key={i} value={s.name}>
-                <div className="flex items-center justify-between w-full gap-4">
-                  <span>{s.name}</span>
-                  <Badge variant="secondary">
-                    +{formatPrice(s.price)}
-                  </Badge>
+            <DialogContent className="max-w-md">
+              <DialogHeader>
+                <DialogTitle>Adicionar Item ao Pedido</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Produto</Label>
+                  <Select
+                    value={newItem.product_id}
+                    onValueChange={(value) => {
+                      const product = products.find(p => p.id === value)
+                      resetVariationsForNewProduct(); // 👈 ADICIONE AQUI
+                      setNewItem({
+                        ...newItem,
+                        product_id: value,
+                        product_name: product?.name || '',
+                        unit_price: product?.price || 0,
+                        size: null, // ✅ null é melhor que ''
+                        selectedAdditionais: []
+                      })
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione um produto..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {products.map(product => (
+                        <SelectItem key={product.id} value={product.id}>
+                          {product.name} - {formatPrice(product.price)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
-              </SelectItem>
-            ))}
-        </SelectContent>
-      </Select>
-    </div>
-)}
+                {/* SEÇÃO DE TAMANHOS */}
+                {newItem.product_id &&
+                  products.find(p => p.id === newItem.product_id)?.sizes?.length > 0 && (
+                    <div className="space-y-2">
+                      <Label>Tamanho / Variação</Label>
+                      <Select
+                        value={newItem.size?.name || ''}
+                        onValueChange={(value) => {
+                          const product = products.find(p => p.id === newItem.product_id)
+                          const size = product?.sizes?.find(s => s.name === value) || null
+                          setNewItem({
+                            ...newItem,
+                            size,
+                            unit_price: size?.price ?? newItem.unit_price
+                          })
+                        }}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecione um tamanho..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {products
+                            .find(p => p.id === newItem.product_id)
+                            ?.sizes?.map((s, i) => (
+                              <SelectItem key={i} value={s.name}>
+                                <div className="flex items-center justify-between w-full gap-4">
+                                  <span>{s.name}</span>
+                                  <Badge variant="secondary">
+                                    +{formatPrice(s.price)}
+                                  </Badge>
+                                </div>
+                              </SelectItem>
+                            ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
 
-{/* NOVA SEÇÃO - VARIAÇÕES (Cores, Sabores, etc) */}
-{newItem.product_id && 
-  products.find(p => p.id === newItem.product_id)?.variations?.length > 0 && (
-    <div className="space-y-4 mt-4 border-t pt-4">
-      <Label className="text-base font-semibold">Opções do Produto</Label>
-      {products
-        .find(p => p.id === newItem.product_id)
-        ?.variations?.map((group, groupIndex) => {
-          const selectedVariation = newItem.selectedVariations?.find(
-            v => v.group === group.name
-          );
-          
-          return (
-            <div key={groupIndex} className="space-y-2">
-              <Label className="font-medium">
-                {group.name}
-              </Label>
-              
-              <Select
-                value={selectedVariation?.name || ''}
-                onValueChange={(value) => {
-                  const option = group.options.find(opt => opt.name === value);
-                  if (!option) return;
-                  
-                  let updatedVariations = [...(newItem.selectedVariations || [])];
-                  
-                  // Remove qualquer opção já selecionada deste grupo
-                  updatedVariations = updatedVariations.filter(
-                    v => v.group !== group.name
-                  );
-                  
-                  // Adiciona a nova seleção
-                  updatedVariations.push({
-                    group: group.name,
-                    name: option.name,
-                    price: option.price || 0
-                  });
-                  
-                  // Recalcula o preço unitário
-                  const product = products.find(p => p.id === newItem.product_id);
-                  const basePrice = newItem.size?.price || product?.price || 0;
-                  const variationsTotal = updatedVariations.reduce((sum, v) => sum + v.price, 0);
-                  
-                  setNewItem({
-                    ...newItem,
-                    selectedVariations: updatedVariations,
-                    unit_price: basePrice + variationsTotal
-                  });
-                }}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder={`Selecione ${group.name.toLowerCase()}...`} />
-                </SelectTrigger>
-                <SelectContent>
-                  {group.options.map((option, optIndex) => (
-                    <SelectItem key={optIndex} value={option.name}>
-                      <div className="flex items-center justify-between w-full gap-4">
-                        <span>{option.name}</span>
-                        {option.price && option.price > 0 && (
-                          <Badge variant="secondary">
-                            +{formatPrice(option.price)}
-                          </Badge>
-                        )}
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              
-              {selectedVariation && selectedVariation.price > 0 && (
-                <p className="text-xs text-muted-foreground mt-1">
-                  Adicional: {formatPrice(selectedVariation.price)}
-                </p>
-              )}
-            </div>
-          );
-        })}
-    </div>
-)}
-     {newItem.product_id && products.find(p => p.id === newItem.product_id)?.adicionais?.length > 0 && (
-      <div className="space-y-2">
-        <Label>Adicionais:</Label>
-        <div className="space-y-2">
-          {products.find(p => p.id === newItem.product_id)?.adicionais?.map((add, index) => (
-            <div key={index} className="flex items-center justify-between p-2 border rounded">
-              <div className="flex items-center">
-                <input
-                  type="checkbox"
-                  checked={newItem.selectedAdditionais.some(a => a.name === add.name)}
-                  onChange={() => {
-                    const exists = newItem.selectedAdditionais.some(a => a.name === add.name)
-                    if (exists) {
-                      setNewItem({
-                        ...newItem,
-                        selectedAdditionais: newItem.selectedAdditionais.filter(a => a.name !== add.name)
-                      })
-                    } else {
-                      setNewItem({
-                        ...newItem,
-                        selectedAdditionais: [...newItem.selectedAdditionais, add]
-                      })
-                    }
-                  }}
-                  className="mr-2"
-                />
-                <span>{add.name}</span>
-              </div>
-              <span className="text-sm text-green-600">+{formatPrice(add.price)}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-    )}
+                {/* NOVA SEÇÃO - VARIAÇÕES (Cores, Sabores, etc) */}
+                {newItem.product_id &&
+                  products.find(p => p.id === newItem.product_id)?.variations?.length > 0 && (
+                    <div className="space-y-4 mt-4 border-t pt-4">
+                      <Label className="text-base font-semibold">Opções do Produto</Label>
+                      {products
+                        .find(p => p.id === newItem.product_id)
+                        ?.variations?.map((group, groupIndex) => {
+                          const selectedVariation = newItem.selectedVariations?.find(
+                            v => v.group === group.name
+                          );
+
+                          return (
+                            <div key={groupIndex} className="space-y-2">
+                              <Label className="font-medium">
+                                {group.name}
+                              </Label>
+
+                              <Select
+                                value={selectedVariation?.name || ''}
+                                onValueChange={(value) => {
+                                  const option = group.options.find(opt => opt.name === value);
+                                  if (!option) return;
+
+                                  let updatedVariations = [...(newItem.selectedVariations || [])];
+
+                                  // Remove qualquer opção já selecionada deste grupo
+                                  updatedVariations = updatedVariations.filter(
+                                    v => v.group !== group.name
+                                  );
+
+                                  // Adiciona a nova seleção
+                                  updatedVariations.push({
+                                    group: group.name,
+                                    name: option.name,
+                                    price: option.price || 0
+                                  });
+
+                                  // Recalcula o preço unitário
+                                  const product = products.find(p => p.id === newItem.product_id);
+                                  const basePrice = newItem.size?.price || product?.price || 0;
+                                  const variationsTotal = updatedVariations.reduce((sum, v) => sum + v.price, 0);
+
+                                  setNewItem({
+                                    ...newItem,
+                                    selectedVariations: updatedVariations,
+                                    unit_price: basePrice + variationsTotal
+                                  });
+                                }}
+                              >
+                                <SelectTrigger className="w-full">
+                                  <SelectValue placeholder={`Selecione ${group.name.toLowerCase()}...`} />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {group.options.map((option, optIndex) => (
+                                    <SelectItem key={optIndex} value={option.name}>
+                                      <div className="flex items-center justify-between w-full gap-4">
+                                        <span>{option.name}</span>
+                                        {option.price && option.price > 0 && (
+                                          <Badge variant="secondary">
+                                            +{formatPrice(option.price)}
+                                          </Badge>
+                                        )}
+                                      </div>
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+
+                              {selectedVariation && selectedVariation.price > 0 && (
+                                <p className="text-xs text-muted-foreground mt-1">
+                                  Adicional: {formatPrice(selectedVariation.price)}
+                                </p>
+                              )}
+                            </div>
+                          );
+                        })}
+                    </div>
+                  )}
+                {newItem.product_id && products.find(p => p.id === newItem.product_id)?.adicionais?.length > 0 && (
+                  <div className="space-y-2">
+                    <Label>Adicionais:</Label>
+                    <div className="space-y-2">
+                      {products.find(p => p.id === newItem.product_id)?.adicionais?.map((add, index) => (
+                        <div key={index} className="flex items-center justify-between p-2 border rounded">
+                          <div className="flex items-center">
+                            <input
+                              type="checkbox"
+                              checked={newItem.selectedAdditionais.some(a => a.name === add.name)}
+                              onChange={() => {
+                                const exists = newItem.selectedAdditionais.some(a => a.name === add.name)
+                                if (exists) {
+                                  setNewItem({
+                                    ...newItem,
+                                    selectedAdditionais: newItem.selectedAdditionais.filter(a => a.name !== add.name)
+                                  })
+                                } else {
+                                  setNewItem({
+                                    ...newItem,
+                                    selectedAdditionais: [...newItem.selectedAdditionais, add]
+                                  })
+                                }
+                              }}
+                              className="mr-2"
+                            />
+                            <span>{add.name}</span>
+                          </div>
+                          <span className="text-sm text-green-600">+{formatPrice(add.price)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 <div className="space-y-2">
                   <Label htmlFor="product_name">Nome do Produto *</Label>
@@ -816,15 +851,15 @@ Muito obrigado pela preferência!`
                       required
                     />
                   </div>
-                  
+
                   <div className="space-y-2">
                     <Label htmlFor="unit_price">Preço Unitário *</Label>
                     <Input
-  id="unit_price"
-  type="number"
-  disabled={
-    products.find(p => p.id === newItem.product_id)?.sizes?.length > 0
-  }
+                      id="unit_price"
+                      type="number"
+                      disabled={
+                        products.find(p => p.id === newItem.product_id)?.sizes?.length > 0
+                      }
                       step="0.01"
                       min="0"
                       value={newItem.unit_price}
@@ -834,24 +869,24 @@ Muito obrigado pela preferência!`
                   </div>
                 </div>
 
-            <div className="space-y-2">
-  <Label>Total do Item</Label>
-  <div className="text-lg font-bold text-green-600">
-    {formatPrice(
-      newItem.quantity *
-      (newItem.unit_price +
-        newItem.selectedAdditionais.reduce((s, a) => s + a.price, 0) +
-        newItem.selectedVariations.reduce((s, v) => s + v.price, 0)) // 👈 NOVO
-    )}
-  </div>
-</div>
+                <div className="space-y-2">
+                  <Label>Total do Item</Label>
+                  <div className="text-lg font-bold text-green-600">
+                    {formatPrice(
+                      newItem.quantity *
+                      (newItem.unit_price +
+                        newItem.selectedAdditionais.reduce((s, a) => s + a.price, 0) +
+                        newItem.selectedVariations.reduce((s, v) => s + v.price, 0)) // 👈 NOVO
+                    )}
+                  </div>
+                </div>
 
                 <div className="flex gap-2">
                   <Button onClick={handleAddItem} className="flex-1">
                     Adicionar Item
                   </Button>
-                  <Button 
-                    variant="outline" 
+                  <Button
+                    variant="outline"
                     onClick={() => setIsAddItemDialogOpen(false)}
                   >
                     Cancelar
@@ -901,13 +936,13 @@ Muito obrigado pela preferência!`
                   <p>{order.client_name}</p>
                 </div>
                 {order.order_items?.some(item => item.variations?.length > 0) && (
-  <div>
-    <Label className="text-sm font-medium text-gray-500">Variações nos itens</Label>
-    <p className="text-sm text-muted-foreground">
-      Este pedido possui produtos com variações selecionadas
-    </p>
-  </div>
-)}
+                  <div>
+                    <Label className="text-sm font-medium text-gray-500">Variações nos itens</Label>
+                    <p className="text-sm text-muted-foreground">
+                      Este pedido possui produtos com variações selecionadas
+                    </p>
+                  </div>
+                )}
                 <div>
                   <Label className="text-sm font-medium text-gray-500">Data do Pedido</Label>
                   <p>{formatDate(order.created_at)}</p>
@@ -949,21 +984,21 @@ Muito obrigado pela preferência!`
                   <p>{bakerySettings.bakery_name}</p>
                 </div>
               )}
-              
+
               {bakerySettings.phone && (
                 <div>
                   <Label className="text-sm font-medium text-gray-500">Telefone</Label>
                   <p>{bakerySettings.phone}</p>
                 </div>
               )}
-              
+
               {bakerySettings.email && (
                 <div>
                   <Label className="text-sm font-medium text-gray-500">E-mail</Label>
                   <p>{bakerySettings.email}</p>
                 </div>
               )}
-   {bakerySettings.pix_key && (
+              {bakerySettings.pix_key && (
                 <div>
                   <Label className="text-sm font-medium text-gray-500">Chave Pix</Label>
                   <p>{bakerySettings.pix_key}</p>
@@ -1007,51 +1042,51 @@ Muito obrigado pela preferência!`
                 </TableHeader>
                 <TableBody>
                   {order.order_items.map((item) => (
-               <TableRow key={item.id}>
-  <TableCell className="font-medium">
-  <div>{item.product_name}</div>
+                    <TableRow key={item.id}>
+                      <TableCell className="font-medium">
+                        <div>{item.product_name}</div>
 
-  {getItemVariationLabel(item) && (
-    <div className="text-xs text-muted-foreground">
-      Tamanho: {getItemVariationLabel(item)}
-    </div>
-  )}
-  
-  {/* 👇 ADICIONE ESTE BLOCO - EXIBIR VARIAÇÕES */}
-  {item.variations && item.variations.length > 0 && (
-    <div className="text-xs text-muted-foreground mt-1">
-      <span className="font-medium">Variações:</span>{" "}
-      {item.variations.map((v, i) => (
-        <span key={i}>
-          {v.group}: {v.name} {v.price > 0 && `(+${formatPrice(v.price)})`}
-          {i < item.variations.length - 1 ? '; ' : ''}
-        </span>
-      ))}
-    </div>
-  )}
-  
-  {item.adicionais && item.adicionais.length > 0 && (
-    <div className="text-xs text-muted-foreground mt-1">
-      Adicionais: {item.adicionais.map(a => `${a.name} (+${formatPrice(a.price)})`).join(', ')}
-    </div>
-  )}
-</TableCell>
-  <TableCell className="text-center">{item.quantity}</TableCell>
-  <TableCell className="text-right">{formatPrice(item.unit_price)}</TableCell>
-  <TableCell className="text-right font-medium">
-    {formatPrice(item.total_price)}
-  </TableCell>
-  <TableCell className="text-right print:hidden">
-    <Button
-      variant="outline"
-      size="sm"
-      onClick={() => handleRemoveItem(item.id, item.total_price)}
-      className="text-red-600 hover:text-red-700"
-    >
-      <Trash2 className="w-4 h-4" />
-    </Button>
-  </TableCell>
-</TableRow>
+                        {getItemVariationLabel(item) && (
+                          <div className="text-xs text-muted-foreground">
+                            Tamanho: {getItemVariationLabel(item)}
+                          </div>
+                        )}
+
+                        {/* 👇 ADICIONE ESTE BLOCO - EXIBIR VARIAÇÕES */}
+                        {item.variations && item.variations.length > 0 && (
+                          <div className="text-xs text-muted-foreground mt-1">
+                            <span className="font-medium">Variações:</span>{" "}
+                            {item.variations.map((v, i) => (
+                              <span key={i}>
+                                {v.group}: {v.name} {v.price > 0 && `(+${formatPrice(v.price)})`}
+                                {i < item.variations.length - 1 ? '; ' : ''}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+
+                        {item.adicionais && item.adicionais.length > 0 && (
+                          <div className="text-xs text-muted-foreground mt-1">
+                            Adicionais: {item.adicionais.map(a => `${a.name} (+${formatPrice(a.price)})`).join(', ')}
+                          </div>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-center">{item.quantity}</TableCell>
+                      <TableCell className="text-right">{formatPrice(item.unit_price)}</TableCell>
+                      <TableCell className="text-right font-medium">
+                        {formatPrice(item.total_price)}
+                      </TableCell>
+                      <TableCell className="text-right print:hidden">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleRemoveItem(item.id, item.total_price)}
+                          className="text-red-600 hover:text-red-700"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
                   ))}
                 </TableBody>
               </Table>
@@ -1074,23 +1109,23 @@ Muito obrigado pela preferência!`
                 <span>Subtotal:</span>
                 <span>{formatPrice(calculateSubtotal())}</span>
               </div>
-              
+
               {order.discount_percentage > 0 && (
                 <div className="flex justify-between text-red-600">
                   <span>Desconto ({order.discount_percentage}%):</span>
                   <span>-{formatPrice(calculateDiscount())}</span>
                 </div>
               )}
-              
+
               {order.delivery_fee > 0 && (
                 <div className="flex justify-between">
                   <span>Taxa de Entrega:</span>
                   <span>{formatPrice(order.delivery_fee)}</span>
                 </div>
               )}
-              
+
               <Separator />
-              
+
               <div className="flex justify-between text-lg font-bold">
                 <span>TOTAL:</span>
                 <span className="text-green-600">{formatPrice(calculateTotal())}</span>

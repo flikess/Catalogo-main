@@ -189,7 +189,8 @@ const CatalogoPublico = () => {
 `)
         .eq('user_id', userId)
         .eq('show_in_catalog', true)
-        .order('name')
+        .order('display_order', { ascending: true })
+        .order('name', { ascending: true })
 
       if (productsError) throw productsError
 
