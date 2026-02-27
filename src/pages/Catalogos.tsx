@@ -9,6 +9,16 @@ import { supabase } from '@/integrations/supabase/client'
 import { useAuth } from '@/components/auth/AuthProvider'
 import { showSuccess, showError } from '@/utils/toast'
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
+import { Settings2 } from 'lucide-react'
+import {
   DndContext,
   closestCenter,
   KeyboardSensor,
@@ -53,6 +63,7 @@ interface BakerySettings {
   email?: string
   phone?: string
   logo_url?: string
+  catalog_slug?: string
 }
 
 interface ViewStats {
@@ -79,6 +90,9 @@ const Catalogos = () => {
   const [showOnlyVisible, setShowOnlyVisible] = useState(false)
   const [viewStats, setViewStats] = useState<ViewStats>({ today: 0, week: 0, month: 0, total: 0 })
   const [topProducts, setTopProducts] = useState<TopProduct[]>([])
+  const [isSlugDialogOpen, setIsSlugDialogOpen] = useState(false)
+  const [newSlug, setNewSlug] = useState('')
+  const [isSavingSlug, setIsSavingSlug] = useState(false)
 
   const sensors = useSensors(
     useSensor(MouseSensor, {
@@ -331,14 +345,62 @@ const Catalogos = () => {
     try {
       const { data, error } = await supabase
         .from('bakery_settings')
-        .select('bakery_name, email, phone, logo_url')
+        .select('bakery_name, email, phone, logo_url, catalog_slug')
         .eq('id', user?.id)
         .single()
 
       if (error && error.code !== 'PGRST116') throw error
-      if (data) setBakerySettings(data)
+      if (data) {
+        setBakerySettings(data)
+        setNewSlug(data.catalog_slug || '')
+      }
     } catch (error) {
       console.error('Error fetching bakery settings:', error)
+    }
+  }
+
+  const updateSlug = async () => {
+    if (!newSlug.trim()) {
+      showError('O link personalizado não pode ser vazio')
+      return
+    }
+
+    const slugRegex = /^[a-z0-9-]+$/
+    if (!slugRegex.test(newSlug)) {
+      showError('O link deve conter apenas letras minúsculas, números e hífens')
+      return
+    }
+
+    setIsSavingSlug(true)
+    try {
+      const { data: existing, error: checkError } = await supabase
+        .from('bakery_settings')
+        .select('id')
+        .eq('catalog_slug', newSlug)
+        .neq('id', user?.id)
+        .maybeSingle()
+
+      if (checkError) throw checkError
+      if (existing) {
+        showError('Este link já está sendo usado por outra loja')
+        return
+      }
+
+      const { error } = await supabase
+        .from('bakery_settings')
+        .update({ catalog_slug: newSlug })
+        .eq('id', user?.id)
+
+      if (error) throw error
+
+      showSuccess('Link personalizado atualizado com sucesso!')
+      setIsSlugDialogOpen(false)
+      fetchBakerySettings()
+    } catch (error: any) {
+      console.error('Error updating slug:', error)
+      showError(`Erro ao atualizar link: ${error.message || 'Verifique se a coluna catalog_slug existe no banco'}`)
+    } finally {
+      setIsSavingSlug(false)
     }
   }
 
@@ -427,7 +489,8 @@ const Catalogos = () => {
 
   const generateCatalogUrl = () => {
     const baseUrl = window.location.origin
-    return `${baseUrl}/catalogo/${user?.id}`
+    const identifier = bakerySettings.catalog_slug || user?.id
+    return `${baseUrl}/${identifier}`
   }
 
   const copyLink = async () => {
@@ -575,14 +638,58 @@ const Catalogos = () => {
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
               <div>
                 <h3 className="font-medium text-blue-900 mb-1">Link do seu catálogo público</h3>
-                <p className="text-sm text-blue-700 font-mono bg-white px-3 py-2 rounded border break-all">
-                  {generateCatalogUrl()}
-                </p>
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <p className="text-sm text-blue-700 font-mono bg-white px-3 py-2 rounded border break-all flex-grow">
+                    {generateCatalogUrl()}
+                  </p>
+                  <div className="flex gap-2">
+                    <Dialog open={isSlugDialogOpen} onOpenChange={setIsSlugDialogOpen}>
+                      <DialogTrigger asChild>
+                        <Button variant="outline" size="sm" className="bg-white">
+                          <Settings2 className="w-4 h-4 mr-2" />
+                          Personalizar Link
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent>
+                        <DialogHeader>
+                          <DialogTitle>Personalizar Link do Catálogo</DialogTitle>
+                          <DialogDescription>
+                            Escolha um nome fácil para seus clientes lembrarem.
+                          </DialogDescription>
+                        </DialogHeader>
+                        <div className="space-y-4 py-4">
+                          <div className="space-y-2">
+                            <label className="text-sm font-medium">Link personalizado</label>
+                            <div className="flex items-center gap-2">
+                              <span className="text-gray-400 text-sm">{window.location.origin}/</span>
+                              <Input
+                                value={newSlug}
+                                onChange={(e) => setNewSlug(e.target.value.toLowerCase().replace(/\s+/g, '-'))}
+                                placeholder="nome-da-sua-loja"
+                              />
+                            </div>
+                            <p className="text-xs text-gray-500">
+                              Use apenas letras minúsculas, números e hífens.
+                            </p>
+                          </div>
+                        </div>
+                        <DialogFooter>
+                          <Button variant="outline" onClick={() => setIsSlugDialogOpen(false)}>
+                            Cancelar
+                          </Button>
+                          <Button onClick={updateSlug} disabled={isSavingSlug}>
+                            {isSavingSlug ? 'Salvando...' : 'Salvar link'}
+                          </Button>
+                        </DialogFooter>
+                      </DialogContent>
+                    </Dialog>
+                    <Button onClick={copyLink} size="sm" className="flex-shrink-0">
+                      <Copy className="w-4 h-4 mr-2" />
+                      Copiar
+                    </Button>
+                  </div>
+                </div>
               </div>
-              <Button onClick={copyLink} size="sm" className="ml-auto sm:ml-4 flex-shrink-0">
-                <Copy className="w-4 h-4 mr-2" />
-                Copiar
-              </Button>
             </div>
           </CardContent>
         </Card>

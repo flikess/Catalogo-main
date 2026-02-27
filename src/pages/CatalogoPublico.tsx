@@ -97,8 +97,11 @@ interface CartItem extends Product {
 type ViewMode = 'grid' | 'list'
 
 const CatalogoPublico = () => {
-  const { userId } = useParams<{ userId: string }>()
+  const { identifier, userId: oldUserId } = useParams<{ identifier: string, userId: string }>()
+  const idValue = identifier || oldUserId // Mantém compatibilidade com /catalogo/:userId
   const navigate = useNavigate()
+
+  const [realUserId, setRealUserId] = useState<string | null>(null)
 
   const [categories, setCategories] = useState<Category[]>([])
   const [featuredProducts, setFeaturedProducts] = useState<Product[]>([])
@@ -134,28 +137,33 @@ const CatalogoPublico = () => {
 
 
   useEffect(() => {
-    if (userId) {
+    if (idValue) {
       fetchCatalogData()
-      recordCatalogView()
     } else {
       setError('ID do catálogo não fornecido.')
       setLoading(false)
     }
-  }, [userId])
+  }, [idValue])
+
+  useEffect(() => {
+    if (realUserId) {
+      recordCatalogView()
+    }
+  }, [realUserId])
 
   const recordCatalogView = async () => {
-    if (!userId) return
+    if (!realUserId) return
     try {
-      await supabase.from('catalog_views').insert({ user_id: userId })
+      await supabase.from('catalog_views').insert({ user_id: realUserId })
     } catch (err) {
       console.error('Failed to record catalog view:', err)
     }
   }
 
   const recordCartAdd = async (productId: string) => {
-    if (!userId) return
+    if (!realUserId) return
     try {
-      await supabase.from('cart_adds').insert({ user_id: userId, product_id: productId })
+      await supabase.from('cart_adds').insert({ user_id: realUserId, product_id: productId })
     } catch (err) {
       console.error('Failed to record cart add:', err)
     }
@@ -164,19 +172,44 @@ const CatalogoPublico = () => {
   const fetchCatalogData = async () => {
     try {
       setLoading(true)
+      setError(null)
 
-      const { data: settingsData, error: settingsError } = await supabase
-        .from('bakery_settings')
-        .select('*')
-        .eq('id', userId)
-        .single()
+      let settingsData = null
+      let settingsError = null
 
-      if (settingsError && settingsError.code === 'PGRST116') {
-        setError('Catálogo não encontrado.')
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(idValue || '')
+
+      if (isUuid) {
+        const { data, error } = await supabase
+          .from('bakery_settings')
+          .select('*')
+          .eq('id', idValue)
+          .single()
+        settingsData = data
+        settingsError = error
+      } else {
+        const { data, error } = await supabase
+          .from('bakery_settings')
+          .select('*')
+          .eq('catalog_slug', idValue)
+          .single()
+        settingsData = data
+        settingsError = error
+      }
+
+      if (settingsError) {
+        if (settingsError.code === 'PGRST116') {
+          setError('Catálogo não encontrado.')
+        } else {
+          console.error('Error fetching settings:', settingsError)
+          setError('Erro ao carregar catálogo.')
+        }
+        setLoading(false)
         return
       }
-      if (settingsError) throw settingsError
 
+      const activeUserId = settingsData.id
+      setRealUserId(activeUserId)
       setBakerySettings(settingsData || {})
 
       const { data: productsData, error: productsError } = await supabase
@@ -187,7 +220,7 @@ const CatalogoPublico = () => {
     nome
   )
 `)
-        .eq('user_id', userId)
+        .eq('user_id', activeUserId)
         .eq('show_in_catalog', true)
         .order('display_order', { ascending: true })
         .order('name', { ascending: true })

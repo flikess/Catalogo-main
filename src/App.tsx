@@ -117,6 +117,7 @@ const App = () => (
                   <Catalogos />
                 </ProtectedRoute>
               } />
+              <Route path="/:identifier" element={<CatalogoPublico />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </AuthProvider>
