@@ -11,7 +11,8 @@ import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { ResponsiveTable } from '@/components/ui/responsive-table'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Plus, Search, Edit, Trash2, Eye, EyeOff, Upload, X, Image as ImageIcon, Tag, List } from 'lucide-react'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Plus, Search, Edit, Trash2, Eye, EyeOff, Upload, X, Image as ImageIcon, Tag, List, Layers } from 'lucide-react'
 import { supabase } from '@/integrations/supabase/client'
 import { useAuth } from '@/components/auth/AuthProvider'
 import { showSuccess, showError } from '@/utils/toast'
@@ -46,8 +47,12 @@ interface Product {
   image_url?: string
   image_urls?: string[]
   categoria_id?: string
+  sub_categoria_id?: string
   created_at: string
   categorias_produtos?: {
+    nome: string
+  }
+  subcategorias_produtos?: {
     nome: string
   }
   adicionais?: Additional[]
@@ -64,31 +69,43 @@ interface Category {
   created_at: string
 }
 
+interface Subcategory {
+  id: string
+  nome: string
+  categoria_id: string
+  created_at: string
+}
+
 const Produtos = () => {
   const { user } = useAuth()
 
   const [products, setProducts] = useState<Product[]>([])
   const [categories, setCategories] = useState<Category[]>([])
+  const [subcategories, setSubcategories] = useState<Subcategory[]>([])
   const [loading, setLoading] = useState(true)
   const [loadingCategories, setLoadingCategories] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [isCategoryDialogOpen, setIsCategoryDialogOpen] = useState(false)
+  const [isSubCategoryDialogOpen, setIsSubCategoryDialogOpen] = useState(false)
   const [isCategoriesListOpen, setIsCategoriesListOpen] = useState(false)
   const [editingProduct, setEditingProduct] = useState<Product | null>(null)
   const [editingCategory, setEditingCategory] = useState<Category | null>(null)
+  const [editingSubCategory, setEditingSubCategory] = useState<Subcategory | null>(null)
   const [uploading, setUploading] = useState(false)
   const [imagePreview, setImagePreview] = useState<string | null>(null)
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [selectedFiles, setSelectedFiles] = useState<(File | null)[]>([null, null, null])
   const [imagePreviews, setImagePreviews] = useState<(string | null)[]>([null, null, null])
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>('all')
+  const [selectedSubCategoryId, setSelectedSubCategoryId] = useState<string>('all')
 
   const [formData, setFormData] = useState({
     name: '',
     description: '',
     price: '',
     categoria_id: '',
+    sub_categoria_id: '',
     show_in_catalog: true,
     image_url: '',
     image_urls: [] as string[],
@@ -103,6 +120,11 @@ const Produtos = () => {
     nome: ''
   })
 
+  const [subCategoryFormData, setSubCategoryFormData] = useState({
+    nome: '',
+    categoria_id: ''
+  })
+
   useEffect(() => {
     fetchProducts()
     fetchCategories()
@@ -115,6 +137,9 @@ const Produtos = () => {
         .select(`
           *,
           categorias_produtos (
+            nome
+          ),
+          subcategorias_produtos (
             nome
           )
         `)
@@ -144,15 +169,30 @@ const Produtos = () => {
     try {
       setLoadingCategories(true)
 
-      const { data, error } = await supabase
-        .from('categorias_produtos')
-        .select('*')
-        .eq('user_id', user?.id)
-        .order('nome')
+      const [catRes, subRes] = await Promise.all([
+        supabase
+          .from('categorias_produtos')
+          .select('*')
+          .eq('user_id', user?.id)
+          .order('nome'),
+        supabase
+          .from('subcategorias_produtos')
+          .select('*')
+          .eq('user_id', user?.id)
+          .order('nome')
+      ])
 
-      if (error) throw error
+      if (catRes.error) throw catRes.error
+      setCategories(catRes.data || [])
 
-      setCategories(data || [])
+      if (subRes.error) {
+        // Se a tabela de subcategorias não existir ainda, apenas ignora
+        if (subRes.error.code !== 'PGRST116') {
+          console.error('Erro ao carregar subcategorias:', subRes.error)
+        }
+      } else {
+        setSubcategories(subRes.data || [])
+      }
     } catch (error) {
       console.error(error)
       showError('Erro ao carregar categorias')
@@ -457,6 +497,7 @@ const Produtos = () => {
         description: formData.description || null,
         price: Number(formData.price.replace(',', '.')),
         categoria_id: formData.categoria_id,
+        sub_categoria_id: formData.sub_categoria_id || null,
         show_in_catalog: formData.show_in_catalog,
         image_url: finalImageUrls[0] || null,
         image_urls: finalImageUrls.length ? finalImageUrls : null,
@@ -579,6 +620,87 @@ const Produtos = () => {
     }
   }
 
+  const handleSubCategorySubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+
+    if (!subCategoryFormData.nome.trim()) {
+      showError('Nome da sub-categoria é obrigatório')
+      return
+    }
+
+    if (!subCategoryFormData.categoria_id) {
+      showError('Selecione a categoria pai')
+      return
+    }
+
+    try {
+      if (editingSubCategory) {
+        const { error } = await supabase
+          .from('subcategorias_produtos')
+          .update({
+            nome: subCategoryFormData.nome.trim(),
+            categoria_id: subCategoryFormData.categoria_id,
+          })
+          .eq('id', editingSubCategory.id)
+
+        if (error) throw error
+        showSuccess('Sub-categoria atualizada!')
+      } else {
+        const { error } = await supabase
+          .from('subcategorias_produtos')
+          .insert({
+            nome: subCategoryFormData.nome.trim(),
+            categoria_id: subCategoryFormData.categoria_id,
+            user_id: user?.id
+          })
+
+        if (error) throw error
+        showSuccess('Sub-categoria criada!')
+      }
+
+      setIsSubCategoryDialogOpen(false)
+      setEditingSubCategory(null)
+      setSubCategoryFormData({ nome: '', categoria_id: '' })
+      fetchCategories()
+    } catch (error: any) {
+      console.error(error)
+      showError('Erro ao salvar sub-categoria. Verifique se a tabela existe no banco.')
+    }
+  }
+
+  const handleEditSubCategory = (sub: Subcategory) => {
+    setEditingSubCategory(sub)
+    setSubCategoryFormData({
+      nome: sub.nome,
+      categoria_id: sub.categoria_id
+    })
+    setIsSubCategoryDialogOpen(true)
+  }
+
+  const handleDeleteSubCategory = async (subId: string) => {
+    const productsInSub = products.filter(p => p.sub_categoria_id === subId)
+    if (productsInSub.length > 0) {
+      showError('Não é possível excluir esta sub-categoria pois existem produtos vinculados a ela')
+      return
+    }
+
+    if (!confirm('Tem certeza que deseja excluir esta sub-categoria?')) return
+
+    try {
+      const { error } = await supabase
+        .from('subcategorias_produtos')
+        .delete()
+        .eq('id', subId)
+
+      if (error) throw error
+      showSuccess('Sub-categoria excluída!')
+      fetchCategories()
+    } catch (error) {
+      console.error(error)
+      showError('Erro ao excluir sub-categoria')
+    }
+  }
+
 
 
   const resetForm = () => {
@@ -587,6 +709,7 @@ const Produtos = () => {
       description: '',
       price: '',
       categoria_id: '',
+      sub_categoria_id: '',
       show_in_catalog: true,
       image_url: '',
       image_urls: [] as string[],
@@ -608,6 +731,7 @@ const Produtos = () => {
       description: product.description || '',
       price: product.price.toString(),
       categoria_id: product.categoria_id || '',
+      sub_categoria_id: product.sub_categoria_id || '',
       show_in_catalog: product.show_in_catalog,
       image_url: product.image_url || '',
       image_urls: product.image_urls || (product.image_url ? [product.image_url] : []),
@@ -645,7 +769,8 @@ const Produtos = () => {
   const filteredProducts = products.filter(p => {
     const matchesSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase())
     const matchesCategory = selectedCategoryId === 'all' || p.categoria_id === selectedCategoryId
-    return matchesSearch && matchesCategory
+    const matchesSubCategory = selectedSubCategoryId === 'all' || p.sub_categoria_id === selectedSubCategoryId
+    return matchesSearch && matchesCategory && matchesSubCategory
   })
 
   const formatPrice = (price: number) =>
@@ -666,6 +791,15 @@ const Produtos = () => {
           )}
 
           <div>
+            <div className="font-medium text-xs font-bold text-blue-600">
+              {row.categorias_produtos?.nome}
+              {row.subcategorias_produtos?.nome && (
+                <>
+                  <span className="mx-1 text-gray-400">/</span>
+                  <span className="text-gray-600 font-normal">{row.subcategorias_produtos.nome}</span>
+                </>
+              )}
+            </div>
             <div className="font-medium">{value}</div>
 
             {row.sizes && row.sizes.length > 0 && (
@@ -727,15 +861,16 @@ const Produtos = () => {
             <Dialog open={isCategoriesListOpen} onOpenChange={setIsCategoriesListOpen}>
               <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
                 <DialogHeader>
-                  <DialogTitle>Categorias de Produtos</DialogTitle>
+                  <DialogTitle>Gerenciar Categorias e Sub-categorias</DialogTitle>
                 </DialogHeader>
 
-                {loadingCategories ? (
-                  <div className="flex justify-center py-8">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
+                <Tabs defaultValue="categories" className="w-full">
+                  <TabsList className="grid w-full grid-cols-2">
+                    <TabsTrigger value="categories">Categorias</TabsTrigger>
+                    <TabsTrigger value="subcategories">Sub-categorias</TabsTrigger>
+                  </TabsList>
+
+                  <TabsContent value="categories" className="space-y-4 pt-4">
                     <Table>
                       <TableHeader>
                         <TableRow>
@@ -782,6 +917,8 @@ const Produtos = () => {
                     <Button
                       onClick={() => {
                         setIsCategoriesListOpen(false)
+                        setEditingCategory(null)
+                        setCategoryFormData({ nome: '' })
                         setIsCategoryDialogOpen(true)
                       }}
                       className="w-full"
@@ -789,21 +926,74 @@ const Produtos = () => {
                       <Plus className="w-4 h-4 mr-2" />
                       Adicionar Nova Categoria
                     </Button>
-                  </div>
-                )}
+                  </TabsContent>
+
+                  <TabsContent value="subcategories" className="space-y-4 pt-4">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Sub-categoria</TableHead>
+                          <TableHead>Categoria Pai</TableHead>
+                          <TableHead className="text-right">Ações</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {subcategories.length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={3} className="text-center py-8 text-muted-foreground">
+                              Nenhuma sub-categoria cadastrada
+                            </TableCell>
+                          </TableRow>
+                        ) : (
+                          subcategories.map(sub => (
+                            <TableRow key={sub.id}>
+                              <TableCell className="font-medium">{sub.nome}</TableCell>
+                              <TableCell>
+                                {categories.find(c => c.id === sub.categoria_id)?.nome || 'N/A'}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                <div className="flex gap-2 justify-end">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleEditSubCategory(sub)}
+                                  >
+                                    <Edit className="w-4 h-4" />
+                                  </Button>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleDeleteSubCategory(sub.id)}
+                                    className="text-destructive hover:text-destructive"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </Button>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          ))
+                        )}
+                      </TableBody>
+                    </Table>
+
+                    <Button
+                      onClick={() => {
+                        setIsCategoriesListOpen(false)
+                        setEditingSubCategory(null)
+                        setSubCategoryFormData({ nome: '', categoria_id: '' })
+                        setIsSubCategoryDialogOpen(true)
+                      }}
+                      className="w-full"
+                    >
+                      <Plus className="w-4 h-4 mr-2" />
+                      Adicionar Sub-categoria
+                    </Button>
+                  </TabsContent>
+                </Tabs>
               </DialogContent>
             </Dialog>
 
             <Dialog open={isCategoryDialogOpen} onOpenChange={setIsCategoryDialogOpen}>
-              <DialogTrigger asChild>
-                <Button variant="outline" onClick={() => {
-                  setEditingCategory(null)
-                  setCategoryFormData({ nome: '' })
-                }}>
-                  <Tag className="w-4 h-4 mr-2" />
-                  Nova Categoria
-                </Button>
-              </DialogTrigger>
               <DialogContent className="max-w-md">
                 <DialogHeader>
                   <DialogTitle>
@@ -830,6 +1020,62 @@ const Produtos = () => {
                       type="button"
                       variant="outline"
                       onClick={() => setIsCategoryDialogOpen(false)}
+                    >
+                      Cancelar
+                    </Button>
+                  </DialogFooter>
+                </form>
+              </DialogContent>
+            </Dialog>
+
+            {/* Diálogo de Sub-categoria */}
+            <Dialog open={isSubCategoryDialogOpen} onOpenChange={setIsSubCategoryDialogOpen}>
+              <DialogContent className="max-w-md">
+                <DialogHeader>
+                  <DialogTitle>
+                    {editingSubCategory ? 'Editar Sub-categoria' : 'Nova Sub-categoria'}
+                  </DialogTitle>
+                </DialogHeader>
+                <form onSubmit={handleSubCategorySubmit} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="sub_category_parent">Categoria Pai *</Label>
+                    <Select
+                      value={subCategoryFormData.categoria_id}
+                      onValueChange={(value) => setSubCategoryFormData({ ...subCategoryFormData, categoria_id: value })}
+                      required
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione a categoria..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {categories.map(category => (
+                          <SelectItem key={category.id} value={category.id}>
+                            {category.nome}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="sub_category_name">Nome da Sub-categoria *</Label>
+                    <Input
+                      id="sub_category_name"
+                      value={subCategoryFormData.nome}
+                      onChange={(e) => setSubCategoryFormData({ ...subCategoryFormData, nome: e.target.value })}
+                      placeholder="Ex: Recheados, Com Cobertura, etc."
+                      required
+                    />
+                  </div>
+
+                  <DialogFooter>
+                    <Button type="submit">
+                      {editingSubCategory ? 'Atualizar' : 'Criar'}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setIsSubCategoryDialogOpen(false)}
                     >
                       Cancelar
                     </Button>
@@ -865,24 +1111,48 @@ const Produtos = () => {
                     />
                   </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="categoria_id">Categoria *</Label>
-                    <Select
-                      value={formData.categoria_id}
-                      onValueChange={(value) => setFormData({ ...formData, categoria_id: value })}
-                      required
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Selecione uma categoria..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {categories.map(category => (
-                          <SelectItem key={category.id} value={category.id}>
-                            {category.nome}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="categoria_id">Categoria *</Label>
+                      <Select
+                        value={formData.categoria_id}
+                        onValueChange={(value) => setFormData({ ...formData, categoria_id: value, sub_categoria_id: '' })}
+                        required
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecione..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {categories.map(category => (
+                            <SelectItem key={category.id} value={category.id}>
+                              {category.nome}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="sub_categoria_id">Sub-categoria</Label>
+                      <Select
+                        value={formData.sub_categoria_id}
+                        onValueChange={(value) => setFormData({ ...formData, sub_categoria_id: value })}
+                        disabled={!formData.categoria_id}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder={formData.categoria_id ? "Selecione..." : "Selecione categoria primeiro"} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {subcategories
+                            .filter(sub => sub.categoria_id === formData.categoria_id)
+                            .map(sub => (
+                              <SelectItem key={sub.id} value={sub.id}>
+                                {sub.nome}
+                              </SelectItem>
+                            ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
 
                   <div className="space-y-2">
@@ -1202,7 +1472,10 @@ const Produtos = () => {
               <div className="w-full md:w-64">
                 <Select
                   value={selectedCategoryId}
-                  onValueChange={setSelectedCategoryId}
+                  onValueChange={(value) => {
+                    setSelectedCategoryId(value)
+                    setSelectedSubCategoryId('all')
+                  }}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Filtrar por categoria" />
@@ -1214,6 +1487,27 @@ const Produtos = () => {
                         {category.nome}
                       </SelectItem>
                     ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="w-full md:w-64">
+                <Select
+                  value={selectedSubCategoryId}
+                  onValueChange={setSelectedSubCategoryId}
+                  disabled={selectedCategoryId === 'all'}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder={selectedCategoryId === 'all' ? "Sub-categoria" : "Filtrar por sub-categoria"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todas as sub-categorias</SelectItem>
+                    {subcategories
+                      .filter(sub => sub.categoria_id === selectedCategoryId)
+                      .map(sub => (
+                        <SelectItem key={sub.id} value={sub.id}>
+                          {sub.nome}
+                        </SelectItem>
+                      ))}
                   </SelectContent>
                 </Select>
               </div>

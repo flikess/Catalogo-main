@@ -21,7 +21,11 @@ import {
   X,
   LayoutGrid,
   List,
-  Star
+  Star,
+  Search,
+  ArrowDown,
+  ArrowUp,
+  ChevronDown
 } from 'lucide-react'
 import { supabase } from '@/integrations/supabase/client'
 import { showSuccess } from '@/utils/toast'
@@ -54,6 +58,16 @@ interface Product {
       price: number
     }[]
   }[]
+  sub_categoria_id?: string
+  subcategorias_produtos?: {
+    nome: string
+  }
+}
+
+interface Subcategory {
+  id: string
+  nome: string
+  categoria_id: string
 }
 
 
@@ -125,6 +139,11 @@ const CatalogoPublico = () => {
   } | null>(null)
 
   const [viewMode, setViewMode] = useState<ViewMode>('grid')
+  const [searchTerm, setSearchTerm] = useState('')
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string>('all')
+  const [selectedSubCategoryId, setSelectedSubCategoryId] = useState<string>('all')
+  const [priceSort, setPriceSort] = useState<'none' | 'asc' | 'desc'>('none')
+  const [allSubcategories, setAllSubcategories] = useState<Subcategory[]>([])
 
   const categoryRefs = useRef<Record<string, HTMLDivElement | null>>({})
   const hasSizes = (p?: Product | null) =>
@@ -215,8 +234,11 @@ const CatalogoPublico = () => {
       const { data: productsData, error: productsError } = await supabase
         .from('products')
         .select(`
-  id, name, description, price, image_url, image_urls, categoria_id, adicionais, is_featured, sizes, variations,
+  id, name, description, price, image_url, image_urls, categoria_id, sub_categoria_id, adicionais, is_featured, sizes, variations,
   categorias_produtos (
+    nome
+  ),
+  subcategorias_produtos (
     nome
   )
 `)
@@ -227,18 +249,29 @@ const CatalogoPublico = () => {
 
       if (productsError) throw productsError
 
-      const featured = (productsData || []).filter(p => p.is_featured)
+      const formattedProducts = (productsData || []).map(p => ({
+        ...p,
+        categorias_produtos: Array.isArray(p.categorias_produtos) ? p.categorias_produtos[0] : p.categorias_produtos,
+        subcategorias_produtos: Array.isArray(p.subcategorias_produtos) ? p.subcategorias_produtos[0] : p.subcategorias_produtos
+      }))
+
+      const featured = formattedProducts.filter(p => p.is_featured)
       setFeaturedProducts(featured)
+
+      // Buscar subcategorias do usuário
+      const { data: subsData } = await supabase
+        .from('subcategorias_produtos')
+        .select('id, nome, categoria_id')
+        .eq('user_id', activeUserId)
+
+      setAllSubcategories(subsData || [])
 
       const groupedProducts: { [key: string]: Category } = {}
 
-      productsData
+      formattedProducts
         ?.filter(p => !p.is_featured)
         .forEach(product => {
-          const categoryData = Array.isArray(product.categorias_produtos)
-            ? product.categorias_produtos[0]
-            : product.categorias_produtos
-          const categoryName = categoryData?.nome || 'Outros'
+          const categoryName = product.categorias_produtos?.nome || 'Outros'
           const categoryId = product.categoria_id || 'outros'
 
           if (!groupedProducts[categoryId]) {
@@ -262,11 +295,52 @@ const CatalogoPublico = () => {
   }
 
   const handleCategorySelect = (categoryId: string) => {
-    const element = categoryRefs.current[categoryId]
-    if (element) {
-      element.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    setSelectedCategoryId(categoryId)
+    setSelectedSubCategoryId('all')
+    if (categoryId !== 'all') {
+      setTimeout(() => {
+        const element = categoryRefs.current[categoryId]
+        if (element) {
+          element.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        }
+      }, 100)
     }
   }
+
+  const getFilteredCategories = () => {
+    return categories
+      .map(cat => {
+        // Se uma categoria específica for selecionada, apenas processa ela
+        if (selectedCategoryId !== 'all' && cat.id !== selectedCategoryId) {
+          return null
+        }
+
+        let filteredProducts = cat.products.filter(p => {
+          const matchesSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            p.description?.toLowerCase().includes(searchTerm.toLowerCase())
+          const matchesSub = selectedSubCategoryId === 'all' || p.sub_categoria_id === selectedSubCategoryId
+          return matchesSearch && matchesSub
+        })
+
+        if (priceSort === 'asc') {
+          filteredProducts = [...filteredProducts].sort((a, b) => a.price - b.price)
+        } else if (priceSort === 'desc') {
+          filteredProducts = [...filteredProducts].sort((a, b) => b.price - a.price)
+        }
+
+        if (filteredProducts.length === 0 && (searchTerm || selectedSubCategoryId !== 'all' || selectedCategoryId !== 'all')) {
+          return null
+        }
+
+        return {
+          ...cat,
+          products: filteredProducts
+        }
+      })
+      .filter((cat): cat is Category => cat !== null)
+  }
+
+  const displayCategories = getFilteredCategories()
 
   const openProductModal = (product: Product) => {
     setViewingProduct(product)
@@ -634,41 +708,94 @@ const CatalogoPublico = () => {
 
 
 
-      {/* Filtro + modo de visualização */}
-      <div className="sticky top-0 bg-white/80 backdrop-blur-sm z-40 py-2 border-b">
-        <div className="max-w-6xl mx-auto px-4 flex flex-col sm:flex-row gap-2 items-center justify-between">
+      {/* Filtros de Pesquisa */}
+      <div className="sticky top-0 bg-white/95 backdrop-blur-md z-40 py-3 border-b shadow-sm">
+        <div className="max-w-6xl mx-auto px-4 space-y-3">
 
-          <Select onValueChange={handleCategorySelect}>
-            <SelectTrigger className="w-[260px]">
-              <SelectValue placeholder="Navegar por categorias..." />
-            </SelectTrigger>
-            <SelectContent>
-              {categories.map(category => (
-                <SelectItem key={category.id} value={category.id}>
-                  {category.nome}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          {/* Busca por Texto */}
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Pesquisar produtos..."
+              className="w-full pl-10 pr-4 py-2 bg-gray-100 border-none rounded-full text-sm focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
 
-          <div className="flex gap-2">
-            <Button
-              variant={viewMode === 'grid' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setViewMode('grid')}
-            >
-              <LayoutGrid className="w-4 h-4 mr-1" />
-              Grade
-            </Button>
+          <div className="flex flex-col sm:flex-row gap-2 items-center justify-between">
+            <div className="flex flex-wrap gap-2 w-full sm:w-auto">
+              <Select value={selectedCategoryId} onValueChange={handleCategorySelect}>
+                <SelectTrigger className="w-[140px] h-9 text-xs rounded-full">
+                  <SelectValue placeholder="Categorias" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas Categorias</SelectItem>
+                  {categories.map(category => (
+                    <SelectItem key={category.id} value={category.id}>
+                      {category.nome}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
 
-            <Button
-              variant={viewMode === 'list' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setViewMode('list')}
-            >
-              <List className="w-4 h-4 mr-1" />
-              Lista
-            </Button>
+              <Select
+                value={selectedSubCategoryId}
+                onValueChange={setSelectedSubCategoryId}
+                disabled={selectedCategoryId === 'all'}
+              >
+                <SelectTrigger className="w-[140px] h-9 text-xs rounded-full">
+                  <SelectValue placeholder="Sub-categorias" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas Sub</SelectItem>
+                  {allSubcategories
+                    .filter(sub => sub.categoria_id === selectedCategoryId)
+                    .map(sub => (
+                      <SelectItem key={sub.id} value={sub.id}>
+                        {sub.nome}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+
+              <Select value={priceSort} onValueChange={(v: any) => setPriceSort(v)}>
+                <SelectTrigger className="w-[140px] h-9 text-xs rounded-full">
+                  <div className="flex items-center gap-1">
+                    {priceSort === 'asc' ? <ArrowUp className="w-3 h-3" /> : priceSort === 'desc' ? <ArrowDown className="w-3 h-3" /> : null}
+                    <SelectValue placeholder="Ordenar preço" />
+                  </div>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Preço: Padrão</SelectItem>
+                  <SelectItem value="asc">Preço: Menor</SelectItem>
+                  <SelectItem value="desc">Preço: Maior</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="hidden sm:flex gap-1 bg-gray-100 p-1 rounded-full">
+              <Button
+                variant={viewMode === 'grid' ? 'secondary' : 'ghost'}
+                size="sm"
+                className="h-7 px-3 rounded-full text-xs"
+                onClick={() => setViewMode('grid')}
+              >
+                <LayoutGrid className="w-3 h-3 mr-1" />
+                Grade
+              </Button>
+
+              <Button
+                variant={viewMode === 'list' ? 'secondary' : 'ghost'}
+                size="sm"
+                className="h-7 px-3 rounded-full text-xs"
+                onClick={() => setViewMode('list')}
+              >
+                <List className="w-3 h-3 mr-1" />
+                Lista
+              </Button>
+            </div>
           </div>
         </div>
       </div>
@@ -789,13 +916,13 @@ const CatalogoPublico = () => {
           </div>
         )}
 
-        {categories.map(category => (
+        {displayCategories.map(category => (
           <div
             key={category.id}
             ref={el => { categoryRefs.current[category.id] = el }}
             className="space-y-4"
           >
-            <h2 className="text-2xl font-bold text-gray-900">
+            <h2 className="text-2xl font-bold text-gray-900 border-l-4 border-blue-600 pl-3">
               {category.nome}
             </h2>
 
