@@ -62,9 +62,13 @@ interface Product {
   id: string;
   name: string;
   price: number;
+  categoria_id?: string;
+  sub_categoria_id?: string;
+  categorias_produtos?: any;
+  subcategorias_produtos?: any;
   adicionais?: Additional[];
   sizes?: SizeOption[];
-  variations?: VariationGroup[]; // 👈 ADICIONE ISSO
+  variations?: VariationGroup[];
 }
 
 // E adicione esta interface antes da Product:
@@ -152,13 +156,21 @@ const Pedidos = () => {
     unit_price: 0,
     adicionais: [],
     size: null,
-    variations: [] // NOVO
+    variations: []
   });
+
+  const [categories, setCategories] = useState<any[]>([]);
+  const [subcategories, setSubcategories] = useState<any[]>([]);
+  const [selectedProductCategoryId, setSelectedProductCategoryId] = useState<string>('all');
+  const [selectedProductSubCategoryId, setSelectedProductSubCategoryId] = useState<string>('all');
+  const [productSearch, setProductSearch] = useState('');
+  const [clientType, setClientType] = useState<'registered' | 'guest'>('registered');
 
   useEffect(() => {
     fetchOrders();
     fetchClients();
     fetchProducts();
+    fetchCategories();
   }, []);
 
   const fetchOrders = async () => {
@@ -259,14 +271,48 @@ const Pedidos = () => {
     try {
       const { data, error } = await supabase
         .from('products')
-        .select('id, name, price, adicionais, sizes, variations') // 👈 ADICIONE variations
+        .select(`
+          id, name, price, adicionais, sizes, variations, categoria_id, sub_categoria_id,
+          categorias_produtos (nome),
+          subcategorias_produtos (nome)
+        `)
         .eq('user_id', user?.id)
         .order('name');
 
       if (error) throw error;
-      setProducts(data || []);
+
+      const formatted = (data || []).map(p => ({
+        ...p,
+        categorias_produtos: Array.isArray(p.categorias_produtos) ? p.categorias_produtos[0] : p.categorias_produtos,
+        subcategorias_produtos: Array.isArray(p.subcategorias_produtos) ? p.subcategorias_produtos[0] : p.subcategorias_produtos,
+      }));
+
+      setProducts(formatted);
     } catch (error) {
       console.error('Error fetching products:', error);
+    }
+  };
+
+  const fetchCategories = async () => {
+    try {
+      const [catRes, subRes] = await Promise.all([
+        supabase
+          .from('categorias_produtos')
+          .select('*')
+          .eq('user_id', user?.id)
+          .order('nome'),
+        supabase
+          .from('subcategorias_produtos')
+          .select('*')
+          .eq('user_id', user?.id)
+          .order('nome')
+      ]);
+
+      if (catRes.error) throw catRes.error;
+      setCategories(catRes.data || []);
+      setSubcategories(subRes.data || []);
+    } catch (error) {
+      console.error('Error fetching categories:', error);
     }
   };
 
@@ -431,6 +477,7 @@ const Pedidos = () => {
       delivery_date: order.delivery_date ? order.delivery_date.split('T')[0] : '',
       notes: order.notes || ''
     });
+    setClientType(order.client_id ? 'registered' : 'guest');
 
     if (order.order_items) {
       const items: OrderItemForm[] = order.order_items.map(item => ({
@@ -713,8 +760,12 @@ const Pedidos = () => {
       unit_price: 0,
       adicionais: [],
       size: null,
-      variations: [] // NOVO
+      variations: []
     });
+    setProductSearch('');
+    setSelectedProductCategoryId('all');
+    setSelectedProductSubCategoryId('all');
+    setClientType('registered');
   };
 
   const filteredOrders = orders.filter(order => {
@@ -732,6 +783,13 @@ const Pedidos = () => {
     }
 
     return matchesSearch && matchesStatus;
+  });
+
+  const filteredProducts = products.filter(product => {
+    const matchesName = product.name.toLowerCase().includes(productSearch.toLowerCase());
+    const matchesCategory = selectedProductCategoryId === 'all' || product.categoria_id === selectedProductCategoryId;
+    const matchesSubcategory = selectedProductSubCategoryId === 'all' || product.sub_categoria_id === selectedProductSubCategoryId;
+    return matchesName && matchesCategory && matchesSubcategory;
   });
 
   const formatPrice = (price: number) => {
@@ -1053,37 +1111,70 @@ const Pedidos = () => {
                   </DialogTitle>
                 </DialogHeader>
                 <form onSubmit={handleSubmit} className="space-y-6">
-                  {/* Informações Básicas */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="client_name">Cliente *</Label>
-                      <Combobox
-                        options={clients.map(client => ({
-                          value: client.id,
-                          label: client.name
-                        }))}
-                        value={formData.client_id}
-                        onChange={(value) => {
-                          const selectedClient = clients.find(c => c.id === value);
-                          setFormData({
-                            ...formData,
-                            client_id: value,
-                            client_name: selectedClient?.name || ''
-                          });
-                        }}
-                        placeholder="Selecione ou digite um cliente..."
-                        emptyMessage="Nenhum cliente encontrado."
-                      />
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-4 p-1 bg-muted rounded-lg w-fit">
+                      <Button
+                        type="button"
+                        variant={clientType === 'registered' ? 'default' : 'ghost'}
+                        size="sm"
+                        onClick={() => setClientType('registered')}
+                        className="text-xs"
+                      >
+                        <User className="w-4 h-4 mr-2" />
+                        Cliente Cadastrado
+                      </Button>
+                      <Button
+                        type="button"
+                        variant={clientType === 'guest' ? 'default' : 'ghost'}
+                        size="sm"
+                        onClick={() => setClientType('guest')}
+                        className="text-xs"
+                      >
+                        <User className="w-4 h-4 mr-2" />
+                        Cliente Avulso
+                      </Button>
                     </div>
 
-                    <div className="space-y-2">
-                      <Label htmlFor="delivery_date">Data de Entrega</Label>
-                      <Input
-                        id="delivery_date"
-                        type="date"
-                        value={formData.delivery_date}
-                        onChange={(e) => setFormData({ ...formData, delivery_date: e.target.value })}
-                      />
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="client_name">Cliente *</Label>
+                        {clientType === 'registered' ? (
+                          <Combobox
+                            options={clients.map(client => ({
+                              value: client.id,
+                              label: client.name
+                            }))}
+                            value={formData.client_id}
+                            onChange={(value) => {
+                              const selectedClient = clients.find(c => c.id === value);
+                              setFormData({
+                                ...formData,
+                                client_id: value,
+                                client_name: selectedClient?.name || ''
+                              });
+                            }}
+                            placeholder="Selecione um cliente..."
+                            emptyMessage="Nenhum cliente encontrado."
+                          />
+                        ) : (
+                          <Input
+                            id="client_name"
+                            value={formData.client_name}
+                            onChange={(e) => setFormData({ ...formData, client_name: e.target.value, client_id: '' })}
+                            placeholder="Nome do cliente avulso..."
+                          />
+                        )}
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="delivery_date">Data de Entrega</Label>
+                        <Input
+                          id="delivery_date"
+                          type="date"
+                          value={formData.delivery_date}
+                          onChange={(e) => setFormData({ ...formData, delivery_date: e.target.value })}
+                        />
+                      </div>
                     </div>
                   </div>
 
@@ -1097,213 +1188,241 @@ const Pedidos = () => {
                     </CardHeader>
                     <CardContent className="space-y-4">
                       {/* Adicionar Produto */}
-                      <div className="grid grid-cols-1 md:grid-cols-5 gap-2 p-4 bg-muted/30 rounded-lg">
-                        <div className="space-y-2">
-                          <Label>Produto</Label>
-                          <Select
-                            value={newItem.product_id}
-                            onValueChange={(value) => {
-                              const product = products.find(p => p.id === value);
-                              resetVariationsForNewProduct(); // NOVO
-                              setNewItem({
-                                ...newItem,
-                                product_id: value,
-                                product_name: product?.name || '',
-                                unit_price: product?.price || 0,
-                                adicionais: [],
-                                size: null,
-                                variations: [] // explícito
-                              });
-                            }}
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="Selecione..." />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {products.map(product => (
-                                <SelectItem key={product.id} value={product.id}>
-                                  {product.name} - {formatPrice(product.price)}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          {newItem.product_id &&
-                            products.find(p => p.id === newItem.product_id)?.sizes?.length > 0 && (
+                      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 p-4 bg-muted/20 rounded-lg">
+                        {/* Search and Filters */}
+                        <div className="lg:col-span-5 space-y-4">
+                          <div className="space-y-2">
+                            <Label>Pesquisar Produto</Label>
+                            <div className="relative">
+                              <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                              <Input
+                                placeholder="Nome do produto..."
+                                className="pl-8"
+                                value={productSearch}
+                                onChange={(e) => setProductSearch(e.target.value)}
+                              />
+                            </div>
+                          </div>
 
-                              <div className="space-y-2">
-                                <Label>Tamanho / Variação</Label>
+                          <div className="grid grid-cols-2 gap-2">
+                            <div className="space-y-1">
+                              <Label className="text-xs">Categoria</Label>
+                              <Select value={selectedProductCategoryId} onValueChange={(v) => {
+                                setSelectedProductCategoryId(v);
+                                setSelectedProductSubCategoryId('all');
+                              }}>
+                                <SelectTrigger className="h-8">
+                                  <SelectValue placeholder="Todas" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="all">Todas</SelectItem>
+                                  {categories.map(c => (
+                                    <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div className="space-y-1">
+                              <Label className="text-xs">Subcategoria</Label>
+                              <Select value={selectedProductSubCategoryId} onValueChange={setSelectedProductSubCategoryId}>
+                                <SelectTrigger className="h-8">
+                                  <SelectValue placeholder="Todas" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="all">Todas</SelectItem>
+                                  {subcategories
+                                    .filter(s => selectedProductCategoryId === 'all' || s.categoria_id === selectedProductCategoryId)
+                                    .map(s => (
+                                      <SelectItem key={s.id} value={s.id}>{s.nome}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </div>
 
-                                <Select
-                                  value={newItem.size?.name || ''}
-                                  onValueChange={(value) => {
-                                    const product = products.find(p => p.id === newItem.product_id)
-                                    const size = product?.sizes?.find(s => s.name === value)
-
-                                    if (!size) return
-
+                          {/* Variations/Options Section (Visible when product selected) */}
+                          {newItem.product_id && (
+                            <div className="space-y-4 border-t pt-4">
+                              <div className="flex items-center justify-between">
+                                <span className="font-semibold text-sm">{newItem.product_name}</span>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => {
                                     setNewItem({
-                                      ...newItem,
-                                      size,
-                                      unit_price: size.price
-                                    })
+                                      product_id: '',
+                                      product_name: '',
+                                      quantity: 1,
+                                      unit_price: 0,
+                                      adicionais: [],
+                                      size: null,
+                                      variations: []
+                                    });
                                   }}
                                 >
-                                  <SelectTrigger>
-                                    <SelectValue placeholder="Selecione..." />
-                                  </SelectTrigger>
+                                  <X className="w-4 h-4" />
+                                </Button>
+                              </div>
 
-                                  <SelectContent>
-                                    {products
-                                      .find(p => p.id === newItem.product_id)
-                                      ?.sizes?.map((s, i) => (
+                              {products.find(p => p.id === newItem.product_id)?.sizes?.length > 0 && (
+                                <div className="space-y-2">
+                                  <Label className="text-xs font-bold uppercase">Tamanho / Variação</Label>
+                                  <Select
+                                    value={newItem.size?.name || ''}
+                                    onValueChange={(value) => {
+                                      const product = products.find(p => p.id === newItem.product_id);
+                                      const size = product?.sizes?.find(s => s.name === value);
+                                      if (!size) return;
+                                      setNewItem({ ...newItem, size, unit_price: size.price });
+                                    }}
+                                  >
+                                    <SelectTrigger>
+                                      <SelectValue placeholder="Selecione o tamanho..." />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      {products.find(p => p.id === newItem.product_id)?.sizes?.map((s, i) => (
                                         <SelectItem key={i} value={s.name}>
                                           {s.name} (+{formatPrice(s.price)})
                                         </SelectItem>
                                       ))}
-                                  </SelectContent>
-                                </Select>
-                              </div>
-                            )}
-                          {/* NOVA SEÇÃO - Variações (Cores, Sabores, etc) */}
-                          {newItem.product_id &&
-                            products.find(p => p.id === newItem.product_id)?.variations?.length > 0 && (
-                              <div className="space-y-4 mt-4 border-t pt-4">
-                                {products
-                                  .find(p => p.id === newItem.product_id)
-                                  ?.variations?.map((group, groupIndex) => {
-                                    // Encontra a variação atualmente selecionada para este grupo
-                                    const selectedVariation = newItem.variations?.find(
-                                      v => v.group === group.name
-                                    );
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                              )}
 
-                                    return (
-                                      <div key={groupIndex} className="space-y-2">
-                                        <Label className="font-medium">
-                                          {group.name}
-                                        </Label>
+                              {products.find(p => p.id === newItem.product_id)?.variations?.length > 0 && (
+                                <div className="space-y-3">
+                                  {products.find(p => p.id === newItem.product_id)?.variations?.map((group, groupIndex) => (
+                                    <div key={groupIndex} className="space-y-1">
+                                      <Label className="text-xs font-bold uppercase">{group.name}</Label>
+                                      <Select
+                                        value={newItem.variations?.find(v => v.group === group.name)?.name || ''}
+                                        onValueChange={(value) => {
+                                          const option = group.options.find(opt => opt.name === value);
+                                          if (!option) return;
+                                          let updatedVariations = [...(newItem.variations || [])].filter(v => v.group !== group.name);
+                                          updatedVariations.push({ group: group.name, name: option.name, price: option.price || 0 });
+                                          setNewItem({ ...newItem, variations: updatedVariations });
+                                        }}
+                                      >
+                                        <SelectTrigger>
+                                          <SelectValue placeholder={`Selecione ${group.name}...`} />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          {group.options.map((option, optIndex) => (
+                                            <SelectItem key={optIndex} value={option.name}>
+                                              {option.name} {option.price && option.price > 0 ? `(+${formatPrice(option.price)})` : ''}
+                                            </SelectItem>
+                                          ))}
+                                        </SelectContent>
+                                      </Select>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
 
-                                        <Select
-                                          value={selectedVariation?.name || ''}
-                                          onValueChange={(value) => {
-                                            // Encontra a opção selecionada
-                                            const option = group.options.find(opt => opt.name === value);
-                                            if (!option) return;
-
-                                            let updatedVariations = [...(newItem.variations || [])];
-
-                                            // Remove qualquer opção já selecionada deste grupo
-                                            updatedVariations = updatedVariations.filter(
-                                              v => v.group !== group.name
-                                            );
-
-                                            // Adiciona a nova seleção
-                                            updatedVariations.push({
-                                              group: group.name,
-                                              name: option.name,
-                                              price: option.price || 0
-                                            });
-
-                                            setNewItem({
-                                              ...newItem,
-                                              variations: updatedVariations
-                                            });
+                              {products.find(p => p.id === newItem.product_id)?.adicionais?.length > 0 && (
+                                <div className="space-y-2">
+                                  <Label className="text-xs font-bold uppercase">Adicionais</Label>
+                                  <div className="grid grid-cols-1 gap-1">
+                                    {products.find(p => p.id === newItem.product_id)?.adicionais?.map((add, index) => (
+                                      <label key={index} className="flex items-center space-x-2 p-1 hover:bg-muted rounded cursor-pointer">
+                                        <input
+                                          type="checkbox"
+                                          checked={!!newItem.adicionais?.find(a => a.name === add.name)}
+                                          onChange={() => {
+                                            const exists = newItem.adicionais?.find(a => a.name === add.name);
+                                            const updated = exists
+                                              ? newItem.adicionais!.filter(a => a.name !== add.name)
+                                              : [...(newItem.adicionais || []), add];
+                                            setNewItem({ ...newItem, adicionais: updated });
                                           }}
-                                        >
-                                          <SelectTrigger className="w-full">
-                                            <SelectValue placeholder={`Selecione ${group.name.toLowerCase()}...`} />
-                                          </SelectTrigger>
-                                          <SelectContent>
-                                            {group.options.map((option, optIndex) => (
-                                              <SelectItem key={optIndex} value={option.name}>
-                                                <div className="flex items-center justify-between w-full gap-4">
-                                                  <span>{option.name}</span>
-                                                  {option.price && option.price > 0 && (
-                                                    <Badge variant="secondary" className="ml-2">
-                                                      +{formatPrice(option.price)}
-                                                    </Badge>
-                                                  )}
-                                                </div>
-                                              </SelectItem>
-                                            ))}
-                                          </SelectContent>
-                                        </Select>
+                                          className="h-4 w-4 rounded border-gray-300"
+                                        />
+                                        <span className="text-xs">
+                                          {add.name} (+{formatPrice(add.price)})
+                                        </span>
+                                      </label>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
 
-                                        {/* Mostrar preço adicional se houver */}
-                                        {selectedVariation && selectedVariation.price > 0 && (
-                                          <p className="text-xs text-muted-foreground mt-1">
-                                            Adicional: {formatPrice(selectedVariation.price)}
-                                          </p>
-                                        )}
-                                      </div>
-                                    );
-                                  })}
-                              </div>
-                            )}
-
-                          {/* Seção de Adicionais */}
-                          {newItem.product_id && products.find(p => p.id === newItem.product_id)?.adicionais?.length > 0 && (
-                            <div className="space-y-2 mt-2">
-                              <p className="text-sm font-medium">Adicionais:</p>
-                              {products.find(p => p.id === newItem.product_id)?.adicionais?.map((add, index) => (
-                                <label key={index} className="flex items-center space-x-2">
-                                  <input
-                                    type="checkbox"
-                                    checked={!!newItem.adicionais?.find(a => a.name === add.name)}
-                                    onChange={() => {
-                                      const exists = newItem.adicionais?.find(a => a.name === add.name);
-                                      const updated = exists
-                                        ? newItem.adicionais!.filter(a => a.name !== add.name)
-                                        : [...(newItem.adicionais || []), add];
-                                      setNewItem({ ...newItem, adicionais: updated });
-                                    }}
-                                    className="h-4 w-4"
+                              <div className="grid grid-cols-2 gap-2 pt-2">
+                                <div className="space-y-1">
+                                  <Label className="text-xs">Qtd</Label>
+                                  <Input
+                                    type="number"
+                                    min="1"
+                                    value={newItem.quantity}
+                                    onChange={(e) => setNewItem({ ...newItem, quantity: parseInt(e.target.value) || 1 })}
+                                    className="h-8"
                                   />
-                                  <span className="text-sm">
-                                    {add.name} (+{formatPrice(add.price)})
-                                  </span>
-                                </label>
-                              ))}
+                                </div>
+                                <div className="space-y-1">
+                                  <Label className="text-xs">Preço Unit.</Label>
+                                  <Input
+                                    type="number"
+                                    step="0.01"
+                                    value={newItem.unit_price}
+                                    onChange={(e) => setNewItem({ ...newItem, unit_price: parseFloat(e.target.value) || 0 })}
+                                    className="h-8"
+                                  />
+                                </div>
+                              </div>
+
+                              <Button type="button" onClick={addItemToOrder} className="w-full bg-primary hover:bg-primary/90">
+                                <Plus className="w-4 h-4 mr-2" />
+                                Adicionar ao Pedido
+                              </Button>
                             </div>
                           )}
                         </div>
 
-
-                        <div className="space-y-2">
-                          <Label>Nome do Produto</Label>
-                          <Input
-                            value={newItem.product_name}
-                            onChange={(e) => setNewItem({ ...newItem, product_name: e.target.value })}
-                            placeholder="Nome do produto"
-                          />
-                        </div>
-
-                        <div className="space-y-2">
-                          <Label>Quantidade</Label>
-                          <Input
-                            type="number"
-                            min="1"
-                            value={newItem.quantity}
-                            onChange={(e) => setNewItem({ ...newItem, quantity: parseInt(e.target.value) || 1 })}
-                          />
-                        </div>
-
-                        <div className="space-y-2">
-                          <Label>Preço Unitário</Label>
-                          <Input
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            value={newItem.unit_price}
-                            onChange={(e) => setNewItem({ ...newItem, unit_price: parseFloat(e.target.value) || 0 })}
-                          />
-                        </div>
-
-                        <div className="space-y-2">
-                          <Label>Ação</Label>
-                          <Button type="button" onClick={addItemToOrder} className="w-full">
-                            <Plus className="w-4 h-4 mr-2" />
-                            Adicionar
-                          </Button>
+                        {/* Product List */}
+                        <div className="lg:col-span-7 border-l pl-6 max-h-[500px] overflow-y-auto">
+                          <Label className="text-xs font-bold text-muted-foreground uppercase mb-2 block">Produtos Disponíveis</Label>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            {filteredProducts.length > 0 ? (
+                              filteredProducts.map(product => (
+                                <button
+                                  key={product.id}
+                                  type="button"
+                                  className={`flex flex-col text-left p-3 rounded-lg border transition-all ${newItem.product_id === product.id
+                                    ? 'border-primary bg-primary/5 ring-1 ring-primary'
+                                    : 'hover:border-primary/50 hover:bg-muted/50'
+                                    }`}
+                                  onClick={() => {
+                                    resetVariationsForNewProduct();
+                                    setNewItem({
+                                      ...newItem,
+                                      product_id: product.id,
+                                      product_name: product.name,
+                                      unit_price: product.price,
+                                      adicionais: [],
+                                      size: null,
+                                      variations: []
+                                    });
+                                  }}
+                                >
+                                  <span className="font-semibold text-sm line-clamp-1">{product.name}</span>
+                                  <div className="flex justify-between items-center mt-1">
+                                    <span className="text-xs text-primary font-bold">{formatPrice(product.price)}</span>
+                                    {product.categorias_produtos?.nome && (
+                                      <Badge variant="outline" className="text-[10px] h-4 px-1">
+                                        {product.categorias_produtos.nome}
+                                      </Badge>
+                                    )}
+                                  </div>
+                                </button>
+                              ))
+                            ) : (
+                              <div className="col-span-2 py-8 text-center text-muted-foreground">
+                                <Package className="w-8 h-8 mx-auto mb-2 opacity-20" />
+                                <p className="text-sm">Nenhum produto encontrado.</p>
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </div>
                       {/* Lista de Produtos */}

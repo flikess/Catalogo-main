@@ -66,6 +66,8 @@ interface Product {
 interface Category {
   id: string
   nome: string
+  banner_desktop_url?: string
+  banner_mobile_url?: string
   created_at: string
 }
 
@@ -100,6 +102,11 @@ const Produtos = () => {
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>('all')
   const [selectedSubCategoryId, setSelectedSubCategoryId] = useState<string>('all')
 
+  const [categoryBannerDesktop, setCategoryBannerDesktop] = useState<File | null>(null)
+  const [categoryBannerMobile, setCategoryBannerMobile] = useState<File | null>(null)
+  const [categoryBannerDesktopPreview, setCategoryBannerDesktopPreview] = useState<string | null>(null)
+  const [categoryBannerMobilePreview, setCategoryBannerMobilePreview] = useState<string | null>(null)
+
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -117,7 +124,9 @@ const Produtos = () => {
   })
 
   const [categoryFormData, setCategoryFormData] = useState({
-    nome: ''
+    nome: '',
+    banner_desktop_url: '',
+    banner_mobile_url: ''
   })
 
   const [subCategoryFormData, setSubCategoryFormData] = useState({
@@ -546,6 +555,28 @@ const Produtos = () => {
     }
   }
 
+  const handleCategoryFileSelect = (event: React.ChangeEvent<HTMLInputElement>, type: 'desktop' | 'mobile') => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    if (!file.type.startsWith('image/')) {
+      showError('Selecione uma imagem')
+      return
+    }
+
+    if (type === 'desktop') {
+      setCategoryBannerDesktop(file)
+      const reader = new FileReader()
+      reader.onload = e => setCategoryBannerDesktopPreview(e.target?.result as string)
+      reader.readAsDataURL(file)
+    } else {
+      setCategoryBannerMobile(file)
+      const reader = new FileReader()
+      reader.onload = e => setCategoryBannerMobilePreview(e.target?.result as string)
+      reader.readAsDataURL(file)
+    }
+  }
+
   const handleCategorySubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
@@ -555,13 +586,27 @@ const Produtos = () => {
     }
 
     try {
+      let desktopUrl = categoryFormData.banner_desktop_url
+      let mobileUrl = categoryFormData.banner_mobile_url
+
+      if (categoryBannerDesktop) {
+        desktopUrl = await uploadImage(categoryBannerDesktop) || desktopUrl
+      }
+      if (categoryBannerMobile) {
+        mobileUrl = await uploadImage(categoryBannerMobile) || mobileUrl
+      }
+
+      const categoryData = {
+        nome: categoryFormData.nome.trim(),
+        banner_desktop_url: desktopUrl,
+        banner_mobile_url: mobileUrl,
+        updated_at: new Date().toISOString()
+      }
+
       if (editingCategory) {
         const { error } = await supabase
           .from('categorias_produtos')
-          .update({
-            nome: categoryFormData.nome.trim(),
-            updated_at: new Date().toISOString()
-          })
+          .update(categoryData)
           .eq('id', editingCategory.id)
 
         if (error) throw error
@@ -570,7 +615,7 @@ const Produtos = () => {
         const { error } = await supabase
           .from('categorias_produtos')
           .insert({
-            nome: categoryFormData.nome.trim(),
+            ...categoryData,
             user_id: user?.id
           })
 
@@ -580,7 +625,11 @@ const Produtos = () => {
 
       setIsCategoryDialogOpen(false)
       setEditingCategory(null)
-      setCategoryFormData({ nome: '' })
+      setCategoryFormData({ nome: '', banner_desktop_url: '', banner_mobile_url: '' })
+      setCategoryBannerDesktop(null)
+      setCategoryBannerMobile(null)
+      setCategoryBannerDesktopPreview(null)
+      setCategoryBannerMobilePreview(null)
       fetchCategories()
     } catch (error) {
       console.error('Error saving category:', error)
@@ -591,8 +640,12 @@ const Produtos = () => {
   const handleEditCategory = (category: Category) => {
     setEditingCategory(category)
     setCategoryFormData({
-      nome: category.nome
+      nome: category.nome,
+      banner_desktop_url: category.banner_desktop_url || '',
+      banner_mobile_url: category.banner_mobile_url || ''
     })
+    setCategoryBannerDesktopPreview(category.banner_desktop_url || null)
+    setCategoryBannerMobilePreview(category.banner_mobile_url || null)
     setIsCategoryDialogOpen(true)
   }
 
@@ -918,7 +971,7 @@ const Produtos = () => {
                       onClick={() => {
                         setIsCategoriesListOpen(false)
                         setEditingCategory(null)
-                        setCategoryFormData({ nome: '' })
+                        setCategoryFormData({ nome: '', banner_desktop_url: '', banner_mobile_url: '' })
                         setIsCategoryDialogOpen(true)
                       }}
                       className="w-full"
@@ -1006,10 +1059,60 @@ const Produtos = () => {
                     <Input
                       id="category_name"
                       value={categoryFormData.nome}
-                      onChange={(e) => setCategoryFormData({ nome: e.target.value })}
+                      onChange={(e) => setCategoryFormData({ ...categoryFormData, nome: e.target.value })}
                       placeholder="Ex: Bolos de Aniversário"
                       required
                     />
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-t pt-4">
+                    <div className="space-y-2">
+                      <Label>Banner Desktop (1200x300)</Label>
+                      <div
+                        className="border-2 border-dashed rounded-lg h-32 flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 bg-gray-50/50 overflow-hidden relative"
+                        onClick={() => document.getElementById('category-banner-desktop')?.click()}
+                      >
+                        {categoryBannerDesktopPreview ? (
+                          <img src={categoryBannerDesktopPreview} className="w-full h-full object-cover" />
+                        ) : (
+                          <>
+                            <Upload className="w-6 h-6 text-gray-400 mb-1" />
+                            <span className="text-xs text-gray-500">Desktop</span>
+                          </>
+                        )}
+                      </div>
+                      <Input
+                        id="category-banner-desktop"
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => handleCategoryFileSelect(e, 'desktop')}
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label>Banner Mobile (800x300)</Label>
+                      <div
+                        className="border-2 border-dashed rounded-lg h-32 flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 bg-gray-50/50 overflow-hidden relative"
+                        onClick={() => document.getElementById('category-banner-mobile')?.click()}
+                      >
+                        {categoryBannerMobilePreview ? (
+                          <img src={categoryBannerMobilePreview} className="w-full h-full object-cover" />
+                        ) : (
+                          <>
+                            <Upload className="w-6 h-6 text-gray-400 mb-1" />
+                            <span className="text-xs text-gray-500">Mobile</span>
+                          </>
+                        )}
+                      </div>
+                      <Input
+                        id="category-banner-mobile"
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => handleCategoryFileSelect(e, 'mobile')}
+                      />
+                    </div>
                   </div>
 
                   <DialogFooter>

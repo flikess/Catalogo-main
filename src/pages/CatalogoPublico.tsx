@@ -44,7 +44,11 @@ interface Product {
   image_url?: string
   image_urls?: string[]
   categoria_id?: string
-  categorias_produtos?: any
+  categorias_produtos?: {
+    nome: string
+    banner_desktop_url?: string
+    banner_mobile_url?: string
+  }
   adicionais?: Additional[]
   is_featured?: boolean
   sizes?: {
@@ -74,6 +78,8 @@ interface Subcategory {
 interface Category {
   id: string
   nome: string
+  banner_desktop_url?: string
+  banner_mobile_url?: string
   products: Product[]
 }
 
@@ -236,7 +242,7 @@ const CatalogoPublico = () => {
         .select(`
   id, name, description, price, image_url, image_urls, categoria_id, sub_categoria_id, adicionais, is_featured, sizes, variations,
   categorias_produtos (
-    nome
+    nome, banner_desktop_url, banner_mobile_url
   ),
   subcategorias_produtos (
     nome
@@ -273,11 +279,15 @@ const CatalogoPublico = () => {
         .forEach(product => {
           const categoryName = product.categorias_produtos?.nome || 'Outros'
           const categoryId = product.categoria_id || 'outros'
+          const bannerDesktop = product.categorias_produtos?.banner_desktop_url
+          const bannerMobile = product.categorias_produtos?.banner_mobile_url
 
           if (!groupedProducts[categoryId]) {
             groupedProducts[categoryId] = {
               id: categoryId,
               nome: categoryName,
+              banner_desktop_url: bannerDesktop,
+              banner_mobile_url: bannerMobile,
               products: []
             }
           }
@@ -920,11 +930,33 @@ const CatalogoPublico = () => {
           <div
             key={category.id}
             ref={el => { categoryRefs.current[category.id] = el }}
-            className="space-y-4"
+            className="pt-4"
           >
-            <h2 className="text-2xl font-bold text-gray-900 border-l-4 border-blue-600 pl-3">
-              {category.nome}
-            </h2>
+            <div className="space-y-4 mb-6">
+              {/* Banner da Categoria */}
+              {category.banner_desktop_url && (
+                <div className="hidden sm:block w-full h-[200px] md:h-[280px] rounded-2xl overflow-hidden mb-6 shadow-md border hover:shadow-lg transition-shadow">
+                  <img
+                    src={category.banner_desktop_url}
+                    alt={category.nome}
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+              )}
+              {category.banner_mobile_url && (
+                <div className="block sm:hidden w-full h-[140px] rounded-xl overflow-hidden mb-4 shadow-sm border">
+                  <img
+                    src={category.banner_mobile_url}
+                    alt={category.nome}
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+              )}
+
+              <h2 className="text-2xl font-bold text-gray-900 border-l-4 border-blue-600 pl-3">
+                {category.nome}
+              </h2>
+            </div>
 
             {viewMode === 'grid' ? (
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
@@ -1029,337 +1061,342 @@ const CatalogoPublico = () => {
       </div>
 
       {/* Modal produto */}
-      {viewingProduct && (
-        <div className="fixed inset-0 z-50 bg-black/50 flex items-end sm:items-center justify-center">
-          <div className="bg-white w-full sm:max-w-lg rounded-t-xl sm:rounded-xl max-h-[90vh] overflow-y-auto">
+      {
+        viewingProduct && (
+          <div className="fixed inset-0 z-50 bg-black/50 flex items-end sm:items-center justify-center">
+            <div className="bg-white w-full sm:max-w-lg rounded-t-xl sm:rounded-xl max-h-[90vh] overflow-y-auto">
 
-            <div className="relative bg-black h-[60vh] flex items-center justify-center">
-              {(viewingProduct.image_urls && viewingProduct.image_urls.length > 0) ? (
-                <div className="relative w-full h-full">
+              <div className="relative bg-black h-[60vh] flex items-center justify-center">
+                {(viewingProduct.image_urls && viewingProduct.image_urls.length > 0) ? (
+                  <div className="relative w-full h-full">
+                    <img
+                      src={viewingProduct.image_urls[currentImageIndex]}
+                      alt={viewingProduct.name}
+                      className="w-full h-full object-contain mx-auto"
+                    />
+
+                    {viewingProduct.image_urls.length > 1 && (
+                      <>
+                        <button
+                          className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/50 text-white p-2 rounded-full hover:bg-black/70 transition-colors"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setCurrentImageIndex(prev => (prev === 0 ? viewingProduct.image_urls!.length - 1 : prev - 1));
+                          }}
+                        >
+                          <ArrowLeft className="w-5 h-5" />
+                        </button>
+                        <button
+                          className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/50 text-white p-2 rounded-full hover:bg-black/70 transition-colors"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setCurrentImageIndex(prev => (prev === viewingProduct.image_urls!.length - 1 ? 0 : prev + 1));
+                          }}
+                        >
+                          <ArrowRight className="w-5 h-5" />
+                        </button>
+
+                        {/* Dots */}
+                        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2">
+                          {viewingProduct.image_urls.map((_, i) => (
+                            <div
+                              key={i}
+                              className={`w-2 h-2 rounded-full transition-colors ${i === currentImageIndex ? 'bg-white' : 'bg-white/50'}`}
+                            />
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                ) : viewingProduct.image_url ? (
                   <img
-                    src={viewingProduct.image_urls[currentImageIndex]}
+                    src={viewingProduct.image_url}
                     alt={viewingProduct.name}
                     className="w-full h-full object-contain mx-auto"
                   />
-
-                  {viewingProduct.image_urls.length > 1 && (
-                    <>
-                      <button
-                        className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/50 text-white p-2 rounded-full hover:bg-black/70 transition-colors"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setCurrentImageIndex(prev => (prev === 0 ? viewingProduct.image_urls!.length - 1 : prev - 1));
-                        }}
-                      >
-                        <ArrowLeft className="w-5 h-5" />
-                      </button>
-                      <button
-                        className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/50 text-white p-2 rounded-full hover:bg-black/70 transition-colors"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setCurrentImageIndex(prev => (prev === viewingProduct.image_urls!.length - 1 ? 0 : prev + 1));
-                        }}
-                      >
-                        <ArrowRight className="w-5 h-5" />
-                      </button>
-
-                      {/* Dots */}
-                      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2">
-                        {viewingProduct.image_urls.map((_, i) => (
-                          <div
-                            key={i}
-                            className={`w-2 h-2 rounded-full transition-colors ${i === currentImageIndex ? 'bg-white' : 'bg-white/50'}`}
-                          />
-                        ))}
-                      </div>
-                    </>
-                  )}
-                </div>
-              ) : viewingProduct.image_url ? (
-                <img
-                  src={viewingProduct.image_url}
-                  alt={viewingProduct.name}
-                  className="w-full h-full object-contain mx-auto"
-                />
-              ) : (
-                <div className="w-full h-full flex flex-col items-center justify-center text-gray-400 bg-gray-100">
-                  <ImageIcon className="w-12 h-12 mb-2" />
-                  <span className="text-sm">Sem imagem</span>
-                </div>
-              )}
-
-              <Button
-                size="icon"
-                variant="ghost"
-                className="absolute top-2 right-2 bg-white/80"
-                onClick={closeProductModal}
-              >
-                <X className="w-4 h-4" />
-              </Button>
-            </div>
-
-            <div className="p-4 space-y-4">
-
-              <div>
-                <h3 className="text-xl font-bold">
-                  {viewingProduct.name}
-                </h3>
-
-                {viewingProduct.description && (
-                  <p className="text-sm text-gray-600 mt-1">
-                    {viewingProduct.description}
-                  </p>
+                ) : (
+                  <div className="w-full h-full flex flex-col items-center justify-center text-gray-400 bg-gray-100">
+                    <ImageIcon className="w-12 h-12 mb-2" />
+                    <span className="text-sm">Sem imagem</span>
+                  </div>
                 )}
+
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="absolute top-2 right-2 bg-white/80"
+                  onClick={closeProductModal}
+                >
+                  <X className="w-4 h-4" />
+                </Button>
               </div>
 
-              {!hasSizes(viewingProduct) && (
-                <div className="text-lg font-bold text-blue-600">
-                  {formatPrice(viewingProduct.price!)}
-                </div>
-              )}
-              {hasSizes(viewingProduct) && (
-                <div className="space-y-2">
-                  <h4 className="font-semibold text-sm">
-                    Tamanho
-                  </h4>
+              <div className="p-4 space-y-4">
 
-                  <div className="grid grid-cols-3 gap-2">
-                    {viewingProduct.sizes!.map((s, index) => (
-                      <button
-                        key={index}
-                        type="button"
-                        onClick={() => setSelectedSize(s)}
-                        className={`
+                <div>
+                  <h3 className="text-xl font-bold">
+                    {viewingProduct.name}
+                  </h3>
+
+                  {viewingProduct.description && (
+                    <p className="text-sm text-gray-600 mt-1">
+                      {viewingProduct.description}
+                    </p>
+                  )}
+                </div>
+
+                {!hasSizes(viewingProduct) && (
+                  <div className="text-lg font-bold text-blue-600">
+                    {formatPrice(viewingProduct.price!)}
+                  </div>
+                )}
+                {hasSizes(viewingProduct) && (
+                  <div className="space-y-2">
+                    <h4 className="font-semibold text-sm">
+                      Tamanho
+                    </h4>
+
+                    <div className="grid grid-cols-3 gap-2">
+                      {viewingProduct.sizes!.map((s, index) => (
+                        <button
+                          key={index}
+                          type="button"
+                          onClick={() => setSelectedSize(s)}
+                          className={`
     border rounded-md px-3 py-2 text-sm
     flex flex-col items-center justify-center
     transition
     ${selectedSize?.name === s.name
-                            ? 'border-blue-600 bg-blue-600 text-white ring-2 ring-blue-300'
-                            : 'border-gray-300 bg-white hover:bg-gray-50'
-                          }
+                              ? 'border-blue-600 bg-blue-600 text-white ring-2 ring-blue-300'
+                              : 'border-gray-300 bg-white hover:bg-gray-50'
+                            }
   `}
-                      >
-                        <div className="text-sm font-semibold">
-                          {s.name || 'Tamanho'}
-                        </div>
-
-                        {Number(s.price) > 0 && (
-                          <div
-                            className={`text-xs ${selectedSize?.name === s.name
-                              ? 'text-white/90'
-                              : 'text-gray-500'
-                              }`}
-                          >
-                            {formatPrice(Number(s.price))}
+                        >
+                          <div className="text-sm font-semibold">
+                            {s.name || 'Tamanho'}
                           </div>
-                        )}
 
-                      </button>
+                          {Number(s.price) > 0 && (
+                            <div
+                              className={`text-xs ${selectedSize?.name === s.name
+                                ? 'text-white/90'
+                                : 'text-gray-500'
+                                }`}
+                            >
+                              {formatPrice(Number(s.price))}
+                            </div>
+                          )}
 
-                    ))}
+                        </button>
+
+                      ))}
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
 
-              {viewingProduct.variations && viewingProduct.variations.length > 0 && (
-                <div className="space-y-3">
-                  <h4 className="font-semibold text-sm">
-                    Opções
-                  </h4>
+                {viewingProduct.variations && viewingProduct.variations.length > 0 && (
+                  <div className="space-y-3">
+                    <h4 className="font-semibold text-sm">
+                      Opções
+                    </h4>
 
-                  {viewingProduct.variations.map((group, gIndex) => (
-                    <div key={gIndex} className="space-y-2">
-                      <p className="text-sm font-medium">
-                        {group.name}
-                      </p>
+                    {viewingProduct.variations.map((group, gIndex) => (
+                      <div key={gIndex} className="space-y-2">
+                        <p className="text-sm font-medium">
+                          {group.name}
+                        </p>
 
-                      <div className="flex flex-wrap gap-2">
-                        {group.options.map((opt, oIndex) => {
-                          const key = `${group.name}-${opt.name}`
+                        <div className="flex flex-wrap gap-2">
+                          {group.options.map((opt, oIndex) => {
+                            const key = `${group.name}-${opt.name}`
 
-                          const selected =
-                            selectedVariations[group.name]?.name === opt.name
+                            const selected =
+                              selectedVariations[group.name]?.name === opt.name
 
-                          return (
-                            <button
-                              key={oIndex}
-                              type="button"
-                              onClick={() =>
-                                setSelectedVariations(prev => ({
-                                  ...prev,
-                                  [group.name]: opt
-                                }))
-                              }
-                              className={`
+                            return (
+                              <button
+                                key={oIndex}
+                                type="button"
+                                onClick={() =>
+                                  setSelectedVariations(prev => ({
+                                    ...prev,
+                                    [group.name]: opt
+                                  }))
+                                }
+                                className={`
                   border rounded-md px-3 py-1.5 text-sm
                   transition
                   ${selected
-                                  ? 'border-blue-600 bg-blue-600 text-white'
-                                  : 'border-gray-300 bg-white hover:bg-gray-50'
-                                }
+                                    ? 'border-blue-600 bg-blue-600 text-white'
+                                    : 'border-gray-300 bg-white hover:bg-gray-50'
+                                  }
                 `}
-                            >
-                              {opt.name}
-                              {opt.price > 0 && (
-                                <span className="ml-1 text-xs opacity-80">
-                                  (+{formatPrice(opt.price)})
-                                </span>
-                              )}
-                            </button>
-                          )
-                        })}
+                              >
+                                {opt.name}
+                                {opt.price > 0 && (
+                                  <span className="ml-1 text-xs opacity-80">
+                                    (+{formatPrice(opt.price)})
+                                  </span>
+                                )}
+                              </button>
+                            )
+                          })}
+                        </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
-              )}
+                    ))}
+                  </div>
+                )}
 
 
-              {viewingProduct.adicionais && viewingProduct.adicionais.length > 0 && (
-                <div className="space-y-2">
-                  <h4 className="font-semibold text-sm">
-                    Adicionais
-                  </h4>
-
+                {viewingProduct.adicionais && viewingProduct.adicionais.length > 0 && (
                   <div className="space-y-2">
-                    {viewingProduct.adicionais.map(add => {
-                      const key = add.id || add.name
+                    <h4 className="font-semibold text-sm">
+                      Adicionais
+                    </h4>
 
-                      return (
-                        <div
-                          key={key}
-                          className="flex items-center justify-between border rounded p-2 cursor-pointer"
-                        >
-                          <div className="flex items-center gap-2">
-                            <input
-                              type="checkbox"
-                              checked={!!selectedAdditionais[key]}
-                              onChange={() => handleAdditionalToggle(key)}
-                            />
+                    <div className="space-y-2">
+                      {viewingProduct.adicionais.map(add => {
+                        const key = add.id || add.name
 
-                            <span className="text-sm">
-                              {add.name}
+                        return (
+                          <div
+                            key={key}
+                            className="flex items-center justify-between border rounded p-2 cursor-pointer"
+                          >
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="checkbox"
+                                checked={!!selectedAdditionais[key]}
+                                onChange={() => handleAdditionalToggle(key)}
+                              />
+
+                              <span className="text-sm">
+                                {add.name}
+                              </span>
+                            </div>
+
+                            <span className="text-sm font-medium">
+                              + {formatPrice(add.price)}
                             </span>
                           </div>
-
-                          <span className="text-sm font-medium">
-                            + {formatPrice(add.price)}
-                          </span>
-                        </div>
-                      )
-                    })}
+                        )
+                      })}
+                    </div>
                   </div>
+                )}
+
+                <div className="flex items-center gap-3">
+
+                  <Button
+                    size="icon"
+                    variant="outline"
+                    onClick={() => setQuantity(q => Math.max(1, q - 1))}
+                  >
+                    <Minus className="w-4 h-4" />
+                  </Button>
+
+                  <input
+                    type="number"
+                    min={1}
+                    inputMode="numeric"
+                    value={quantity === 0 ? '' : quantity}
+                    onFocus={() => {
+                      if (quantity === 1) setQuantity(0)
+                    }}
+                    onChange={(e) => {
+                      const v = e.target.value
+
+                      if (v === '') {
+                        setQuantity(0)
+                        return
+                      }
+
+                      const n = Number(v)
+                      if (!isNaN(n)) setQuantity(n)
+                    }}
+                    onBlur={() => {
+                      if (!quantity || quantity < 1) setQuantity(1)
+                    }}
+                    className="w-20 h-9 text-center border rounded-md text-sm"
+                  />
+
+
+                  <Button
+                    size="icon"
+                    variant="outline"
+                    onClick={() => setQuantity(q => q + 1)}
+                  >
+                    <Plus className="w-4 h-4" />
+                  </Button>
+
                 </div>
-              )}
+                <div className="flex justify-between items-center border-t pt-3">
+                  <span className="text-sm textq text-gray-600">
+                    Total deste item
+                  </span>
 
-              <div className="flex items-center gap-3">
+                  <span className="text-lg font-bold text-blue-600">
+                    {getItemPreviewTotal() > 0
+                      ? formatPrice(getItemPreviewTotal())
+                      : 'Selecione as opções'}
+                  </span>
+                </div>
 
-                <Button
-                  size="icon"
-                  variant="outline"
-                  onClick={() => setQuantity(q => Math.max(1, q - 1))}
-                >
-                  <Minus className="w-4 h-4" />
-                </Button>
-
-                <input
-                  type="number"
-                  min={1}
-                  inputMode="numeric"
-                  value={quantity === 0 ? '' : quantity}
-                  onFocus={() => {
-                    if (quantity === 1) setQuantity(0)
-                  }}
-                  onChange={(e) => {
-                    const v = e.target.value
-
-                    if (v === '') {
-                      setQuantity(0)
-                      return
-                    }
-
-                    const n = Number(v)
-                    if (!isNaN(n)) setQuantity(n)
-                  }}
-                  onBlur={() => {
-                    if (!quantity || quantity < 1) setQuantity(1)
-                  }}
-                  className="w-20 h-9 text-center border rounded-md text-sm"
-                />
 
 
                 <Button
-                  size="icon"
-                  variant="outline"
-                  onClick={() => setQuantity(q => q + 1)}
+                  className="w-full"
+                  disabled={
+                    (
+                      viewingProduct.sizes?.some(s => Number(s.price) > 0) &&
+                      !selectedSize
+                    )
+                    ||
+                    (viewingProduct.variations?.some(v => !selectedVariations[v.name]))
+                  }
+
+                  onClick={addToCartWithAdditionais}
                 >
-                  <Plus className="w-4 h-4" />
+
+                  <ShoppingCart className="w-4 h-4 mr-2" />
+                  Adicionar ao orçamento
                 </Button>
 
               </div>
-              <div className="flex justify-between items-center border-t pt-3">
-                <span className="text-sm textq text-gray-600">
-                  Total deste item
-                </span>
-
-                <span className="text-lg font-bold text-blue-600">
-                  {getItemPreviewTotal() > 0
-                    ? formatPrice(getItemPreviewTotal())
-                    : 'Selecione as opções'}
-                </span>
-              </div>
-
-
-
-              <Button
-                className="w-full"
-                disabled={
-                  (
-                    viewingProduct.sizes?.some(s => Number(s.price) > 0) &&
-                    !selectedSize
-                  )
-                  ||
-                  (viewingProduct.variations?.some(v => !selectedVariations[v.name]))
-                }
-
-                onClick={addToCartWithAdditionais}
-              >
-
-                <ShoppingCart className="w-4 h-4 mr-2" />
-                Adicionar ao orçamento
-              </Button>
-
             </div>
           </div>
-        </div>
-      )}
+        )
+      }
 
       {/* Botão carrinho flutuante */}
-      {cartItemCount > 0 && (
-        <Button
-          className="fixed bottom-6 right-6 rounded-full shadow-lg z-40"
-          size="icon"
-          onClick={() => setIsCartOpen(true)}
-        >
-          <ShoppingCart className="w-5 h-5" />
-          <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full px-1">
-            {cartItemCount}
-          </span>
-        </Button>
-      )}
+      {
+        cartItemCount > 0 && (
+          <Button
+            className="fixed bottom-6 right-6 rounded-full shadow-lg z-40"
+            size="icon"
+            onClick={() => setIsCartOpen(true)}
+          >
+            <ShoppingCart className="w-5 h-5" />
+            <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full px-1">
+              {cartItemCount}
+            </span>
+          </Button>
+        )
+      }
 
       {/* Carrinho */}
-      {isCartOpen && (
-        <div
-          className="fixed inset-0 z-50"
-          onClick={() => setIsCartOpen(false)}
-        >
-          {/* overlay */}
-          <div className="absolute inset-0 bg-black/40" />
-
-          {/* container responsivo */}
+      {
+        isCartOpen && (
           <div
-            className="
+            className="fixed inset-0 z-50"
+            onClick={() => setIsCartOpen(false)}
+          >
+            {/* overlay */}
+            <div className="absolute inset-0 bg-black/40" />
+
+            {/* container responsivo */}
+            <div
+              className="
         fixed
         bottom-0
         left-0
@@ -1379,203 +1416,204 @@ const CatalogoPublico = () => {
         sm:max-w-sm
         sm:rounded-none
       "
-            onClick={(e) => e.stopPropagation()}
-          >
+              onClick={(e) => e.stopPropagation()}
+            >
 
-            {/* handle */}
-            <div className="w-full py-2 flex justify-center sm:hidden">
-              <div className="w-10 h-1.5 bg-gray-300 rounded-full" />
-            </div>
-
-            {/* header */}
-            <div className="px-4 pb-3 border-b flex items-center justify-between">
-              <h3 className="font-semibold text-base">
-                Seu orçamento
-              </h3>
-
-              <Button
-                size="icon"
-                variant="ghost"
-                onClick={() => setIsCartOpen(false)}
-              >
-                <X className="w-4 h-4" />
-              </Button>
-            </div>
-
-            {/* lista */}
-            <div className="p-4 space-y-4 flex-1 overflow-y-auto">
-
-              {cart.length === 0 && (
-                <p className="text-sm text-gray-500 text-center">
-                  Seu orçamento está vazio.
-                </p>
-              )}
-
-              {cart.map((item, index) => {
-
-                const addsTotal =
-                  item.selectedAdditionais?.reduce((s, a) => s + a.price, 0) || 0
-
-                const variationsTotal =
-                  item.selectedVariations?.reduce((s, v) => s + v.price, 0) || 0
-
-                const sizePrice = item.selectedSize?.price || 0
-
-
-                return (
-                  <div
-                    key={index}
-                    className="rounded-xl border p-3 space-y-2 bg-white"
-                  >
-                    <div className="flex justify-between gap-2">
-                      <div className="min-w-0">
-
-                        <p className="text-sm font-medium truncate">
-                          {item.name}
-                          {item.selectedSize && (
-                            <span className="text-xs text-gray-500">
-                              {' '}({item.selectedSize.name})
-                            </span>
-                          )}
-                        </p>
-
-                        {item.selectedAdditionais?.length > 0 && (
-                          <p className="text-xs text-gray-500 truncate">
-                            {item.selectedAdditionais.map(a => a.name).join(', ')}
-                          </p>
-                        )}
-                        {item.selectedVariations?.length > 0 && (
-                          <p className="text-xs text-gray-500 truncate">
-                            {item.selectedVariations
-                              .map(v => `${v.group}: ${v.name}`)
-                              .join(', ')}
-                          </p>
-                        )}
-
-                      </div>
-
-
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        onClick={() => removeFromCart(index)}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </div>
-
-                    <div className="flex items-center justify-between">
-
-                      {/* quantidade editável */}
-                      <div className="flex items-center gap-2">
-                        <Button
-                          size="icon"
-                          variant="outline"
-                          className="h-7 w-7"
-                          onClick={() =>
-                            updateQuantity(index, Math.max(1, item.quantity - 1))
-                          }
-                        >
-                          <Minus className="w-3 h-3" />
-                        </Button>
-
-                        <input
-                          type="number"
-                          min={1}
-                          inputMode="numeric"
-                          value={item.quantity === 0 ? '' : item.quantity}
-                          onFocus={() => {
-                            if (item.quantity === 1) {
-                              updateQuantity(index, 0)
-                            }
-                          }}
-                          onChange={(e) => {
-                            const v = e.target.value
-
-                            if (v === '') {
-                              updateQuantity(index, 0)
-                              return
-                            }
-
-                            const n = Number(v)
-                            if (!isNaN(n)) {
-                              updateQuantity(index, n)
-                            }
-                          }}
-                          onBlur={() => {
-                            if (!item.quantity || item.quantity < 1) {
-                              updateQuantity(index, 1)
-                            }
-                          }}
-                          className="w-12 h-7 text-center border rounded-md text-xs"
-                        />
-
-
-                        <Button
-                          size="icon"
-                          variant="outline"
-                          className="h-7 w-7"
-                          onClick={() =>
-                            updateQuantity(index, item.quantity + 1)
-                          }
-                        >
-                          <Plus className="w-3 h-3" />
-                        </Button>
-                      </div>
-
-                      <span className="text-sm font-semibold">
-                        {formatPrice(
-                          (
-                            (
-                              item.selectedSize && Number(item.selectedSize.price) > 0
-                                ? Number(item.selectedSize.price)
-                                : item.price
-                            )
-                            + addsTotal
-                            + variationsTotal
-                          ) * item.quantity
-                        )}
-
-
-                      </span>
-
-                    </div>
-                  </div>
-                )
-              })}
-
-            </div>
-
-            {/* footer */}
-            <div className="p-4 border-t space-y-3">
-
-              <div className="flex justify-between font-semibold text-sm">
-                <span>Total</span>
-                <span>{formatPrice(cartTotal)}</span>
+              {/* handle */}
+              <div className="w-full py-2 flex justify-center sm:hidden">
+                <div className="w-10 h-1.5 bg-gray-300 rounded-full" />
               </div>
 
-              <Button
-                className="w-full"
-                onClick={() =>
-                  navigate('/finalizar', {
-                    state: {
-                      cart,
-                      cartTotal,
-                      bakerySettings
-                    }
-                  })
-                }
-              >
-                <ShoppingCart className="w-4 h-4 mr-2" />
-                Finalizar pedido
-              </Button>
+              {/* header */}
+              <div className="px-4 pb-3 border-b flex items-center justify-between">
+                <h3 className="font-semibold text-base">
+                  Seu orçamento
+                </h3>
 
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  onClick={() => setIsCartOpen(false)}
+                >
+                  <X className="w-4 h-4" />
+                </Button>
+              </div>
+
+              {/* lista */}
+              <div className="p-4 space-y-4 flex-1 overflow-y-auto">
+
+                {cart.length === 0 && (
+                  <p className="text-sm text-gray-500 text-center">
+                    Seu orçamento está vazio.
+                  </p>
+                )}
+
+                {cart.map((item, index) => {
+
+                  const addsTotal =
+                    item.selectedAdditionais?.reduce((s, a) => s + a.price, 0) || 0
+
+                  const variationsTotal =
+                    item.selectedVariations?.reduce((s, v) => s + v.price, 0) || 0
+
+                  const sizePrice = item.selectedSize?.price || 0
+
+
+                  return (
+                    <div
+                      key={index}
+                      className="rounded-xl border p-3 space-y-2 bg-white"
+                    >
+                      <div className="flex justify-between gap-2">
+                        <div className="min-w-0">
+
+                          <p className="text-sm font-medium truncate">
+                            {item.name}
+                            {item.selectedSize && (
+                              <span className="text-xs text-gray-500">
+                                {' '}({item.selectedSize.name})
+                              </span>
+                            )}
+                          </p>
+
+                          {item.selectedAdditionais?.length > 0 && (
+                            <p className="text-xs text-gray-500 truncate">
+                              {item.selectedAdditionais.map(a => a.name).join(', ')}
+                            </p>
+                          )}
+                          {item.selectedVariations?.length > 0 && (
+                            <p className="text-xs text-gray-500 truncate">
+                              {item.selectedVariations
+                                .map(v => `${v.group}: ${v.name}`)
+                                .join(', ')}
+                            </p>
+                          )}
+
+                        </div>
+
+
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          onClick={() => removeFromCart(index)}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+
+                      <div className="flex items-center justify-between">
+
+                        {/* quantidade editável */}
+                        <div className="flex items-center gap-2">
+                          <Button
+                            size="icon"
+                            variant="outline"
+                            className="h-7 w-7"
+                            onClick={() =>
+                              updateQuantity(index, Math.max(1, item.quantity - 1))
+                            }
+                          >
+                            <Minus className="w-3 h-3" />
+                          </Button>
+
+                          <input
+                            type="number"
+                            min={1}
+                            inputMode="numeric"
+                            value={item.quantity === 0 ? '' : item.quantity}
+                            onFocus={() => {
+                              if (item.quantity === 1) {
+                                updateQuantity(index, 0)
+                              }
+                            }}
+                            onChange={(e) => {
+                              const v = e.target.value
+
+                              if (v === '') {
+                                updateQuantity(index, 0)
+                                return
+                              }
+
+                              const n = Number(v)
+                              if (!isNaN(n)) {
+                                updateQuantity(index, n)
+                              }
+                            }}
+                            onBlur={() => {
+                              if (!item.quantity || item.quantity < 1) {
+                                updateQuantity(index, 1)
+                              }
+                            }}
+                            className="w-12 h-7 text-center border rounded-md text-xs"
+                          />
+
+
+                          <Button
+                            size="icon"
+                            variant="outline"
+                            className="h-7 w-7"
+                            onClick={() =>
+                              updateQuantity(index, item.quantity + 1)
+                            }
+                          >
+                            <Plus className="w-3 h-3" />
+                          </Button>
+                        </div>
+
+                        <span className="text-sm font-semibold">
+                          {formatPrice(
+                            (
+                              (
+                                item.selectedSize && Number(item.selectedSize.price) > 0
+                                  ? Number(item.selectedSize.price)
+                                  : item.price
+                              )
+                              + addsTotal
+                              + variationsTotal
+                            ) * item.quantity
+                          )}
+
+
+                        </span>
+
+                      </div>
+                    </div>
+                  )
+                })}
+
+              </div>
+
+              {/* footer */}
+              <div className="p-4 border-t space-y-3">
+
+                <div className="flex justify-between font-semibold text-sm">
+                  <span>Total</span>
+                  <span>{formatPrice(cartTotal)}</span>
+                </div>
+
+                <Button
+                  className="w-full"
+                  onClick={() =>
+                    navigate('/finalizar', {
+                      state: {
+                        cart,
+                        cartTotal,
+                        bakerySettings
+                      }
+                    })
+                  }
+                >
+                  <ShoppingCart className="w-4 h-4 mr-2" />
+                  Finalizar pedido
+                </Button>
+
+
+              </div>
 
             </div>
-
           </div>
-        </div>
-      )}
+        )
+      }
 
 
       {/* Footer */}
@@ -1583,7 +1621,7 @@ const CatalogoPublico = () => {
         Catálogo gerado com Confeitaria Pro
       </footer>
 
-    </div>
+    </div >
   )
 }
 
