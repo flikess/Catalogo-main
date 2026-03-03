@@ -47,9 +47,14 @@ export const Header = () => {
   }
 
   const handleLogout = async () => {
-    await supabase.auth.signOut()
-    showSuccess('Logout realizado com sucesso!')
-    navigate('/login')
+    try {
+      await supabase.auth.signOut()
+    } catch (error) {
+      console.error('Error during logout:', error)
+    } finally {
+      showSuccess('Logout realizado com sucesso!')
+      navigate('/login', { replace: true })
+    }
   }
 
   const getInitials = (name: string, email: string) => {
@@ -68,7 +73,7 @@ export const Header = () => {
           <div className="lg:hidden">
             <MobileSidebar />
           </div>
-          
+
           {/* Title */}
           <div className="min-w-0 flex-1">
             <h1 className="text-base sm:text-lg font-semibold text-foreground truncate">
@@ -77,19 +82,19 @@ export const Header = () => {
             </h1>
           </div>
         </div>
-        
+
         {/* Right Side - Theme + User Menu */}
         <div className="flex items-center gap-1 sm:gap-2">
           {/* Theme Selector */}
           <div className="hidden sm:block">
             <ThemeSelector />
           </div>
-          
+
           {/* User Menu */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button 
-                variant="ghost" 
+              <Button
+                variant="ghost"
                 className="relative h-8 w-8 sm:h-9 sm:w-9 rounded-full hover:bg-accent"
               >
                 <Avatar className="h-8 w-8 sm:h-9 sm:w-9">
@@ -110,17 +115,17 @@ export const Header = () => {
                   {user?.email}
                 </div>
               </div>
-              
+
               <div className="h-px bg-border my-1" />
-              
+
               {/* Theme Selector for Mobile */}
               <div className="sm:hidden px-2 py-1">
                 <div className="text-xs font-medium text-muted-foreground mb-1">Tema</div>
                 <ThemeSelector />
               </div>
-              
+
               <div className="h-px bg-border my-1 sm:hidden" />
-              
+
               {/* Menu Items */}
               <DropdownMenuItem onClick={() => navigate('/perfil')}>
                 <User className="w-4 h-4 mr-2" />

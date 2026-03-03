@@ -11,6 +11,7 @@ interface AdminUser {
   status: 'ativo' | 'inativo'
   data_pagamento?: string
   vencimento?: string
+  phone?: string
   created_at: string
 }
 
@@ -21,6 +22,7 @@ interface CreateUserData {
   plano: 'Mensal' | 'Anual'
   data_pagamento: string
   vencimento: string
+  phone?: string
 }
 
 interface UpdateUserData {
@@ -30,6 +32,7 @@ interface UpdateUserData {
   plano?: string
   data_pagamento?: string
   vencimento?: string
+  phone?: string
 }
 
 export const useAdminUsers = () => {
@@ -47,63 +50,38 @@ export const useAdminUsers = () => {
   const fetchUsers = async () => {
     try {
       setLoading(true)
-      console.log('🔍 Iniciando busca de usuários para admin...')
-      console.log('👤 Usuário atual:', user?.email)
-      console.log('🎭 Role do usuário:', user?.user_metadata?.role)
+      console.log('🔍 Buscando usuários via Edge Function...')
 
-      // Verificar se é super admin no frontend
       if (user?.user_metadata?.role !== 'super_admin') {
-        console.error('❌ Usuário não é super admin')
-        showError('Acesso negado: apenas super admins podem acessar esta funcionalidade')
-        setUsers([])
+        showError('Acesso negado')
         return
       }
 
-      // Tentar usar a função RPC primeiro
-      console.log('🔄 Tentando função RPC simplificada...')
-      const { data: rpcData, error: rpcError } = await supabase
-        .rpc('get_all_users_for_admin')
+      const data = await callAdminFunction('list', {})
 
-      if (rpcError) {
-        console.error('❌ Erro na função RPC:', rpcError)
-        console.error('📝 Detalhes do erro RPC:', {
-          message: rpcError.message,
-          details: rpcError.details,
-          hint: rpcError.hint,
-          code: rpcError.code
+      if (Array.isArray(data)) {
+        const formattedUsers: AdminUser[] = data.map(u => {
+          const vencimento = u.vencimento ? new Date(u.vencimento) : null
+          const hoje = new Date()
+          const status: 'ativo' | 'inativo' = (vencimento && vencimento >= hoje) ? 'ativo' : 'inativo'
+
+          return {
+            id: u.id,
+            email: u.email || '',
+            full_name: u.full_name || '',
+            plano: u.plano || '',
+            status: u.status || status,
+            data_pagamento: u.data_pagamento || '',
+            vencimento: u.vencimento || '',
+            phone: u.phone || '',
+            created_at: u.created_at
+          }
         })
-
-        // Tentar fallback
-        console.log('🔄 Tentando busca direta como fallback...')
-        await fetchUsersDirectly()
-        return
-      }
-
-      console.log('✅ Dados da função RPC:', rpcData)
-
-      if (rpcData && rpcData.length >= 0) {
-        const formattedUsers: AdminUser[] = rpcData.map(user => ({
-          id: user.id,
-          email: user.email || '',
-          full_name: user.full_name || '',
-          plano: user.plano || '',
-          status: user.status as 'ativo' | 'inativo',
-          data_pagamento: user.data_pagamento || '',
-          vencimento: user.vencimento || '',
-          created_at: user.created_at,
-        }))
-
         setUsers(formattedUsers)
-        console.log(`✅ ${formattedUsers.length} usuários carregados via RPC`)
-      } else {
-        console.log('⚠️ Nenhum usuário retornado pela função RPC')
-        setUsers([])
       }
-    } catch (error) {
-      console.error('💥 Erro geral ao buscar usuários:', error)
-      showError('Erro ao carregar usuários')
-      // Tentar fallback
-      await fetchUsersDirectly()
+    } catch (error: any) {
+      console.error('Erro ao buscar usuários:', error)
+      showError('Erro ao carregar lista de usuários')
     } finally {
       setLoading(false)
     }
@@ -123,7 +101,7 @@ export const useAdminUsers = () => {
       console.log('📋 Buscando perfis...')
       const { data: profiles, error: profilesError } = await supabase
         .from('profiles')
-        .select('id, full_name, email, created_at')
+        .select('id, full_name, email, phone, created_at')
         .order('created_at', { ascending: false })
 
       if (profilesError) {
@@ -169,6 +147,7 @@ export const useAdminUsers = () => {
           status,
           data_pagamento: assinatura?.data_pagamento || '',
           vencimento: assinatura?.vencimento || '',
+          phone: profile.phone || '',
           created_at: profile.created_at,
         }
       }) || []

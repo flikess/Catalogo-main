@@ -22,6 +22,7 @@ export const UserForm = ({ isOpen, onClose, onSubmit, initialData, mode }: UserF
     email: '',
     password: '',
     full_name: '',
+    phone: '',
     plano: 'Mensal',
     data_pagamento: new Date().toISOString().split('T')[0],
     vencimento: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
@@ -34,6 +35,7 @@ export const UserForm = ({ isOpen, onClose, onSubmit, initialData, mode }: UserF
         email: initialData?.email || '',
         password: '', // Sempre começa vazio para segurança
         full_name: initialData?.full_name || '',
+        phone: initialData?.phone || '',
         plano: initialData?.plano || 'Mensal',
         data_pagamento: initialData?.data_pagamento ?
           new Date(initialData.data_pagamento).toISOString().split('T')[0] :
@@ -94,6 +96,7 @@ export const UserForm = ({ isOpen, onClose, onSubmit, initialData, mode }: UserF
         email: '',
         password: '',
         full_name: '',
+        phone: '',
         plano: 'Mensal',
         data_pagamento: new Date().toISOString().split('T')[0],
         vencimento: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
@@ -163,6 +166,16 @@ export const UserForm = ({ isOpen, onClose, onSubmit, initialData, mode }: UserF
               onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
               placeholder="Nome completo do usuário"
               required
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="phone">WhatsApp / Telefone</Label>
+            <Input
+              id="phone"
+              value={formData.phone}
+              onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+              placeholder="(00) 00000-0000"
             />
           </div>
 
@@ -272,6 +285,6 @@ export const UserForm = ({ isOpen, onClose, onSubmit, initialData, mode }: UserF
           </div>
         </form>
       </DialogContent>
-    </Dialog>
+    </Dialog >
   )
 }

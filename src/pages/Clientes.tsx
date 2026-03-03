@@ -16,10 +16,14 @@ interface Client {
   id: string
   name: string
   cpf?: string
+  cnpj?: string
   email?: string
   phone?: string
   address?: string
   city?: string
+  discount_percentage?: number
+  markup_percentage?: number
+  type: 'CPF' | 'CNPJ'
   created_at: string
 }
 
@@ -30,18 +34,34 @@ const Clientes = () => {
   const [searchTerm, setSearchTerm] = useState('')
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingClient, setEditingClient] = useState<Client | null>(null)
+  const [vendeCnpj, setVendeCnpj] = useState(false)
   const [formData, setFormData] = useState({
     name: '',
     cpf: '',
+    cnpj: '',
     email: '',
     phone: '',
     address: '',
-    city: ''
+    city: '',
+    discount_percentage: 0,
+    markup_percentage: 0,
+    type: 'CPF' as 'CPF' | 'CNPJ'
   })
 
   useEffect(() => {
     fetchClients()
+    fetchBakerySettings()
   }, [])
+
+  const fetchBakerySettings = async () => {
+    if (!user) return
+    const { data } = await supabase
+      .from('bakery_settings')
+      .select('vende_cnpj')
+      .eq('id', user.id)
+      .single()
+    if (data) setVendeCnpj(!!data.vende_cnpj)
+  }
 
   const fetchClients = async () => {
     try {
@@ -63,7 +83,7 @@ const Clientes = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    
+
     try {
       if (editingClient) {
         // Update existing client
@@ -105,12 +125,33 @@ const Clientes = () => {
     setFormData({
       name: client.name,
       cpf: client.cpf || '',
+      cnpj: client.cnpj || '',
       email: client.email || '',
       phone: client.phone || '',
       address: client.address || '',
-      city: client.city || ''
+      city: client.city || '',
+      discount_percentage: client.discount_percentage || 0,
+      markup_percentage: client.markup_percentage || 0,
+      type: client.type || (client.cnpj ? 'CNPJ' : 'CPF')
     })
     setIsDialogOpen(true)
+  }
+
+  const maskCNPJ = (value: string) => {
+    const rawValue = value.replace(/\D/g, '').slice(0, 14)
+    return rawValue
+      .replace(/^(\d{2})(\d)/, '$1.$2')
+      .replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3')
+      .replace(/\.(\d{3})(\d)/, '.$1/$2')
+      .replace(/(\d{4})(\d)/, '$1-$2')
+  }
+
+  const maskCPF = (value: string) => {
+    const rawValue = value.replace(/\D/g, '').slice(0, 11)
+    return rawValue
+      .replace(/(\d{3})(\d)/, '$1.$2')
+      .replace(/(\d{3})(\d)/, '$1.$2')
+      .replace(/(\d{3})(\d{1,2})/, '$1-$2')
   }
 
   const handleDelete = async (clientId: string) => {
@@ -135,10 +176,14 @@ const Clientes = () => {
     setFormData({
       name: '',
       cpf: '',
+      cnpj: '',
       email: '',
       phone: '',
       address: '',
-      city: ''
+      city: '',
+      discount_percentage: 0,
+      markup_percentage: 0,
+      type: 'CPF'
     })
   }
 
@@ -248,97 +293,144 @@ const Clientes = () => {
       <div className="space-y-6">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <h1 className="text-2xl font-bold text-gray-900">Clientes</h1>
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-            <DialogTrigger asChild>
-              <Button onClick={() => { resetForm(); setEditingClient(null) }}>
-                <Plus className="w-4 h-4 mr-2" />
-                Novo Cliente
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
-              <DialogHeader>
-                <DialogTitle>
-                  {editingClient ? 'Editar Cliente' : 'Novo Cliente'}
-                </DialogTitle>
-              </DialogHeader>
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="name">Nome *</Label>
-                  <Input
-                    id="name"
-                    value={formData.name}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    placeholder="Nome completo"
-                    required
-                  />
-                </div>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="cpf">CPF</Label>
-                  <Input
-                    id="cpf"
-                    value={formData.cpf}
-                    onChange={(e) => setFormData({ ...formData, cpf: e.target.value })}
-                    placeholder="000.000.000-00"
-                  />
-                </div>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="email">E-mail</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    value={formData.email}
-                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                    placeholder="cliente@email.com"
-                  />
-                </div>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="phone">Telefone</Label>
-                  <Input
-                    id="phone"
-                    value={formData.phone}
-                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                    placeholder="(11) 99999-9999"
-                  />
-                </div>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="address">Endereço</Label>
-                  <Input
-                    id="address"
-                    value={formData.address}
-                    onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                    placeholder="Rua, número, bairro"
-                  />
-                </div>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="city">Cidade</Label>
-                  <Input
-                    id="city"
-                    value={formData.city}
-                    onChange={(e) => setFormData({ ...formData, city: e.target.value })}
-                    placeholder="Cidade - UF"
-                  />
-                </div>
-                
-                <div className="flex gap-2">
-                  <Button type="submit" className="flex-1">
-                    {editingClient ? 'Atualizar' : 'Criar'}
+          <div className="flex gap-2">
+            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+              <DialogTrigger asChild>
+                <Button onClick={() => { resetForm(); setFormData(prev => ({ ...prev, type: 'CPF' })); setEditingClient(null) }}>
+                  <Plus className="w-4 h-4 mr-2" />
+                  Novo Cliente
+                </Button>
+              </DialogTrigger>
+              {vendeCnpj && (
+                <DialogTrigger asChild>
+                  <Button variant="outline" onClick={() => { resetForm(); setFormData(prev => ({ ...prev, type: 'CNPJ' })); setEditingClient(null) }}>
+                    <Plus className="w-4 h-4 mr-2" />
+                    Novo Cliente CNPJ
                   </Button>
-                  <Button 
-                    type="button" 
-                    variant="outline" 
-                    onClick={() => setIsDialogOpen(false)}
-                  >
-                    Cancelar
-                  </Button>
-                </div>
-              </form>
-            </DialogContent>
-          </Dialog>
+                </DialogTrigger>
+              )}
+              <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle>
+                    {editingClient ? 'Editar Cliente' : (formData.type === 'CNPJ' ? 'Novo Cliente CNPJ' : 'Novo Cliente')}
+                  </DialogTitle>
+                </DialogHeader>
+                <form onSubmit={handleSubmit} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="name">Nome *</Label>
+                    <Input
+                      id="name"
+                      value={formData.name}
+                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                      placeholder="Nome completo"
+                      required
+                    />
+                  </div>
+
+                  {formData.type === 'CPF' ? (
+                    <div className="space-y-2">
+                      <Label htmlFor="cpf">CPF</Label>
+                      <Input
+                        id="cpf"
+                        value={formData.cpf}
+                        onChange={(e) => setFormData({ ...formData, cpf: maskCPF(e.target.value) })}
+                        placeholder="000.000.000-00"
+                      />
+                    </div>
+                  ) : (
+                    <>
+                      <div className="space-y-2">
+                        <Label htmlFor="cnpj">CNPJ</Label>
+                        <Input
+                          id="cnpj"
+                          value={formData.cnpj}
+                          onChange={(e) => setFormData({ ...formData, cnpj: maskCNPJ(e.target.value) })}
+                          placeholder="00.000.000/0000-00"
+                          required
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="discount">% de Desconto</Label>
+                          <Input
+                            id="discount"
+                            type="number"
+                            value={formData.discount_percentage}
+                            onChange={(e) => setFormData({ ...formData, discount_percentage: Number(e.target.value) })}
+                            placeholder="0"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="markup">% de Acréscimo</Label>
+                          <Input
+                            id="markup"
+                            type="number"
+                            value={formData.markup_percentage}
+                            onChange={(e) => setFormData({ ...formData, markup_percentage: Number(e.target.value) })}
+                            placeholder="0"
+                          />
+                        </div>
+                      </div>
+                    </>
+                  )}
+
+                  <div className="space-y-2">
+                    <Label htmlFor="email">E-mail</Label>
+                    <Input
+                      id="email"
+                      type="email"
+                      value={formData.email}
+                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                      placeholder="cliente@email.com"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="phone">Telefone</Label>
+                    <Input
+                      id="phone"
+                      value={formData.phone}
+                      onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                      placeholder="(11) 99999-9999"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="address">Endereço</Label>
+                    <Input
+                      id="address"
+                      value={formData.address}
+                      onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                      placeholder="Rua, número, bairro"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="city">Cidade</Label>
+                    <Input
+                      id="city"
+                      value={formData.city}
+                      onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+                      placeholder="Cidade - UF"
+                    />
+                  </div>
+
+                  <div className="flex gap-2">
+                    <Button type="submit" className="flex-1">
+                      {editingClient ? 'Atualizar' : 'Criar'}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setIsDialogOpen(false)}
+                    >
+                      Cancelar
+                    </Button>
+                  </div>
+                </form>
+              </DialogContent>
+            </Dialog>
+          </div>
         </div>
 
         {/* Search */}

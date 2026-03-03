@@ -58,10 +58,11 @@ const Pagamento = () => {
   const handleLogout = async () => {
     try {
       await supabase.auth.signOut()
-      showSuccess('Logout realizado com sucesso!')
-      navigate('/login')
     } catch (error) {
       console.error('Error during logout:', error)
+    } finally {
+      showSuccess('Logout realizado com sucesso!')
+      navigate('/login', { replace: true })
     }
   }
 

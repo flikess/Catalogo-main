@@ -27,6 +27,10 @@ interface Order {
   notes?: string
   created_at: string
   order_items?: OrderItem[]
+  clients?: {
+    cnpj: string;
+    type: string;
+  }
 }
 
 interface VariationSelection {
@@ -151,6 +155,10 @@ const PedidoDetalhes = () => {
         .from('orders')
         .select(`
         *,
+        clients (
+          cnpj,
+          type
+        ),
         order_items (
           id,
           product_id,
@@ -934,6 +942,11 @@ const PedidoDetalhes = () => {
                 <div>
                   <Label className="text-sm font-medium text-gray-500">Cliente</Label>
                   <p>{order.client_name}</p>
+                  {order.clients?.cnpj && (
+                    <p className="text-xs text-muted-foreground font-mono mt-0.5">
+                      CNPJ: {order.clients.cnpj.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, "$1.$2.$3/$4-$5")}
+                    </p>
+                  )}
                 </div>
                 {order.order_items?.some(item => item.variations?.length > 0) && (
                   <div>

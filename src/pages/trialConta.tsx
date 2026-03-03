@@ -15,11 +15,28 @@ const TrialConta = () => {
         email: '',
         password: '',
         fullName: '',
-        businessName: ''
+        businessName: '',
+        phone: ''
     })
+
+    const maskPhone = (value: string) => {
+        const rawValue = value.replace(/\D/g, '').slice(0, 11)
+        if (rawValue.length <= 10) {
+            return rawValue
+                .replace(/^(\d{2})(\d)/, '($1) $2')
+                .replace(/(\d{4})(\d)/, '$1-$2')
+        }
+        return rawValue
+            .replace(/^(\d{2})(\d)/, '($1) $2')
+            .replace(/(\d{5})(\d)/, '$1-$2')
+    }
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const { id, value } = e.target
+        if (id === 'phone') {
+            setFormData(prev => ({ ...prev, [id]: maskPhone(value) }))
+            return
+        }
         setFormData(prev => ({ ...prev, [id]: value }))
     }
 
@@ -34,7 +51,8 @@ const TrialConta = () => {
                     email: formData.email,
                     password: formData.password,
                     full_name: formData.fullName,
-                    business_name: formData.businessName
+                    business_name: formData.businessName,
+                    phone: formData.phone
                 }
             })
 
@@ -171,6 +189,18 @@ const TrialConta = () => {
                                     type="text"
                                     placeholder="Ex: Doces da Maria"
                                     value={formData.businessName}
+                                    onChange={handleChange}
+                                    required
+                                />
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label htmlFor="phone">WhatsApp</Label>
+                                <Input
+                                    id="phone"
+                                    type="text"
+                                    placeholder="(00) 00000-0000"
+                                    value={formData.phone}
                                     onChange={handleChange}
                                     required
                                 />

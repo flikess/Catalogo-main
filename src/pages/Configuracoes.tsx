@@ -28,6 +28,7 @@ interface BakerySettings {
   banner_mobile_url?: string | null
   pix_key?: string | null
   presentation_message?: string | null
+  vende_cnpj?: boolean
   updated_at?: string
 }
 
@@ -515,131 +516,144 @@ const Configuracoes = () => {
                 <Separator />
 
 
-<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 
-  <div className="space-y-2">
-    <Label>Nome da loja</Label>
-    <Input
-      value={bakerySettings.bakery_name || ''}
-      onChange={(e) =>
-        setBakerySettings(prev => ({ ...prev, bakery_name: e.target.value }))
-      }
-    />
-  </div>
+                  <div className="space-y-2">
+                    <Label>Nome da loja</Label>
+                    <Input
+                      value={bakerySettings.bakery_name || ''}
+                      onChange={(e) =>
+                        setBakerySettings(prev => ({ ...prev, bakery_name: e.target.value }))
+                      }
+                    />
+                  </div>
 
-  <div className="space-y-2">
-    <Label>Email da loja</Label>
-    <Input
-      value={bakerySettings.email || ''}
-      onChange={(e) =>
-        setBakerySettings(prev => ({ ...prev, email: e.target.value }))
-      }
-    />
-  </div>
+                  <div className="space-y-2">
+                    <Label>Email da loja</Label>
+                    <Input
+                      value={bakerySettings.email || ''}
+                      onChange={(e) =>
+                        setBakerySettings(prev => ({ ...prev, email: e.target.value }))
+                      }
+                    />
+                  </div>
 
-  <div className="space-y-2">
-    <Label>CPF / CNPJ</Label>
-    <Input
-      value={bakerySettings.cpf_cnpj || ''}
-      onChange={(e) =>
-        setBakerySettings(prev => ({ ...prev, cpf_cnpj: e.target.value }))
-      }
-    />
-  </div>
+                  <div className="space-y-2">
+                    <Label>CPF / CNPJ</Label>
+                    <Input
+                      value={bakerySettings.cpf_cnpj || ''}
+                      onChange={(e) =>
+                        setBakerySettings(prev => ({ ...prev, cpf_cnpj: e.target.value }))
+                      }
+                    />
+                  </div>
 
-  <div className="space-y-2">
-    <Label>Telefone / WhatsApp</Label>
-    <Input
-      value={bakerySettings.phone || ''}
-      onChange={(e) =>
-        setBakerySettings(prev => ({ ...prev, phone: e.target.value }))
-      }
-    />
-  </div>
+                  <div className="space-y-2">
+                    <Label>Telefone / WhatsApp</Label>
+                    <Input
+                      value={bakerySettings.phone || ''}
+                      onChange={(e) =>
+                        setBakerySettings(prev => ({ ...prev, phone: e.target.value }))
+                      }
+                    />
+                  </div>
 
-</div>
+                  <div className="flex items-center gap-2 pt-4">
+                    <input
+                      id="vende_cnpj"
+                      type="checkbox"
+                      checked={bakerySettings.vende_cnpj || false}
+                      onChange={(e) =>
+                        setBakerySettings(prev => ({ ...prev, vende_cnpj: e.target.checked }))
+                      }
+                      className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                    />
+                    <Label htmlFor="vende_cnpj" className="cursor-pointer font-medium">Vende para CNPJ?</Label>
+                  </div>
 
-<Separator />
+                </div>
 
-<div className="space-y-4">
+                <Separator />
 
-  <div className="space-y-2">
-    <Label>Chave PIX</Label>
-    <Input
-      value={bakerySettings.pix_key || ''}
-      onChange={(e) =>
-        setBakerySettings(prev => ({ ...prev, pix_key: e.target.value }))
-      }
-    />
-  </div>
+                <div className="space-y-4">
 
-  <div className="space-y-2">
-    <Label>Mensagem de apresentação</Label>
-    <Input
-      value={bakerySettings.presentation_message || ''}
-      onChange={(e) =>
-        setBakerySettings(prev => ({ ...prev, presentation_message: e.target.value }))
-      }
-    />
-  </div>
+                  <div className="space-y-2">
+                    <Label>Chave PIX</Label>
+                    <Input
+                      value={bakerySettings.pix_key || ''}
+                      onChange={(e) =>
+                        setBakerySettings(prev => ({ ...prev, pix_key: e.target.value }))
+                      }
+                    />
+                  </div>
 
-</div>
+                  <div className="space-y-2">
+                    <Label>Mensagem de apresentação</Label>
+                    <Input
+                      value={bakerySettings.presentation_message || ''}
+                      onChange={(e) =>
+                        setBakerySettings(prev => ({ ...prev, presentation_message: e.target.value }))
+                      }
+                    />
+                  </div>
 
-<Separator />
+                </div>
 
-<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Separator />
 
-  <div className="space-y-2">
-    <Label>Estado</Label>
-    <Input
-      value={bakerySettings.address_state || ''}
-      onChange={(e) =>
-        setBakerySettings(prev => ({ ...prev, address_state: e.target.value }))
-      }
-    />
-  </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 
-  <div className="space-y-2">
-    <Label>Cidade</Label>
-    <Input
-      value={bakerySettings.address_city || ''}
-      onChange={(e) =>
-        setBakerySettings(prev => ({ ...prev, address_city: e.target.value }))
-      }
-    />
-  </div>
+                  <div className="space-y-2">
+                    <Label>Estado</Label>
+                    <Input
+                      value={bakerySettings.address_state || ''}
+                      onChange={(e) =>
+                        setBakerySettings(prev => ({ ...prev, address_state: e.target.value }))
+                      }
+                    />
+                  </div>
 
-  <div className="space-y-2">
-    <Label>Bairro</Label>
-    <Input
-      value={bakerySettings.address_neighborhood || ''}
-      onChange={(e) =>
-        setBakerySettings(prev => ({ ...prev, address_neighborhood: e.target.value }))
-      }
-    />
-  </div>
+                  <div className="space-y-2">
+                    <Label>Cidade</Label>
+                    <Input
+                      value={bakerySettings.address_city || ''}
+                      onChange={(e) =>
+                        setBakerySettings(prev => ({ ...prev, address_city: e.target.value }))
+                      }
+                    />
+                  </div>
 
-  <div className="space-y-2">
-    <Label>Rua</Label>
-    <Input
-      value={bakerySettings.address_street || ''}
-      onChange={(e) =>
-        setBakerySettings(prev => ({ ...prev, address_street: e.target.value }))
-      }
-    />
-  </div>
+                  <div className="space-y-2">
+                    <Label>Bairro</Label>
+                    <Input
+                      value={bakerySettings.address_neighborhood || ''}
+                      onChange={(e) =>
+                        setBakerySettings(prev => ({ ...prev, address_neighborhood: e.target.value }))
+                      }
+                    />
+                  </div>
 
-  <div className="space-y-2">
-    <Label>Número</Label>
-    <Input
-      value={bakerySettings.address_number || ''}
-      onChange={(e) =>
-        setBakerySettings(prev => ({ ...prev, address_number: e.target.value }))
-      }
-    />
-  </div>
+                  <div className="space-y-2">
+                    <Label>Rua</Label>
+                    <Input
+                      value={bakerySettings.address_street || ''}
+                      onChange={(e) =>
+                        setBakerySettings(prev => ({ ...prev, address_street: e.target.value }))
+                      }
+                    />
+                  </div>
 
-</div>
+                  <div className="space-y-2">
+                    <Label>Número</Label>
+                    <Input
+                      value={bakerySettings.address_number || ''}
+                      onChange={(e) =>
+                        setBakerySettings(prev => ({ ...prev, address_number: e.target.value }))
+                      }
+                    />
+                  </div>
+
+                </div>
 
 
                 <Button
@@ -655,47 +669,47 @@ const Configuracoes = () => {
           </TabsContent>
 
           <TabsContent value="profile">
-  <Card>
-    <CardHeader>
-      <CardTitle className="flex items-center gap-2">
-        <User className="w-5 h-5" />
-        Meu perfil
-      </CardTitle>
-    </CardHeader>
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <User className="w-5 h-5" />
+                  Meu perfil
+                </CardTitle>
+              </CardHeader>
 
-    <CardContent className="space-y-6">
+              <CardContent className="space-y-6">
 
-      <div className="space-y-2">
-        <Label>Nome completo</Label>
-        <Input
-          value={profileData.full_name}
-          onChange={(e) =>
-            setProfileData(prev => ({
-              ...prev,
-              full_name: e.target.value
-            }))
-          }
-        />
-      </div>
+                <div className="space-y-2">
+                  <Label>Nome completo</Label>
+                  <Input
+                    value={profileData.full_name}
+                    onChange={(e) =>
+                      setProfileData(prev => ({
+                        ...prev,
+                        full_name: e.target.value
+                      }))
+                    }
+                  />
+                </div>
 
-      <div className="space-y-2">
-        <Label>Email</Label>
-        <Input
-          value={profileData.email}
-          disabled
-        />
-      </div>
+                <div className="space-y-2">
+                  <Label>Email</Label>
+                  <Input
+                    value={profileData.email}
+                    disabled
+                  />
+                </div>
 
-      <Button
-        onClick={handleSaveProfile}
-        disabled={loading}
-      >
-        {loading ? 'Salvando...' : 'Salvar perfil'}
-      </Button>
+                <Button
+                  onClick={handleSaveProfile}
+                  disabled={loading}
+                >
+                  {loading ? 'Salvando...' : 'Salvar perfil'}
+                </Button>
 
-    </CardContent>
-  </Card>
-</TabsContent>
+              </CardContent>
+            </Card>
+          </TabsContent>
 
 
         </Tabs>

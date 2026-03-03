@@ -21,9 +21,14 @@ export const AdminLayout = ({ children }: AdminLayoutProps) => {
   const navigate = useNavigate()
 
   const handleLogout = async () => {
-    await supabase.auth.signOut()
-    showSuccess('Logout realizado com sucesso!')
-    navigate('/login')
+    try {
+      await supabase.auth.signOut()
+    } catch (error) {
+      console.error('Error during logout:', error)
+    } finally {
+      showSuccess('Logout realizado com sucesso!')
+      navigate('/login', { replace: true })
+    }
   }
 
   const getInitials = (email: string) => {

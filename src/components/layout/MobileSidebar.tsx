@@ -1,14 +1,14 @@
 import { useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { 
-  LayoutDashboard, 
-  ShoppingCart, 
-  DollarSign, 
-  Users, 
-  Package, 
-  Warehouse, 
-  Settings, 
-  BookOpen, 
+import {
+  LayoutDashboard,
+  ShoppingCart,
+  DollarSign,
+  Users,
+  Package,
+  Warehouse,
+  Settings,
+  BookOpen,
   LogOut,
   Menu,
   X,
@@ -37,10 +37,15 @@ export const MobileSidebar = () => {
   const navigate = useNavigate()
 
   const handleLogout = async () => {
-    await supabase.auth.signOut()
-    showSuccess('Logout realizado com sucesso!')
-    navigate('/login')
-    setOpen(false)
+    try {
+      await supabase.auth.signOut()
+    } catch (error) {
+      console.error('Error during logout:', error)
+    } finally {
+      showSuccess('Logout realizado com sucesso!')
+      navigate('/login', { replace: true })
+      setOpen(false)
+    }
   }
 
   const handleNavigation = (path: string) => {
@@ -51,9 +56,9 @@ export const MobileSidebar = () => {
   return (
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger asChild>
-        <Button 
-          variant="ghost" 
-          size="sm" 
+        <Button
+          variant="ghost"
+          size="sm"
           className="h-8 w-8 p-0 hover:bg-accent"
         >
           <Menu className="h-4 w-4" />
@@ -65,28 +70,28 @@ export const MobileSidebar = () => {
         <div className="flex items-center justify-between p-4 border-b bg-primary/5">
           <div className="flex items-center gap-2">
             <img
-      src="/logomob.png"
-      alt="Logo"
-      className="w-full h-full object-cover"
-    />
+              src="/logomob.png"
+              alt="Logo"
+              className="w-full h-full object-cover"
+            />
           </div>
         </div>
-     
+
         {/* Navigation */}
         <nav className="flex-1 py-4">
           <div className="space-y-1 px-2">
             {menuItems.map((item) => {
               const Icon = item.icon
               const isActive = location.pathname === item.path
-              
+
               return (
                 <button
                   key={item.path}
                   onClick={() => handleNavigation(item.path)}
                   className={`
                     w-full flex items-center justify-between px-3 py-2.5 text-sm rounded-lg transition-colors
-                    ${isActive 
-                      ? 'bg-primary text-primary-foreground shadow-sm' 
+                    ${isActive
+                      ? 'bg-primary text-primary-foreground shadow-sm'
                       : 'text-foreground hover:bg-accent hover:text-accent-foreground'
                     }
                   `}
@@ -105,7 +110,7 @@ export const MobileSidebar = () => {
             })}
           </div>
         </nav>
-        
+
         {/* Footer */}
         <div className="border-t p-4">
           <button

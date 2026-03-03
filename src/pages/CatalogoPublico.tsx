@@ -4,6 +4,8 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import {
   Phone,
   Mail,
@@ -25,10 +27,11 @@ import {
   Search,
   ArrowDown,
   ArrowUp,
-  ChevronDown
+  ChevronDown,
+  Store
 } from 'lucide-react'
 import { supabase } from '@/integrations/supabase/client'
-import { showSuccess } from '@/utils/toast'
+import { showSuccess, showError } from '@/utils/toast'
 
 interface Additional {
   id?: string
@@ -96,6 +99,15 @@ interface BakerySettings {
   banner_url?: string
   banner_mobile_url?: string
   presentation_message?: string
+  vende_cnpj?: boolean
+}
+
+interface Client {
+  id: string
+  name: string
+  cnpj: string
+  discount_percentage?: number
+  markup_percentage?: number
 }
 
 interface CartItem extends Product {
@@ -151,9 +163,43 @@ const CatalogoPublico = () => {
   const [priceSort, setPriceSort] = useState<'none' | 'asc' | 'desc'>('none')
   const [allSubcategories, setAllSubcategories] = useState<Subcategory[]>([])
 
+  const [cnpjClient, setCnpjClient] = useState<Client | null>(null)
+  const [showCnpjLogin, setShowCnpjLogin] = useState(false)
+  const [loginCnpjInput, setLoginCnpjInput] = useState('')
+  const [loginError, setLoginError] = useState('')
+
   const categoryRefs = useRef<Record<string, HTMLDivElement | null>>({})
   const hasSizes = (p?: Product | null) =>
     Array.isArray(p?.sizes) && p.sizes.length > 0
+
+  const maskCNPJ = (value: string) => {
+    const rawValue = value.replace(/\D/g, '').slice(0, 14)
+    return rawValue
+      .replace(/^(\d{2})(\d)/, '$1.$2')
+      .replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3')
+      .replace(/\.(\d{3})(\d)/, '.$1/$2')
+      .replace(/(\d{4})(\d)/, '$1-$2')
+  }
+
+  const getAdjustedPrice = (price: number) => {
+    if (!cnpjClient) return price
+    let adjusted = price
+    if (cnpjClient.discount_percentage) {
+      adjusted -= (price * cnpjClient.discount_percentage) / 100
+    }
+    if (cnpjClient.markup_percentage) {
+      adjusted += (price * cnpjClient.markup_percentage) / 100
+    }
+    return adjusted
+  }
+
+  const formatPrice = (price: number, shouldAdjust = true) => {
+    const finalPrice = shouldAdjust ? getAdjustedPrice(price) : price
+    return new Intl.NumberFormat('pt-BR', {
+      style: 'currency',
+      currency: 'BRL'
+    }).format(finalPrice)
+  }
 
   const getBasePrice = (p: Product) => {
     if (hasSizes(p)) return null
@@ -236,6 +282,10 @@ const CatalogoPublico = () => {
       const activeUserId = settingsData.id
       setRealUserId(activeUserId)
       setBakerySettings(settingsData || {})
+
+      if (settingsData.vende_cnpj && !cnpjClient) {
+        setShowCnpjLogin(true)
+      }
 
       const { data: productsData, error: productsError } = await supabase
         .from('products')
@@ -491,7 +541,7 @@ const CatalogoPublico = () => {
         : item.price
 
     const unit =
-      basePrice + additionaisTotal + variationsTotal
+      getAdjustedPrice(basePrice + additionaisTotal + variationsTotal)
 
     return sum + unit * item.quantity
 
@@ -525,17 +575,11 @@ const CatalogoPublico = () => {
         0
       )
 
-    return (basePrice + additionaisTotal + variationsTotal) * quantity
+    return getAdjustedPrice(basePrice + additionaisTotal + variationsTotal) * quantity
   }
 
 
 
-  const formatPrice = (price: number) => {
-    return new Intl.NumberFormat('pt-BR', {
-      style: 'currency',
-      currency: 'BRL'
-    }).format(price)
-  }
 
   const handleWhatsApp = () => {
     const message = 'Olá, gostaria de tirar uma dúvida.'
@@ -548,6 +592,131 @@ const CatalogoPublico = () => {
     } else {
       const whatsappUrl = `https://wa.me/?text=${encodedMessage}`
       window.open(whatsappUrl, '_blank')
+    }
+  }
+
+  const handleSendToWhatsApp = async () => {
+    if (cart.length === 0) return
+
+    try {
+      // 1. Salvar o pedido no banco de dados primeiro
+      const orderData = {
+        client_id: cnpjClient?.id || null,
+        client_name: cnpjClient?.name || 'Cliente Visitante',
+        total_amount: cartTotal,
+        discount_percentage: cnpjClient?.discount_percentage || 0,
+        delivery_fee: 0,
+        status: 'orcamento',
+        user_id: realUserId,
+        notes: cnpjClient ? `Pedido enviado via Catálogo CNPJ (CNPJ: ${cnpjClient.cnpj})` : 'Pedido enviado via Catálogo Público',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      }
+
+      const { data: newOrder, error: orderError } = await supabase
+        .from('orders')
+        .insert(orderData)
+        .select()
+        .single()
+
+      if (orderError) throw orderError
+
+      // 2. Salvar os itens do pedido
+      const orderItemsData = cart.map(item => {
+        const addsTotal = item.selectedAdditionais?.reduce((s, a) => s + a.price, 0) || 0
+        const variationsTotal = item.selectedVariations?.reduce((s, v) => s + v.price, 0) || 0
+        const basePrice = item.selectedSize && Number(item.selectedSize.price) > 0 ? Number(item.selectedSize.price) : item.price
+        const unitPriceAdjusted = getAdjustedPrice(basePrice + addsTotal + variationsTotal)
+
+        return {
+          order_id: newOrder.id,
+          product_id: item.id,
+          product_name: item.name,
+          quantity: item.quantity,
+          unit_price: unitPriceAdjusted,
+          total_price: unitPriceAdjusted * item.quantity,
+          adicionais: item.selectedAdditionais,
+          size: item.selectedSize,
+          variations: item.selectedVariations
+        }
+      })
+
+      const { error: itemsError } = await supabase
+        .from('order_items')
+        .insert(orderItemsData)
+
+      if (itemsError) throw itemsError
+
+      // 3. Montar a mensagem do WhatsApp
+      let message = `*Pedido #${newOrder.id.slice(0, 8)} - ${bakerySettings.bakery_name}*\n\n`
+
+      if (cnpjClient) {
+        message += `*Cliente:* ${cnpjClient.name}\n`
+        message += `*CNPJ:* ${cnpjClient.cnpj}\n\n`
+      }
+
+      cart.forEach(item => {
+        const addsTotal = item.selectedAdditionais?.reduce((s, a) => s + a.price, 0) || 0
+        const variationsTotal = item.selectedVariations?.reduce((s, v) => s + v.price, 0) || 0
+        const basePrice = item.selectedSize && Number(item.selectedSize.price) > 0 ? Number(item.selectedSize.price) : item.price
+        const unitPrice = getAdjustedPrice(basePrice + addsTotal + variationsTotal)
+
+        message += `*${item.quantity}x ${item.name}*\n`
+        if (item.selectedSize) message += `Tamanho: ${item.selectedSize.name}\n`
+        if (item.selectedVariations?.length) {
+          item.selectedVariations.forEach(v => {
+            message += `${v.group}: ${v.name}\n`
+          })
+        }
+        if (item.selectedAdditionais?.length) {
+          message += `Adicionais: ${item.selectedAdditionais.map(a => a.name).join(', ')}\n`
+        }
+        message += `Subtotal: ${formatPrice(unitPrice * item.quantity, false)}\n\n`
+      })
+
+      message += `*Total: ${formatPrice(cartTotal, false)}*`
+
+      const encodedMessage = encodeURIComponent(message)
+      const phone = bakerySettings.phone?.replace(/\D/g, '')
+
+      if (phone) {
+        window.open(`https://wa.me/55${phone}?text=${encodedMessage}`, '_blank')
+      } else {
+        window.open(`https://wa.me/?text=${encodedMessage}`, '_blank')
+      }
+
+      // Limpar carrinho após sucesso
+      setCart([])
+      setIsCartOpen(false)
+      showSuccess('Pedido registrado com sucesso!')
+
+    } catch (error) {
+      console.error('Erro ao registrar pedido:', error)
+      showError('Erro ao registrar pedido. Tente novamente.')
+    }
+  }
+
+  const handleCnpjLogin = async () => {
+    if (!loginCnpjInput) return
+    setLoginError('')
+
+    try {
+      const { data, error } = await supabase
+        .from('clients')
+        .select('*')
+        .eq('cnpj', loginCnpjInput.replace(/\D/g, ''))
+        .eq('user_id', realUserId)
+        .single()
+
+      if (error || !data) {
+        setLoginError('CNPJ inválido ou não cadastrado.')
+        return
+      }
+
+      setCnpjClient(data)
+      setShowCnpjLogin(false)
+    } catch (err) {
+      setLoginError('Erro ao validar CNPJ.')
     }
   }
 
@@ -589,8 +758,59 @@ const CatalogoPublico = () => {
     )
   }
 
+  if (showCnpjLogin) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4 font-sans">
+        <Card className="max-w-md w-full p-8 shadow-2xl border-none bg-white/80 backdrop-blur-lg">
+          <div className="text-center space-y-2 mb-8">
+            <div className="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg rotate-3">
+              <Store className="w-8 h-8 text-white -rotate-3" />
+            </div>
+            <h1 className="text-3xl font-bold tracking-tight text-gray-900">Bem-vindo(a)</h1>
+            <p className="text-sm text-gray-500">Digite seu CNPJ para acessar preços e condições exclusivas de {bakerySettings.bakery_name}.</p>
+          </div>
+
+          <div className="space-y-6">
+            <div className="space-y-2">
+              <Label htmlFor="cnpj-login" className="text-xs font-semibold uppercase tracking-wider text-gray-500 ml-1">CNPJ da Empresa</Label>
+              <Input
+                id="cnpj-login"
+                placeholder="00.000.000/0000-00"
+                value={loginCnpjInput}
+                onChange={(e) => setLoginCnpjInput(maskCNPJ(e.target.value))}
+                className="h-12 border-gray-200 focus:ring-blue-500 focus:border-blue-500 rounded-xl"
+              />
+              {loginError && <p className="text-sm font-medium text-red-500 animate-pulse ml-1">{loginError}</p>}
+            </div>
+
+            <Button className="w-full h-12 rounded-xl bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-200 transition-all active:scale-95 text-base font-semibold" onClick={handleCnpjLogin}>
+              Acessar Catálogo
+            </Button>
+
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <span className="w-full border-t border-gray-100" />
+              </div>
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-white px-4 text-gray-400 font-medium">Não é parceiro?</span>
+              </div>
+            </div>
+
+            <Button variant="ghost" className="w-full h-12 rounded-xl text-gray-600 hover:bg-gray-50 font-medium" onClick={() => setShowCnpjLogin(false)}>
+              Continuar como visitante
+            </Button>
+          </div>
+
+          <p className="text-center text-[10px] text-gray-400 mt-8">
+            Sua privacidade é importante. Seus dados estão protegidos.
+          </p>
+        </Card>
+      </div>
+    )
+  }
+
   return (
-    <div className="min-h-screen bg-gray-50 pb-24">
+    <div className="min-h-screen bg-gray-50 pb-24 font-sans">
 
       {/* Header */}
       <div className="relative">
@@ -1588,23 +1808,27 @@ const CatalogoPublico = () => {
 
                 <div className="flex justify-between font-semibold text-sm">
                   <span>Total</span>
-                  <span>{formatPrice(cartTotal)}</span>
+                  <span>{formatPrice(cartTotal, false)}</span>
                 </div>
 
                 <Button
                   className="w-full"
-                  onClick={() =>
-                    navigate('/finalizar', {
-                      state: {
-                        cart,
-                        cartTotal,
-                        bakerySettings
-                      }
-                    })
-                  }
+                  onClick={() => {
+                    if (bakerySettings.vende_cnpj) {
+                      handleSendToWhatsApp()
+                    } else {
+                      navigate('/finalizar', {
+                        state: {
+                          cart,
+                          cartTotal,
+                          bakerySettings
+                        }
+                      })
+                    }
+                  }}
                 >
                   <ShoppingCart className="w-4 h-4 mr-2" />
-                  Finalizar pedido
+                  {bakerySettings.vende_cnpj ? 'Enviar pelo WhatsApp' : 'Finalizar pedido'}
                 </Button>
 
 

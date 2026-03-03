@@ -18,6 +18,7 @@ import {
   Crown,
   Calendar,
   Mail,
+  MessageCircle,
   RefreshCw
 } from 'lucide-react'
 
@@ -110,9 +111,17 @@ const Admin = () => {
           </div>
           <div>
             <div className="font-medium">{row.full_name || 'Sem nome'}</div>
-            <div className="text-sm text-muted-foreground flex items-center gap-1">
-              <Mail className="w-3 h-3" />
-              {row.email}
+            <div className="text-sm text-muted-foreground flex flex-col gap-0.5">
+              <div className="flex items-center gap-1">
+                <Mail className="w-3 h-3" />
+                {row.email}
+              </div>
+              {row.phone && (
+                <div className="flex items-center gap-1 text-green-600 font-medium">
+                  <MessageCircle className="w-3 h-3" />
+                  <span className="text-[11px]">{row.phone}</span>
+                </div>
+              )}
             </div>
           </div>
         </div>

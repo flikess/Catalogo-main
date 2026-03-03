@@ -33,6 +33,10 @@ interface Order {
   notes?: string;
   created_at: string;
   order_items?: OrderItem[];
+  clients?: {
+    cnpj: string;
+    type: string;
+  };
 }
 
 interface VariationSelection {
@@ -182,6 +186,10 @@ const Pedidos = () => {
         .select(`
         *,
         client_id,
+        clients (
+          cnpj,
+          type
+        ),
         order_items (
           id,
           product_name,
@@ -870,10 +878,17 @@ const Pedidos = () => {
     {
       key: 'client_name',
       label: 'Cliente',
-      render: (value: string) => (
+      render: (value: string, row: Order) => (
         <div className="flex items-center">
           <User className="w-4 h-4 mr-2 text-muted-foreground" />
-          <span className="truncate">{value}</span>
+          <div className="flex flex-col">
+            <span className="truncate">{value}</span>
+            {row.clients?.cnpj && (
+              <span className="text-[10px] text-muted-foreground font-mono">
+                CNPJ: {row.clients.cnpj.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, "$1.$2.$3/$4-$5")}
+              </span>
+            )}
+          </div>
         </div>
       )
     },
