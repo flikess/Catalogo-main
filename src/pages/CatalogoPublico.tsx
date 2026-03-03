@@ -691,8 +691,48 @@ const CatalogoPublico = () => {
       showSuccess('Pedido registrado com sucesso!')
 
     } catch (error) {
-      console.error('Erro ao registrar pedido:', error)
-      showError('Erro ao registrar pedido. Tente novamente.')
+      console.error('Erro ao registrar pedido no banco:', error)
+
+      // FALLBACK: Se falhar no banco, ainda tentamos enviar o WhatsApp 
+      // para não perder a venda do cliente visitante.
+      try {
+        let message = `*Pedido (Visitante) - ${bakerySettings.bakery_name}*\n\n`
+
+        cart.forEach(item => {
+          const addsTotal = item.selectedAdditionais?.reduce((s, a) => s + a.price, 0) || 0
+          const variationsTotal = item.selectedVariations?.reduce((s, v) => s + v.price, 0) || 0
+          const basePrice = item.selectedSize && Number(item.selectedSize.price) > 0 ? Number(item.selectedSize.price) : item.price
+          const unitPrice = getAdjustedPrice(basePrice + addsTotal + variationsTotal)
+
+          message += `*${item.quantity}x ${item.name}*\n`
+          if (item.selectedSize) message += `Tamanho: ${item.selectedSize.name}\n`
+          if (item.selectedVariations?.length) {
+            item.selectedVariations.forEach(v => {
+              message += `${v.group}: ${v.name}\n`
+            })
+          }
+          if (item.selectedAdditionais?.length) {
+            message += `Adicionais: ${item.selectedAdditionais.map(a => a.name).join(', ')}\n`
+          }
+          message += `Subtotal: ${formatPrice(unitPrice * item.quantity, false)}\n\n`
+        })
+
+        message += `*Total: ${formatPrice(cartTotal, false)}*`
+        const encodedMessage = encodeURIComponent(message)
+        const phone = bakerySettings.phone?.replace(/\D/g, '')
+
+        if (phone) {
+          window.open(`https://wa.me/55${phone}?text=${encodedMessage}`, '_blank')
+        } else {
+          window.open(`https://wa.me/?text=${encodedMessage}`, '_blank')
+        }
+
+        setCart([])
+        setIsCartOpen(false)
+        showSuccess('Pedido enviado pelo WhatsApp!')
+      } catch (err) {
+        showError('Erro ao gerar link do WhatsApp. Tente novamente.')
+      }
     }
   }
 

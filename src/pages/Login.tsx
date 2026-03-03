@@ -54,12 +54,12 @@ const Login = () => {
       url.searchParams.delete('logout')
       window.history.replaceState({}, '', url.pathname)
 
-      // Redirecionamento imediato após login
+      // Redirecionamento imediato após login (usando href para resetar o estado da app)
       const userRole = data.user?.user_metadata?.role
       if (userRole === 'super_admin') {
-        navigate('/admin')
+        window.location.href = '/admin'
       } else {
-        navigate('/dashboard')
+        window.location.href = '/dashboard'
       }
     } catch (error: any) {
       showError(error.message || 'Erro ao fazer login')

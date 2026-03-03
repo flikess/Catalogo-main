@@ -31,19 +31,23 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
     // Bloqueio de auto-login se acabamos de deslogar
     const params = new URLSearchParams(window.location.search)
+    let shouldSkipInitialCheck = false
+
     if (params.get('logout') === 'true') {
       console.log('🛡️ Logout detectado na URL, bloqueando auto-login')
       setUser(null)
       setLoading(false)
-      return
+      shouldSkipInitialCheck = true
     }
 
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session }, error }) => {
-      console.log('AuthProvider: Initial session check:', { session, error })
-      setUser(session?.user ?? null)
-      setLoading(false)
-    })
+    if (!shouldSkipInitialCheck) {
+      // Get initial session
+      supabase.auth.getSession().then(({ data: { session }, error }) => {
+        console.log('AuthProvider: Initial session check:', { session, error })
+        setUser(session?.user ?? null)
+        setLoading(false)
+      })
+    }
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
