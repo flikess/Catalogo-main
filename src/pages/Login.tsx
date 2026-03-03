@@ -40,7 +40,7 @@ const Login = () => {
     setLoading(true)
 
     try {
-      const { error } = await supabase.auth.signInWithPassword({
+      const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       })
@@ -48,6 +48,19 @@ const Login = () => {
       if (error) throw error
 
       showSuccess('Login realizado com sucesso!')
+
+      // Limpar o parâmetro de logout da URL para permitir o redirecionamento
+      const url = new URL(window.location.href)
+      url.searchParams.delete('logout')
+      window.history.replaceState({}, '', url.pathname)
+
+      // Redirecionamento imediato após login
+      const userRole = data.user?.user_metadata?.role
+      if (userRole === 'super_admin') {
+        navigate('/admin')
+      } else {
+        navigate('/dashboard')
+      }
     } catch (error: any) {
       showError(error.message || 'Erro ao fazer login')
     } finally {
