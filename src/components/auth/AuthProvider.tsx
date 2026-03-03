@@ -28,7 +28,16 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   useEffect(() => {
     console.log('AuthProvider: Initializing...')
-    
+
+    // Bloqueio de auto-login se acabamos de deslogar
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('logout') === 'true') {
+      console.log('🛡️ Logout detectado na URL, bloqueando auto-login')
+      setUser(null)
+      setLoading(false)
+      return
+    }
+
     // Get initial session
     supabase.auth.getSession().then(({ data: { session }, error }) => {
       console.log('AuthProvider: Initial session check:', { session, error })
@@ -41,18 +50,18 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       async (event, session) => {
         console.log('AuthProvider: Auth state changed:', { event, session })
         setUser(session?.user ?? null)
-        
+
         // Mostrar toast de boas-vindas apenas quando usuário faz login (não em mudanças de estado)
         if (event === 'SIGNED_IN' && session?.user && !hasShownWelcomeToast) {
           checkSubscriptionOnLogin(session.user)
           setHasShownWelcomeToast(true)
         }
-        
+
         // Reset flag quando usuário faz logout
         if (event === 'SIGNED_OUT') {
           setHasShownWelcomeToast(false)
         }
-        
+
         setLoading(false)
       }
     )

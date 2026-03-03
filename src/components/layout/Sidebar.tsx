@@ -30,12 +30,16 @@ export const Sidebar = () => {
 
   const handleLogout = async () => {
     try {
-      await supabase.auth.signOut()
+      Object.keys(localStorage).forEach(key => {
+        if (key.includes('auth-token')) {
+          localStorage.removeItem(key)
+        }
+      })
+      await supabase.auth.signOut({ scope: 'local' })
     } catch (error) {
       console.error('Error during logout:', error)
     } finally {
-      showSuccess('Logout realizado com sucesso!')
-      navigate('/login', { replace: true })
+      window.location.href = '/login?logout=true'
     }
   }
 

@@ -48,12 +48,21 @@ export const Header = () => {
 
   const handleLogout = async () => {
     try {
-      await supabase.auth.signOut()
+      // 1. Limpar todas as chaves de autenticação do localStorage manualmente
+      Object.keys(localStorage).forEach(key => {
+        if (key.includes('auth-token')) {
+          localStorage.removeItem(key)
+        }
+      })
+
+      // 2. Tentar o logout local no Supabase
+      await supabase.auth.signOut({ scope: 'local' })
     } catch (error) {
       console.error('Error during logout:', error)
     } finally {
-      showSuccess('Logout realizado com sucesso!')
-      navigate('/login', { replace: true })
+      // 3. Usar window.location.href para forçar um recarregamento completo da página
+      // Isso limpa todos os estados de memória (como o useAuth) e garante que o usuário saia
+      window.location.href = '/login?logout=true'
     }
   }
 

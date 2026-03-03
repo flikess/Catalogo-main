@@ -18,6 +18,10 @@ const Login = () => {
   const [password, setPassword] = useState('')
 
   useEffect(() => {
+    // Se acabamos de deslogar, não redirecionar de volta
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('logout') === 'true') return
+
     if (user) {
       // Redirecionar com base na role do usuário
       const userRole = user.user_metadata?.role
