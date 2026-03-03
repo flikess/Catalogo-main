@@ -99,6 +99,9 @@ const Produtos = () => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [selectedFiles, setSelectedFiles] = useState<(File | null)[]>([null, null, null])
   const [imagePreviews, setImagePreviews] = useState<(string | null)[]>([null, null, null])
+  const [isBulkCategory, setIsBulkCategory] = useState(false)
+  const [isBulkSubCategory, setIsBulkSubCategory] = useState(false)
+  const [bulkNames, setBulkNames] = useState('')
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>('all')
   const [selectedSubCategoryId, setSelectedSubCategoryId] = useState<string>('all')
 
@@ -577,6 +580,18 @@ const Produtos = () => {
     }
   }
 
+  const clearCategoryBanner = (type: 'desktop' | 'mobile') => {
+    if (type === 'desktop') {
+      setCategoryBannerDesktop(null)
+      setCategoryBannerDesktopPreview(null)
+      setCategoryFormData(prev => ({ ...prev, banner_desktop_url: '' }))
+    } else {
+      setCategoryBannerMobile(null)
+      setCategoryBannerMobilePreview(null)
+      setCategoryFormData(prev => ({ ...prev, banner_mobile_url: '' }))
+    }
+  }
+
   const handleCategorySubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
@@ -586,45 +601,72 @@ const Produtos = () => {
     }
 
     try {
-      let desktopUrl = categoryFormData.banner_desktop_url
-      let mobileUrl = categoryFormData.banner_mobile_url
+      if (isBulkCategory && !editingCategory) {
+        const names = categoryFormData.nome
+          .split(/[,\n]/)
+          .map(n => n.trim())
+          .filter(n => n !== '')
 
-      if (categoryBannerDesktop) {
-        desktopUrl = await uploadImage(categoryBannerDesktop) || desktopUrl
-      }
-      if (categoryBannerMobile) {
-        mobileUrl = await uploadImage(categoryBannerMobile) || mobileUrl
-      }
+        if (names.length === 0) {
+          showError('Insira ao menos um nome para cadastro em massa')
+          return
+        }
 
-      const categoryData = {
-        nome: categoryFormData.nome.trim(),
-        banner_desktop_url: desktopUrl,
-        banner_mobile_url: mobileUrl,
-        updated_at: new Date().toISOString()
-      }
+        const categoryDataList = names.map(name => ({
+          nome: name,
+          user_id: user?.id,
+          updated_at: new Date().toISOString()
+        }))
 
-      if (editingCategory) {
         const { error } = await supabase
           .from('categorias_produtos')
-          .update(categoryData)
-          .eq('id', editingCategory.id)
+          .insert(categoryDataList)
 
         if (error) throw error
-        showSuccess('Categoria atualizada com sucesso!')
+        showSuccess(`${names.length} categorias criadas com sucesso!`)
       } else {
-        const { error } = await supabase
-          .from('categorias_produtos')
-          .insert({
-            ...categoryData,
-            user_id: user?.id
-          })
+        // Lógica original para cadastro único (permite banners)
+        let desktopUrl = categoryBannerDesktopPreview ? categoryFormData.banner_desktop_url : null
+        let mobileUrl = categoryBannerMobilePreview ? categoryFormData.banner_mobile_url : null
 
-        if (error) throw error
-        showSuccess('Categoria criada com sucesso!')
+        if (categoryBannerDesktop) {
+          desktopUrl = await uploadImage(categoryBannerDesktop) || desktopUrl
+        }
+        if (categoryBannerMobile) {
+          mobileUrl = await uploadImage(categoryBannerMobile) || mobileUrl
+        }
+
+        const categoryData = {
+          nome: categoryFormData.nome.trim(),
+          banner_desktop_url: desktopUrl,
+          banner_mobile_url: mobileUrl,
+          updated_at: new Date().toISOString()
+        }
+
+        if (editingCategory) {
+          const { error } = await supabase
+            .from('categorias_produtos')
+            .update(categoryData)
+            .eq('id', editingCategory.id)
+
+          if (error) throw error
+          showSuccess('Categoria atualizada com sucesso!')
+        } else {
+          const { error } = await supabase
+            .from('categorias_produtos')
+            .insert({
+              ...categoryData,
+              user_id: user?.id
+            })
+
+          if (error) throw error
+          showSuccess('Categoria criada com sucesso!')
+        }
       }
 
       setIsCategoryDialogOpen(false)
       setEditingCategory(null)
+      setIsBulkCategory(false)
       setCategoryFormData({ nome: '', banner_desktop_url: '', banner_mobile_url: '' })
       setCategoryBannerDesktop(null)
       setCategoryBannerMobile(null)
@@ -687,37 +729,63 @@ const Produtos = () => {
     }
 
     try {
-      if (editingSubCategory) {
+      if (isBulkSubCategory && !editingSubCategory) {
+        const names = subCategoryFormData.nome
+          .split(/[,\n]/)
+          .map(n => n.trim())
+          .filter(n => n !== '')
+
+        if (names.length === 0) {
+          showError('Insira ao menos um nome')
+          return
+        }
+
+        const subDataList = names.map(name => ({
+          nome: name,
+          categoria_id: subCategoryFormData.categoria_id,
+          user_id: user?.id
+        }))
+
         const { error } = await supabase
           .from('subcategorias_produtos')
-          .update({
-            nome: subCategoryFormData.nome.trim(),
-            categoria_id: subCategoryFormData.categoria_id,
-          })
-          .eq('id', editingSubCategory.id)
+          .insert(subDataList)
 
         if (error) throw error
-        showSuccess('Sub-categoria atualizada!')
+        showSuccess(`${names.length} sub-categorias criadas!`)
       } else {
-        const { error } = await supabase
-          .from('subcategorias_produtos')
-          .insert({
-            nome: subCategoryFormData.nome.trim(),
-            categoria_id: subCategoryFormData.categoria_id,
-            user_id: user?.id
-          })
+        if (editingSubCategory) {
+          const { error } = await supabase
+            .from('subcategorias_produtos')
+            .update({
+              nome: subCategoryFormData.nome.trim(),
+              categoria_id: subCategoryFormData.categoria_id,
+            })
+            .eq('id', editingSubCategory.id)
 
-        if (error) throw error
-        showSuccess('Sub-categoria criada!')
+          if (error) throw error
+          showSuccess('Sub-categoria atualizada!')
+        } else {
+          const { error } = await supabase
+            .from('subcategorias_produtos')
+            .insert({
+              nome: subCategoryFormData.nome.trim(),
+              categoria_id: subCategoryFormData.categoria_id,
+              user_id: user?.id
+            })
+
+          if (error) throw error
+          showSuccess('Sub-categoria criada!')
+        }
       }
 
       setIsSubCategoryDialogOpen(false)
       setEditingSubCategory(null)
+      setIsBulkSubCategory(false)
       setSubCategoryFormData({ nome: '', categoria_id: '' })
       fetchCategories()
     } catch (error: any) {
       console.error(error)
-      showError('Erro ao salvar sub-categoria. Verifique se a tabela existe no banco.')
+      showError('Erro ao salvar')
     }
   }
 
@@ -1055,65 +1123,125 @@ const Produtos = () => {
                 </DialogHeader>
                 <form onSubmit={handleCategorySubmit} className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="category_name">Nome da Categoria *</Label>
-                    <Input
-                      id="category_name"
-                      value={categoryFormData.nome}
-                      onChange={(e) => setCategoryFormData({ ...categoryFormData, nome: e.target.value })}
-                      placeholder="Ex: Bolos de Aniversário"
-                      required
-                    />
+                    <div className="flex justify-between items-center">
+                      <Label htmlFor="category_name">
+                        {isBulkCategory ? 'Nomes das Categorias (uma por linha ou separadas por vírgula)' : 'Nome da Categoria *'}
+                      </Label>
+                      {!editingCategory && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="text-[10px] h-6"
+                          onClick={() => setIsBulkCategory(!isBulkCategory)}
+                        >
+                          {isBulkCategory ? 'Cadastrar Único' : 'Cadastrar em Massa'}
+                        </Button>
+                      )}
+                    </div>
+                    {isBulkCategory ? (
+                      <Textarea
+                        id="category_name"
+                        value={categoryFormData.nome}
+                        onChange={(e) => setCategoryFormData({ ...categoryFormData, nome: e.target.value })}
+                        placeholder="Categoria 1, Categoria 2..."
+                        rows={5}
+                        required
+                      />
+                    ) : (
+                      <Input
+                        id="category_name"
+                        value={categoryFormData.nome}
+                        onChange={(e) => setCategoryFormData({ ...categoryFormData, nome: e.target.value })}
+                        placeholder="Ex: Bolos de Aniversário"
+                        required
+                      />
+                    )}
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-t pt-4">
-                    <div className="space-y-2">
-                      <Label>Banner Desktop (1200x300)</Label>
-                      <div
-                        className="border-2 border-dashed rounded-lg h-32 flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 bg-gray-50/50 overflow-hidden relative"
-                        onClick={() => document.getElementById('category-banner-desktop')?.click()}
-                      >
-                        {categoryBannerDesktopPreview ? (
-                          <img src={categoryBannerDesktopPreview} className="w-full h-full object-cover" />
-                        ) : (
-                          <>
-                            <Upload className="w-6 h-6 text-gray-400 mb-1" />
-                            <span className="text-xs text-gray-500">Desktop</span>
-                          </>
-                        )}
+                  {!isBulkCategory && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-t pt-4">
+                      <div className="space-y-2">
+                        <Label>Banner Desktop (1200x300)</Label>
+                        <div
+                          className="border-2 border-dashed rounded-lg h-32 flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 bg-gray-50/50 overflow-hidden relative"
+                          onClick={() => document.getElementById('category-banner-desktop')?.click()}
+                        >
+                          {categoryBannerDesktopPreview ? (
+                            <div className="relative w-full h-full group">
+                              <img src={categoryBannerDesktopPreview} className="w-full h-full object-cover" />
+                              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                <Button
+                                  type="button"
+                                  variant="destructive"
+                                  size="sm"
+                                  className="h-8 w-8 rounded-full"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    clearCategoryBanner('desktop');
+                                  }}
+                                >
+                                  <X className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </div>
+                          ) : (
+                            <>
+                              <Upload className="w-6 h-6 text-gray-400 mb-1" />
+                              <span className="text-xs text-gray-500">Desktop</span>
+                            </>
+                          )}
+                        </div>
+                        <Input
+                          id="category-banner-desktop"
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={(e) => handleCategoryFileSelect(e, 'desktop')}
+                        />
                       </div>
-                      <Input
-                        id="category-banner-desktop"
-                        type="file"
-                        accept="image/*"
-                        className="hidden"
-                        onChange={(e) => handleCategoryFileSelect(e, 'desktop')}
-                      />
-                    </div>
 
-                    <div className="space-y-2">
-                      <Label>Banner Mobile (800x300)</Label>
-                      <div
-                        className="border-2 border-dashed rounded-lg h-32 flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 bg-gray-50/50 overflow-hidden relative"
-                        onClick={() => document.getElementById('category-banner-mobile')?.click()}
-                      >
-                        {categoryBannerMobilePreview ? (
-                          <img src={categoryBannerMobilePreview} className="w-full h-full object-cover" />
-                        ) : (
-                          <>
-                            <Upload className="w-6 h-6 text-gray-400 mb-1" />
-                            <span className="text-xs text-gray-500">Mobile</span>
-                          </>
-                        )}
+                      <div className="space-y-2">
+                        <Label>Banner Mobile (800x300)</Label>
+                        <div
+                          className="border-2 border-dashed rounded-lg h-32 flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 bg-gray-50/50 overflow-hidden relative"
+                          onClick={() => document.getElementById('category-banner-mobile')?.click()}
+                        >
+                          {categoryBannerMobilePreview ? (
+                            <div className="relative w-full h-full group">
+                              <img src={categoryBannerMobilePreview} className="w-full h-full object-cover" />
+                              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                <Button
+                                  type="button"
+                                  variant="destructive"
+                                  size="sm"
+                                  className="h-8 w-8 rounded-full"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    clearCategoryBanner('mobile');
+                                  }}
+                                >
+                                  <X className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </div>
+                          ) : (
+                            <>
+                              <Upload className="w-6 h-6 text-gray-400 mb-1" />
+                              <span className="text-xs text-gray-500">Mobile</span>
+                            </>
+                          )}
+                        </div>
+                        <Input
+                          id="category-banner-mobile"
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={(e) => handleCategoryFileSelect(e, 'mobile')}
+                        />
                       </div>
-                      <Input
-                        id="category-banner-mobile"
-                        type="file"
-                        accept="image/*"
-                        className="hidden"
-                        onChange={(e) => handleCategoryFileSelect(e, 'mobile')}
-                      />
                     </div>
-                  </div>
+                  )}
 
                   <DialogFooter>
                     <Button type="submit">
@@ -1161,14 +1289,40 @@ const Produtos = () => {
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="sub_category_name">Nome da Sub-categoria *</Label>
-                    <Input
-                      id="sub_category_name"
-                      value={subCategoryFormData.nome}
-                      onChange={(e) => setSubCategoryFormData({ ...subCategoryFormData, nome: e.target.value })}
-                      placeholder="Ex: Recheados, Com Cobertura, etc."
-                      required
-                    />
+                    <div className="flex justify-between items-center">
+                      <Label htmlFor="sub_category_name">
+                        {isBulkSubCategory ? 'Nomes das Sub-categorias (uma por linha ou vírgula)' : 'Nome da Sub-categoria *'}
+                      </Label>
+                      {!editingSubCategory && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="text-[10px] h-6"
+                          onClick={() => setIsBulkSubCategory(!isBulkSubCategory)}
+                        >
+                          {isBulkSubCategory ? 'Cadastrar Único' : 'Cadastrar em Massa'}
+                        </Button>
+                      )}
+                    </div>
+                    {isBulkSubCategory ? (
+                      <Textarea
+                        id="sub_category_name"
+                        value={subCategoryFormData.nome}
+                        onChange={(e) => setSubCategoryFormData({ ...subCategoryFormData, nome: e.target.value })}
+                        placeholder="Opção 1, Opção 2..."
+                        rows={5}
+                        required
+                      />
+                    ) : (
+                      <Input
+                        id="sub_category_name"
+                        value={subCategoryFormData.nome}
+                        onChange={(e) => setSubCategoryFormData({ ...subCategoryFormData, nome: e.target.value })}
+                        placeholder="Ex: Recheados, Com Cobertura, etc."
+                        required
+                      />
+                    )}
                   </div>
 
                   <DialogFooter>

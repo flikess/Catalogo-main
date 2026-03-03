@@ -700,23 +700,46 @@ const CatalogoPublico = () => {
     if (!loginCnpjInput) return
     setLoginError('')
 
+    const cleanInput = loginCnpjInput.trim()
+    const rawCnpj = cleanInput.replace(/\D/g, '')
+    const maskedCnpj = maskCNPJ(cleanInput)
+
+    console.log('🔍 Tentando login CNPJ:', {
+      input: cleanInput,
+      raw: rawCnpj,
+      masked: maskedCnpj,
+      lojaId: realUserId
+    })
+
     try {
+      // Busca mais flexível usando ilike e buscando tanto o formato limpo quanto o mascarado
+      // Também garante que o cliente pertença à loja correta (realUserId)
       const { data, error } = await supabase
         .from('clients')
         .select('*')
-        .eq('cnpj', loginCnpjInput.replace(/\D/g, ''))
         .eq('user_id', realUserId)
-        .single()
+        .or(`cnpj.ilike.%${rawCnpj}%,cnpj.ilike.%${maskedCnpj}%`)
+        .maybeSingle()
 
-      if (error || !data) {
-        setLoginError('CNPJ inválido ou não cadastrado.')
+      if (error) {
+        console.error('❌ Erro Supabase CNPJ:', error)
+        setLoginError('Erro técnico ao validar. Tente novamente.')
         return
       }
 
+      if (!data) {
+        console.warn('⚠️ Nenhum cliente encontrado para este CNPJ nesta loja.')
+        setLoginError('CNPJ não cadastrado ou pertence a outra loja.')
+        return
+      }
+
+      console.log('✅ Cliente autenticado:', data.name)
       setCnpjClient(data)
       setShowCnpjLogin(false)
+      showSuccess(`Bem-vindo, ${data.name}!`)
     } catch (err) {
-      setLoginError('Erro ao validar CNPJ.')
+      console.error('💥 Erro fatal no login CNPJ:', err)
+      setLoginError('Ocorreu um erro inesperado.')
     }
   }
 

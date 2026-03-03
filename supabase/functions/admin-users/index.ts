@@ -34,8 +34,12 @@ serve(async (req) => {
     const token = authHeader.replace('Bearer ', '');
     const { data: { user }, error: userError } = await supabase.auth.getUser(token);
 
-    if (userError || !user || user.user_metadata?.role !== 'super_admin') {
-      return new Response(JSON.stringify({ error: 'Acesso negado: apenas super admins' }), {
+    // Verificação robusta de Role: olha em user_metadata e app_metadata (padrão Supabase)
+    const userRole = user?.user_metadata?.role || user?.app_metadata?.role;
+
+    if (userError || !user || userRole !== 'super_admin') {
+      console.error('Acesso negado para:', user?.email, 'Role:', userRole);
+      return new Response(JSON.stringify({ error: `Acesso negado: Requer role super_admin (Encontrado: ${userRole || 'nenhum'})` }), {
         status: 403,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
