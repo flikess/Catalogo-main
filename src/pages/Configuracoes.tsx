@@ -29,6 +29,7 @@ interface BakerySettings {
   pix_key?: string | null
   presentation_message?: string | null
   vende_cnpj?: boolean
+  working_hours?: Record<number, { open: string; close: string; closed: boolean }>
   updated_at?: string
 }
 
@@ -347,6 +348,10 @@ const Configuracoes = () => {
             <TabsTrigger value="profile" className="flex gap-2 items-center">
               <User className="w-4 h-4" />
               Perfil
+            </TabsTrigger>
+            <TabsTrigger value="hours" className="flex gap-2 items-center">
+              <Store className="w-4 h-4" />
+              Horários
             </TabsTrigger>
           </TabsList>
 
@@ -707,6 +712,95 @@ const Configuracoes = () => {
                   {loading ? 'Salvando...' : 'Salvar perfil'}
                 </Button>
 
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="hours">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Store className="w-5 h-5" />
+                  Horário de Funcionamento
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <p className="text-sm text-muted-foreground">
+                  Defina os horários em que sua loja está aberta para receber pedidos.
+                </p>
+                <div className="space-y-4">
+                  {[0, 1, 2, 3, 4, 5, 6].map((day) => {
+                    const dayNames = [
+                      'Domingo', 'Segunda-feira', 'Terça-feira',
+                      'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'
+                    ]
+                    const hours = (bakerySettings?.working_hours as any)?.[day] || { open: '08:00', close: '18:00', closed: false }
+
+                    return (
+                      <div key={day} className="flex flex-wrap items-center gap-4 p-4 rounded-lg border bg-card">
+                        <div className="w-32 font-medium">{dayNames[day]}</div>
+
+                        <div className="flex flex-1 items-center gap-4 min-w-[200px]">
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="checkbox"
+                              id={`closed-${day}`}
+                              checked={hours.closed}
+                              onChange={(e) => {
+                                const newHours = { ...(bakerySettings.working_hours || {}) }
+                                newHours[day] = { ...hours, closed: e.target.checked }
+                                setBakerySettings(prev => ({ ...prev, working_hours: newHours }))
+                              }}
+                              className="w-4 h-4"
+                            />
+                            <Label htmlFor={`closed-${day}`}>Fechado</Label>
+                          </div>
+
+                          {!hours.closed && (
+                            <div className="flex items-center gap-4 ml-auto">
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm">De:</span>
+                                <Input
+                                  type="time"
+                                  value={hours.open}
+                                  className="w-24"
+                                  onChange={(e) => {
+                                    const newHours = { ...(bakerySettings.working_hours || {}) }
+                                    newHours[day] = { ...hours, open: e.target.value }
+                                    setBakerySettings(prev => ({ ...prev, working_hours: newHours }))
+                                  }}
+                                />
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm">Até:</span>
+                                <Input
+                                  type="time"
+                                  value={hours.close}
+                                  className="w-24"
+                                  onChange={(e) => {
+                                    const newHours = { ...(bakerySettings.working_hours || {}) }
+                                    newHours[day] = { ...hours, close: e.target.value }
+                                    setBakerySettings(prev => ({ ...prev, working_hours: newHours }))
+                                  }}
+                                />
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+
+                <div className="pt-4 border-t">
+                  <Button
+                    className="w-full"
+                    onClick={handleSaveBakerySettings}
+                    disabled={loading}
+                  >
+                    {loading ? 'Salvando...' : 'Salvar horários de funcionamento'}
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           </TabsContent>

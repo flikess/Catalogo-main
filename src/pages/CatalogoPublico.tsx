@@ -100,6 +100,7 @@ interface BakerySettings {
   banner_mobile_url?: string
   presentation_message?: string
   vende_cnpj?: boolean
+  working_hours?: Record<number, { open: string; close: string; closed: boolean }>
 }
 
 interface Client {
@@ -205,6 +206,31 @@ const CatalogoPublico = () => {
     if (hasSizes(p)) return null
     return p.price
   }
+
+  const isStoreOpen = () => {
+    if (!bakerySettings.working_hours) return true
+
+    // Usar o horário do sistema (o USER mandou o horário atual)
+    const now = new Date()
+    const dayOfWeek = now.getDay()
+    const hours = bakerySettings.working_hours[dayOfWeek]
+
+    if (!hours || hours.closed) return false
+
+    const [openH, openM] = hours.open.split(':').map(Number)
+    const [closeH, closeM] = hours.close.split(':').map(Number)
+
+    const nowH = now.getHours()
+    const nowM = now.getMinutes()
+
+    const nowInMinutes = nowH * 60 + nowM
+    const openInMinutes = openH * 60 + openM
+    const closeInMinutes = closeH * 60 + closeM
+
+    return nowInMinutes >= openInMinutes && nowInMinutes <= closeInMinutes
+  }
+
+  const storeIsOpen = isStoreOpen()
 
 
   useEffect(() => {
@@ -462,6 +488,11 @@ const CatalogoPublico = () => {
       }
     }
 
+    if (!storeIsOpen) {
+      alert('A loja está fechada no momento. Por favor, tente novamente durante o horário de funcionamento.')
+      return
+    }
+
     let finalPrice = basePrice + variationsTotal
 
 
@@ -597,6 +628,11 @@ const CatalogoPublico = () => {
 
   const handleSendToWhatsApp = async () => {
     if (cart.length === 0) return
+
+    if (!storeIsOpen) {
+      showError('A loja está fechada no momento. Os pedidos não podem ser processados.')
+      return
+    }
 
     try {
       // 1. Salvar o pedido no banco de dados primeiro
@@ -877,6 +913,13 @@ const CatalogoPublico = () => {
 
       {/* Header */}
       <div className="relative">
+
+        {!storeIsOpen && !loading && !error && (
+          <div className="bg-orange-600 text-white text-center py-2.5 px-4 font-semibold flex items-center justify-center gap-2 sticky top-0 z-50 shadow-md">
+            <AlertTriangle className="w-5 h-5 text-white animate-pulse" />
+            Loja fechada no momento. Os pedidos estão temporariamente suspensos.
+          </div>
+        )}
 
         {(bakerySettings.banner_url || bakerySettings.banner_mobile_url) ? (
 
@@ -1630,6 +1673,7 @@ const CatalogoPublico = () => {
                 <Button
                   className="w-full"
                   disabled={
+                    !storeIsOpen ||
                     (
                       viewingProduct.sizes?.some(s => Number(s.price) > 0) &&
                       !selectedSize
@@ -1637,12 +1681,10 @@ const CatalogoPublico = () => {
                     ||
                     (viewingProduct.variations?.some(v => !selectedVariations[v.name]))
                   }
-
                   onClick={addToCartWithAdditionais}
                 >
-
                   <ShoppingCart className="w-4 h-4 mr-2" />
-                  Adicionar ao orçamento
+                  {storeIsOpen ? 'Adicionar ao orçamento' : 'Loja fechada'}
                 </Button>
 
               </div>
@@ -1876,6 +1918,7 @@ const CatalogoPublico = () => {
 
                 <Button
                   className="w-full"
+                  disabled={!storeIsOpen || cart.length === 0}
                   onClick={() => {
                     if (bakerySettings.vende_cnpj) {
                       handleSendToWhatsApp()
@@ -1891,7 +1934,7 @@ const CatalogoPublico = () => {
                   }}
                 >
                   <ShoppingCart className="w-4 h-4 mr-2" />
-                  {bakerySettings.vende_cnpj ? 'Enviar pelo WhatsApp' : 'Finalizar pedido'}
+                  {!storeIsOpen ? 'Loja fechada' : (bakerySettings.vende_cnpj ? 'Enviar pelo WhatsApp' : 'Finalizar pedido')}
                 </Button>
 
 
