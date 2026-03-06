@@ -11,6 +11,7 @@ import { Store, User, MapPin, Phone, FileText, Upload, X, Image as ImageIcon } f
 import { supabase } from '@/integrations/supabase/client'
 import { useAuth } from '@/components/auth/AuthProvider'
 import { showSuccess, showError } from '@/utils/toast'
+import { optimizeImage } from '@/utils/image-optimization'
 
 interface BakerySettings {
   id?: string
@@ -112,7 +113,7 @@ const Configuracoes = () => {
     }
   }
 
-  const handleLogoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleLogoSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
 
@@ -121,16 +122,19 @@ const Configuracoes = () => {
       return
     }
 
-    if (file.size > 2 * 1024 * 1024) {
-      showError('A imagem deve ter no máximo 2MB')
-      return
+    setLoading(true)
+    try {
+      const optimized = await optimizeImage(file, 512, 512, 0.8)
+      setLogoFile(optimized)
+      setLogoPreview(URL.createObjectURL(optimized))
+    } catch (err) {
+      showError('Erro ao processar imagem')
+    } finally {
+      setLoading(false)
     }
-
-    setLogoFile(file)
-    setLogoPreview(URL.createObjectURL(file))
   }
 
-  const handleBannerSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleBannerSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
 
@@ -139,16 +143,19 @@ const Configuracoes = () => {
       return
     }
 
-    if (file.size > 4 * 1024 * 1024) {
-      showError('O banner deve ter no máximo 4MB')
-      return
+    setLoading(true)
+    try {
+      const optimized = await optimizeImage(file, 1920, 1080, 0.8)
+      setBannerFile(optimized)
+      setBannerPreview(URL.createObjectURL(optimized))
+    } catch (err) {
+      showError('Erro ao processar imagem')
+    } finally {
+      setLoading(false)
     }
-
-    setBannerFile(file)
-    setBannerPreview(URL.createObjectURL(file))
   }
 
-  const handleBannerMobileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleBannerMobileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
 
@@ -157,13 +164,16 @@ const Configuracoes = () => {
       return
     }
 
-    if (file.size > 4 * 1024 * 1024) {
-      showError('O banner mobile deve ter no máximo 4MB')
-      return
+    setLoading(true)
+    try {
+      const optimized = await optimizeImage(file, 1080, 1920, 0.8)
+      setBannerMobileFile(optimized)
+      setBannerMobilePreview(URL.createObjectURL(optimized))
+    } catch (err) {
+      showError('Erro ao processar imagem')
+    } finally {
+      setLoading(false)
     }
-
-    setBannerMobileFile(file)
-    setBannerMobilePreview(URL.createObjectURL(file))
   }
 
   const handleRemoveLogo = () => {

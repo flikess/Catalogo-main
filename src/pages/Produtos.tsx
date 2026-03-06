@@ -16,6 +16,7 @@ import { Plus, Search, Edit, Trash2, Eye, EyeOff, Upload, X, Image as ImageIcon,
 import { supabase } from '@/integrations/supabase/client'
 import { useAuth } from '@/components/auth/AuthProvider'
 import { showSuccess, showError } from '@/utils/toast'
+import { optimizeImage } from '@/utils/image-optimization'
 
 interface Additional {
   id?: string
@@ -253,7 +254,7 @@ const Produtos = () => {
     } catch { }
   }
 
-  const handleFileSelectMulti = (event: React.ChangeEvent<HTMLInputElement>, index: number) => {
+  const handleFileSelectMulti = async (event: React.ChangeEvent<HTMLInputElement>, index: number) => {
     const file = event.target.files?.[0]
     if (!file) return
 
@@ -262,17 +263,26 @@ const Produtos = () => {
       return
     }
 
-    const newFiles = [...selectedFiles]
-    newFiles[index] = file
-    setSelectedFiles(newFiles)
+    setUploading(true)
+    try {
+      const optimized = await optimizeImage(file, 1080, 1080, 0.8)
 
-    const reader = new FileReader()
-    reader.onload = e => {
-      const newPreviews = [...imagePreviews]
-      newPreviews[index] = e.target?.result as string
-      setImagePreviews(newPreviews)
+      const newFiles = [...selectedFiles]
+      newFiles[index] = optimized
+      setSelectedFiles(newFiles)
+
+      const reader = new FileReader()
+      reader.onload = e => {
+        const newPreviews = [...imagePreviews]
+        newPreviews[index] = e.target?.result as string
+        setImagePreviews(newPreviews)
+      }
+      reader.readAsDataURL(optimized)
+    } catch (err) {
+      showError('Erro ao processar imagem')
+    } finally {
+      setUploading(false)
     }
-    reader.readAsDataURL(file)
   }
 
   const clearImageMulti = (index: number) => {
@@ -558,7 +568,7 @@ const Produtos = () => {
     }
   }
 
-  const handleCategoryFileSelect = (event: React.ChangeEvent<HTMLInputElement>, type: 'desktop' | 'mobile') => {
+  const handleCategoryFileSelect = async (event: React.ChangeEvent<HTMLInputElement>, type: 'desktop' | 'mobile') => {
     const file = event.target.files?.[0]
     if (!file) return
 
@@ -567,16 +577,27 @@ const Produtos = () => {
       return
     }
 
-    if (type === 'desktop') {
-      setCategoryBannerDesktop(file)
-      const reader = new FileReader()
-      reader.onload = e => setCategoryBannerDesktopPreview(e.target?.result as string)
-      reader.readAsDataURL(file)
-    } else {
-      setCategoryBannerMobile(file)
-      const reader = new FileReader()
-      reader.onload = e => setCategoryBannerMobilePreview(e.target?.result as string)
-      reader.readAsDataURL(file)
+    setUploading(true)
+    try {
+      const maxWidth = type === 'desktop' ? 1920 : 1080
+      const maxHeight = type === 'desktop' ? 1080 : 1920
+      const optimized = await optimizeImage(file, maxWidth, maxHeight, 0.8)
+
+      if (type === 'desktop') {
+        setCategoryBannerDesktop(optimized)
+        const reader = new FileReader()
+        reader.onload = e => setCategoryBannerDesktopPreview(e.target?.result as string)
+        reader.readAsDataURL(optimized)
+      } else {
+        setCategoryBannerMobile(optimized)
+        const reader = new FileReader()
+        reader.onload = e => setCategoryBannerMobilePreview(e.target?.result as string)
+        reader.readAsDataURL(optimized)
+      }
+    } catch (err) {
+      showError('Erro ao processar imagem')
+    } finally {
+      setUploading(false)
     }
   }
 
