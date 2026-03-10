@@ -11,7 +11,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { ResponsiveTable } from '@/components/ui/responsive-table';
 import { Combobox } from '@/components/ui/combobox';
-import { Plus, Search, Edit, Trash2, Eye, Calendar, User, Package, Download, FileText, Printer, MoreVertical, X, ShoppingCart, MapPin, Truck, CreditCard } from 'lucide-react';
+import { Plus, Search, Edit, Trash2, Eye, Calendar, User, Package, Download, FileText, Printer, MoreVertical, X, ShoppingCart, MapPin, Truck, CreditCard, AlertCircle } from 'lucide-react';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/components/auth/AuthProvider';
@@ -73,6 +74,15 @@ interface Product {
   adicionais?: Additional[];
   sizes?: SizeOption[];
   variations?: VariationGroup[];
+  track_stock: boolean;
+  stock_quantity: number;
+  recipe?: RecipeItem[];
+}
+
+interface RecipeItem {
+  stock_item_id: string;
+  quantity: number;
+  unit: string;
 }
 
 // E adicione esta interface antes da Product:
@@ -169,6 +179,8 @@ const Pedidos = () => {
   const [selectedProductSubCategoryId, setSelectedProductSubCategoryId] = useState<string>('all');
   const [productSearch, setProductSearch] = useState('');
   const [clientType, setClientType] = useState<'registered' | 'guest'>('registered');
+  const [isProductionPanelOpen, setIsProductionPanelOpen] = useState(false);
+  const [businessType, setBusinessType] = useState<string>('confeitaria');
 
   useEffect(() => {
     fetchOrders();
@@ -280,7 +292,7 @@ const Pedidos = () => {
       const { data, error } = await supabase
         .from('products')
         .select(`
-          id, name, price, adicionais, sizes, variations, categoria_id, sub_categoria_id,
+          id, name, price, adicionais, sizes, variations, categoria_id, sub_categoria_id, track_stock, stock_quantity, recipe,
           categorias_produtos (nome),
           subcategorias_produtos (nome)
         `)
@@ -289,11 +301,14 @@ const Pedidos = () => {
 
       if (error) throw error;
 
-      const formatted = (data || []).map(p => ({
+      const formatted: Product[] = (data || []).map(p => ({
         ...p,
+        track_stock: p.track_stock || false,
+        stock_quantity: p.stock_quantity || 0,
+        recipe: p.recipe || [],
         categorias_produtos: Array.isArray(p.categorias_produtos) ? p.categorias_produtos[0] : p.categorias_produtos,
         subcategorias_produtos: Array.isArray(p.subcategorias_produtos) ? p.subcategorias_produtos[0] : p.subcategorias_produtos,
-      }));
+      })) as any[];
 
       setProducts(formatted);
     } catch (error) {
@@ -615,22 +630,61 @@ const Pedidos = () => {
         // Buscar dados atuais do produto (estoque e se controla)
         const { data: product, error: prodError } = await supabase
           .from('products')
-          .select('track_stock, stock_quantity')
+          .select('track_stock, stock_quantity, recipe')
           .eq('id', item.product_id)
           .single();
 
-        if (prodError || !product || !product.track_stock) continue;
+        if (prodError || !product) continue;
 
-        const currentStock = product.stock_quantity || 0;
-        const quantity = item.quantity;
-        const newStock = type === 'deduct'
-          ? currentStock - quantity
-          : currentStock + quantity;
+        // A) Redução de estoque do PRODUTO (Estoque Final)
+        if (product.track_stock) {
+          const currentStock = product.stock_quantity || 0;
+          const quantity = item.quantity;
+          const newStock = type === 'deduct'
+            ? currentStock - quantity
+            : currentStock + quantity;
 
-        await supabase
-          .from('products')
-          .update({ stock_quantity: Math.max(0, newStock) })
-          .eq('id', item.product_id);
+          await supabase
+            .from('products')
+            .update({ stock_quantity: Math.max(0, newStock) })
+            .eq('id', item.product_id);
+        }
+
+        // B) Redução de INGREDIENTES (Receita)
+        if (product.recipe && Array.isArray(product.recipe) && product.recipe.length > 0) {
+          for (const recipeItem of product.recipe) {
+            const { data: stockItem, error: stError } = await supabase
+              .from('stock_items')
+              .select('quantity')
+              .eq('id', recipeItem.stock_item_id)
+              .single();
+
+            if (stError || !stockItem) continue;
+
+            const quantityToMove = recipeItem.quantity * item.quantity;
+            const newStockItemQuantity = type === 'deduct'
+              ? stockItem.quantity - quantityToMove
+              : stockItem.quantity + quantityToMove;
+
+            await supabase
+              .from('stock_items')
+              .update({
+                quantity: Math.max(0, newStockItemQuantity),
+                updated_at: new Date().toISOString()
+              })
+              .eq('id', recipeItem.stock_item_id);
+
+            // Registrar movimentação de ingrediente
+            await supabase
+              .from('stock_movements')
+              .insert({
+                stock_item_id: recipeItem.stock_item_id,
+                type: type === 'deduct' ? 'saida' : 'entrada',
+                quantity: quantityToMove,
+                reason: type === 'deduct' ? `Venda Pedido #${orderId.slice(0, 8)}` : `Cancelamento Pedido #${orderId.slice(0, 8)}`,
+              });
+          }
+        }
       }
     } catch (error) {
       console.error('Erro ao processar movimentação de estoque:', error);
@@ -1110,6 +1164,18 @@ const Pedidos = () => {
               </DropdownMenuContent>
             </DropdownMenu>
 
+            {businessType === 'confeitaria' && (
+              <Button
+                onClick={() => setIsProductionPanelOpen(true)}
+                variant="outline"
+                size="sm"
+                className="bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-100"
+              >
+                <Package className="w-4 h-4 mr-2" />
+                Painel de Produção
+              </Button>
+            )}
+
             {/* Add Order Button */}
             <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
               <DialogTrigger asChild>
@@ -1119,7 +1185,7 @@ const Pedidos = () => {
                   <span className="sm:hidden">Novo</span>
                 </Button>
               </DialogTrigger>
-              <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+              <DialogContent className="sm:max-w-4xl w-[95vw] max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                   <DialogTitle>
                     {editingOrder ? 'Editar Pedido' : 'Novo Pedido'}
@@ -1219,7 +1285,7 @@ const Pedidos = () => {
                             </div>
                           </div>
 
-                          <div className="grid grid-cols-2 gap-2">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                             <div className="space-y-1">
                               <Label className="text-xs">Categoria</Label>
                               <Select value={selectedProductCategoryId} onValueChange={(v) => {
@@ -1674,8 +1740,91 @@ const Pedidos = () => {
           </CardContent>
         </Card>
       </div>
-    </Layout>
-  )
-}
 
-export default Pedidos
+      {/* Painel de Produção Diária Modal */}
+      <Dialog open={isProductionPanelOpen} onOpenChange={setIsProductionPanelOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-orange-700">
+              <Package className="w-6 h-6" />
+              Consolidado de Produção Pendente
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="py-4 space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Estes são todos os itens de pedidos <strong>Confirmados</strong> ou <strong>Em Produção</strong> agrupados para facilitar a sua fornada.
+            </p>
+
+            <div className="border rounded-lg overflow-hidden">
+              <Table>
+                <TableHeader className="bg-gray-50">
+                  <TableRow>
+                    <TableHead className="font-bold">Produto</TableHead>
+                    <TableHead className="text-center font-bold">Total a Produzir</TableHead>
+                    <TableHead className="text-right font-bold">Pedidos</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {(() => {
+                    const production: Record<string, { name: string, total: number, orderIds: string[] }> = {}
+                    orders.filter(o => ['confirmado', 'producao'].includes(o.status))
+                      .forEach(o => {
+                        o.order_items?.forEach(oi => {
+                          const key = oi.product_id || oi.product_name
+                          if (!production[key]) {
+                            production[key] = { name: oi.product_name, total: 0, orderIds: [] }
+                          }
+                          production[key].total += oi.quantity
+                          if (!production[key].orderIds.includes(o.id.slice(-4))) {
+                            production[key].orderIds.push(o.id.slice(-4))
+                          }
+                        })
+                      })
+
+                    const items = Object.values(production)
+                    if (items.length === 0) {
+                      return (
+                        <TableRow>
+                          <TableCell colSpan={3} className="text-center py-8 text-muted-foreground italic">
+                            Nenhum item pendente para produção no momento.
+                          </TableCell>
+                        </TableRow>
+                      )
+                    }
+
+                    return items.map((item, idx) => (
+                      <TableRow key={idx}>
+                        <TableCell className="font-medium">{item.name}</TableCell>
+                        <TableCell className="text-center">
+                          <Badge variant="secondary" className="bg-orange-100 text-orange-800 text-lg px-3">
+                            {item.total} un
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right text-xs text-muted-foreground">
+                          {item.orderIds.join(', ')}
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  })()}
+                </TableBody>
+              </Table>
+            </div>
+
+            <div className="flex justify-between items-center bg-blue-50 p-4 rounded-lg border border-blue-100">
+              <div className="flex items-center gap-2 text-blue-800">
+                <AlertCircle className="w-5 h-5" />
+                <span className="text-sm font-medium">Use este painel para organizar as tarefas da cozinha.</span>
+              </div>
+              <Button onClick={() => window.print()} variant="ghost" size="sm">
+                <Printer className="w-4 h-4 mr-2" /> Imprimir Lista
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </Layout>
+  );
+};
+
+export default Pedidos;

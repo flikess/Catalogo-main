@@ -6,7 +6,7 @@ const corsHeaders = {
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-serve(async (req) => {
+serve(async (req: Request) => {
     // Tratando CORS
     if (req.method === 'OPTIONS') {
         return new Response('ok', { headers: corsHeaders })
@@ -18,7 +18,7 @@ serve(async (req) => {
             Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
         )
 
-        const { email, password, full_name, business_name, phone } = await req.json()
+        const { email, password, full_name, business_name, phone, business_type } = await req.json()
 
         // 1. Calcular vencimento de 2 dias no servidor
         const vencimento = new Date()
@@ -34,6 +34,7 @@ serve(async (req) => {
                 full_name,
                 business_name,
                 phone, // <-- Salvando o WhatsApp no metadado do Auth
+                business_type,
                 plano: 'Trial',
                 vencimento: vencimentoIso,
                 role: 'user'
@@ -78,6 +79,7 @@ serve(async (req) => {
                 bakery_name: business_name,
                 email: email,
                 phone: phone, // <-- Salvando o WhatsApp na configuração da loja
+                business_type,
                 created_at: new Date().toISOString()
             })
 
@@ -88,7 +90,7 @@ serve(async (req) => {
             { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
         )
 
-    } catch (error) {
+    } catch (error: any) {
         let errorMessage = error.message
 
         if (

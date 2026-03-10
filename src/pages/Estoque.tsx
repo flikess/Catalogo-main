@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { ResponsiveTable } from '@/components/ui/responsive-table'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Plus, Search, Edit, Trash2, AlertTriangle, Package, TrendingUp, TrendingDown, Tag, List, ShoppingBag } from 'lucide-react'
+import { Plus, Search, Edit, Trash2, AlertTriangle, Package, TrendingUp, TrendingDown, Tag, List, ShoppingBag, ClipboardList, CheckCircle2 } from 'lucide-react'
 import { supabase } from '@/integrations/supabase/client'
 import { useAuth } from '@/components/auth/AuthProvider'
 import { showSuccess, showError } from '@/utils/toast'
@@ -34,7 +34,7 @@ interface StockItem {
 interface StockMovement {
   id: string
   stock_item_id: string
-  type: 'entrada' | 'saida'
+  type: 'entrada' | 'saida' | 'perda'
   quantity: number
   reason?: string
   notes?: string
@@ -46,6 +46,9 @@ interface Product {
   name: string
   track_stock: boolean
   stock_quantity: number
+  recipe?: any[]
+  recipe_yield?: number
+  price?: number
   categorias_produtos?: {
     nome: string
   }
@@ -75,6 +78,7 @@ const Estoque = () => {
   const [stockCategories, setStockCategories] = useState<StockCategory[]>([])
   const [products, setProducts] = useState<Product[]>([])
   const [movements, setMovements] = useState<StockMovement[]>([])
+  const [businessType, setBusinessType] = useState<string>('geral')
   const [loading, setLoading] = useState(true)
   const [loadingCategories, setLoadingCategories] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
@@ -100,18 +104,62 @@ const Estoque = () => {
     description: ''
   })
   const [movementData, setMovementData] = useState({
-    type: 'entrada' as 'entrada' | 'saida',
+    type: 'entrada' as 'entrada' | 'saida' | 'perda',
     quantity: '',
     reason: '',
     notes: ''
   })
+  const [isShoppingListOpen, setIsShoppingListOpen] = useState(false)
+  const [orderItemsForShopping, setOrderItemsForShopping] = useState<any[]>([])
 
   useEffect(() => {
     fetchStockItems()
     fetchStockCategories()
     fetchProducts()
     fetchMovements()
+    fetchShopSettings()
+    fetchOrderItemsForShopping()
   }, [])
+
+  const fetchShopSettings = async () => {
+    if (!user) return
+    try {
+      const { data, error } = await supabase
+        .from('bakery_settings')
+        .select('business_type')
+        .eq('id', user.id)
+        .single()
+
+      if (data?.business_type) {
+        setBusinessType(data.business_type)
+      }
+    } catch (err) {
+      console.error('Error fetching shop settings:', err)
+    }
+  }
+
+  const fetchOrderItemsForShopping = async () => {
+    if (!user) return
+    try {
+      const { data, error } = await supabase
+        .from('order_items')
+        .select(`
+          product_id,
+          quantity,
+          orders!inner (
+            status,
+            user_id
+          )
+        `)
+        .eq('orders.user_id', user.id)
+        .in('orders.status', ['confirmado', 'producao'])
+
+      if (error) throw error
+      setOrderItemsForShopping(data || [])
+    } catch (err) {
+      console.error('Error fetching order items for shopping:', err)
+    }
+  }
 
   const fetchStockItems = async () => {
     try {
@@ -164,6 +212,9 @@ const Estoque = () => {
           name,
           track_stock,
           stock_quantity,
+          recipe,
+          recipe_yield,
+          price,
           categorias_produtos (
             nome
           )
@@ -209,7 +260,7 @@ const Estoque = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    if (!formData.category_id) {
+    if (businessType !== 'confeitaria' && !formData.category_id) {
       showError('Por favor, selecione uma categoria')
       return
     }
@@ -223,7 +274,7 @@ const Estoque = () => {
         minimum_stock: parseFloat(formData.minimum_stock) || 0,
         cost_per_unit: parseFloat(formData.cost_per_unit) || 0,
         supplier: formData.supplier || null,
-        category_id: formData.category_id
+        category_id: businessType === 'confeitaria' ? null : formData.category_id
       }
 
       if (editingItem) {
@@ -236,7 +287,33 @@ const Estoque = () => {
           .eq('id', editingItem.id)
 
         if (error) throw error
-        showSuccess('Item atualizado com sucesso!')
+
+        // --- NOVO: ALERTA DE PREÇO ---
+        if (editingItem && parseFloat(formData.cost_per_unit) !== editingItem.cost_per_unit && businessType === 'confeitaria') {
+          const impactedProducts = products.filter(p =>
+            p.recipe?.some((r: any) => r.stock_item_id === editingItem.id)
+          )
+
+          if (impactedProducts.length > 0) {
+            const oldCost = editingItem.cost_per_unit
+            const newCost = parseFloat(formData.cost_per_unit)
+
+            impactedProducts.forEach(p => {
+              const recipeItem = p.recipe?.find((r: any) => r.stock_item_id === editingItem.id)
+              const impactPerRecipe = (newCost - oldCost) * (recipeItem?.quantity || 0)
+              const unitImpact = impactPerRecipe / (p.recipe_yield || 1)
+
+              const newUnitCost = (p.price || 0) * 0.7 // Mocking cost for summary if actual cost unknown
+              // Actually we can calculate precisely but a toast is simpler
+            })
+
+            showSuccess(`Item atualizado! Esse custo afeta ${impactedProducts.length} produtos. Verifique suas margens na aba de Produtos.`)
+          } else {
+            showSuccess('Item atualizado com sucesso!')
+          }
+        } else {
+          showSuccess('Item atualizado com sucesso!')
+        }
       } else {
         const { error } = await supabase
           .from('stock_items')
@@ -329,7 +406,7 @@ const Estoque = () => {
       // Atualizar quantidade em estoque
       const newQuantity = movementData.type === 'entrada'
         ? selectedItem.quantity + quantity
-        : selectedItem.quantity - quantity
+        : selectedItem.quantity - quantity // Ambos 'saida' e 'perda' subtraem do estoque
 
       const { error: updateError } = await supabase
         .from('stock_items')
@@ -441,7 +518,7 @@ const Estoque = () => {
 
   const resetMovementForm = () => {
     setMovementData({
-      type: 'entrada',
+      type: 'entrada' as 'entrada' | 'saida' | 'perda',
       quantity: '',
       reason: '',
       notes: ''
@@ -449,7 +526,8 @@ const Estoque = () => {
   }
 
   const filteredItems = stockItems.filter(item =>
-    item.stock_categories?.name.toLowerCase().includes(searchTerm.toLowerCase())
+    item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    item.stock_categories?.name?.toLowerCase().includes(searchTerm.toLowerCase())
   )
 
   const filteredProducts = products.filter(product =>
@@ -485,14 +563,14 @@ const Estoque = () => {
   const tableColumns = [
     {
       key: 'name',
-      label: 'Item',
+      label: businessType === 'confeitaria' ? 'Ingrediente' : 'Item',
       render: (value: string, row: StockItem) => (
         <div>
           <div className="font-medium">{value}</div>
           {row.description && (
             <div className="text-sm text-muted-foreground">{row.description}</div>
           )}
-          {row.stock_categories && (
+          {row.stock_categories && businessType !== 'confeitaria' && (
             <Badge variant="outline" className="mt-1">
               {row.stock_categories.name}
             </Badge>
@@ -520,6 +598,29 @@ const Estoque = () => {
       render: (_: any, row: StockItem) => {
         const status = getStockStatus(row)
         return <Badge className={status.color}>{status.label}</Badge>
+      }
+    },
+    {
+      key: 'reserved',
+      label: 'Reservado',
+      hideOnMobile: true,
+      render: (_: any, row: StockItem) => {
+        if (businessType !== 'confeitaria') return null
+        let reserved = 0
+        orderItemsForShopping.forEach((oi: any) => {
+          const p = products.find(prod => prod.id === oi.product_id)
+          if (p && p.recipe) {
+            const rItem = p.recipe.find((ri: any) => ri.stock_item_id === row.id)
+            if (rItem) {
+              reserved += (oi.quantity * rItem.quantity) / (p.recipe_yield || 1)
+            }
+          }
+        })
+        return (
+          <span className="font-semibold text-orange-600">
+            {reserved > 0 ? reserved.toFixed(2) : '0'} {row.unit}
+          </span>
+        )
       }
     },
     {
@@ -572,118 +673,146 @@ const Estoque = () => {
     <Layout>
       <div className="space-y-6">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <h1 className="text-2xl font-bold text-gray-900">Controle de Estoque</h1>
+          <h1 className="text-2xl font-bold text-gray-900">
+            {businessType === 'confeitaria' ? 'Gestão de Ingredientes' : 'Controle de Estoque'}
+          </h1>
           <div className="flex flex-wrap gap-2 w-full sm:w-auto">
             {/* Botão Listar Categorias */}
-            <Button
-              variant="outline"
-              onClick={() => setIsCategoriesListOpen(true)}
-            >
-              <List className="w-4 h-4 mr-2" />
-              Categorias
-            </Button>
+            {businessType !== 'confeitaria' && (
+              <Button
+                variant="outline"
+                onClick={() => setIsCategoriesListOpen(true)}
+              >
+                <List className="w-4 h-4 mr-2" />
+                Categorias
+              </Button>
+            )}
 
             {/* Botão Nova Categoria */}
-            <Dialog open={isCategoryDialogOpen} onOpenChange={setIsCategoryDialogOpen}>
-              <DialogTrigger asChild>
-                <Button variant="outline" onClick={() => {
-                  setEditingCategory(null)
-                  setCategoryFormData({ name: '', description: '' })
-                }}>
-                  <Tag className="w-4 h-4 mr-2" />
-                  Nova Categoria
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="max-w-md">
-                <DialogHeader>
-                  <DialogTitle>
-                    {editingCategory ? 'Editar Categoria' : 'Nova Categoria de Estoque'}
-                  </DialogTitle>
-                </DialogHeader>
-                <form onSubmit={handleCategorySubmit} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="category_name">Nome da Categoria *</Label>
-                    <Input
-                      id="category_name"
-                      value={categoryFormData.name}
-                      onChange={(e) => setCategoryFormData({ ...categoryFormData, name: e.target.value })}
-                      placeholder="Ex: Ingredientes Especiais"
-                      required
-                    />
-                  </div>
+            {businessType !== 'confeitaria' && (
+              <Dialog open={isCategoryDialogOpen} onOpenChange={setIsCategoryDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button variant="outline" onClick={() => {
+                    setEditingCategory(null)
+                    setCategoryFormData({ name: '', description: '' })
+                  }}>
+                    <Tag className="w-4 h-4 mr-2" />
+                    Nova Categoria
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-[500px] w-[95vw]">
+                  <DialogHeader>
+                    <DialogTitle>
+                      {editingCategory ? 'Editar Categoria' : 'Nova Categoria'}
+                    </DialogTitle>
+                  </DialogHeader>
+                  <form onSubmit={handleCategorySubmit} className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="cat-name">Nome *</Label>
+                      <Input
+                        id="cat-name"
+                        value={categoryFormData.name}
+                        onChange={(e) => setCategoryFormData({ ...categoryFormData, name: e.target.value })}
+                        placeholder="Ex: Embalagens, Matéria Prima"
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="cat-desc">Descrição</Label>
+                      <Textarea
+                        id="cat-desc"
+                        value={categoryFormData.description}
+                        onChange={(e) => setCategoryFormData({ ...categoryFormData, description: e.target.value })}
+                        placeholder="Descrição opcional"
+                        rows={2}
+                      />
+                    </div>
+                    <DialogFooter>
+                      <Button type="submit">
+                        {editingCategory ? 'Atualizar' : 'Criar'}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => setIsCategoryDialogOpen(false)}
+                      >
+                        Cancelar
+                      </Button>
+                    </DialogFooter>
+                  </form>
+                </DialogContent>
+              </Dialog>
+            )}
 
-                  <div className="space-y-2">
-                    <Label htmlFor="category_description">Descrição</Label>
-                    <Textarea
-                      id="category_description"
-                      value={categoryFormData.description}
-                      onChange={(e) => setCategoryFormData({ ...categoryFormData, description: e.target.value })}
-                      placeholder="Descrição da categoria (opcional)"
-                      rows={2}
-                    />
-                  </div>
-
-                  <DialogFooter>
-                    <Button type="submit">
-                      {editingCategory ? 'Atualizar' : 'Criar'}
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => setIsCategoryDialogOpen(false)}
-                    >
-                      Cancelar
-                    </Button>
-                  </DialogFooter>
-                </form>
-              </DialogContent>
-            </Dialog>
+            {/* Botão Lista de Compras (Somente Confeitaria) */}
+            {businessType === 'confeitaria' && (
+              <Button
+                variant="outline"
+                className="w-full sm:w-auto border-orange-200 text-orange-700 hover:bg-orange-50"
+                onClick={() => {
+                  fetchOrderItemsForShopping()
+                  setIsShoppingListOpen(true)
+                }}
+              >
+                <ClipboardList className="w-4 h-4 mr-2" />
+                Lista de Compras
+              </Button>
+            )}
 
             {/* Botão Novo Item */}
             <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
               <DialogTrigger asChild>
-                <Button onClick={() => { resetForm(); setEditingItem(null) }}>
+                <Button
+                  onClick={() => { resetForm(); setEditingItem(null) }}
+                  className="w-full sm:w-auto"
+                >
                   <Plus className="w-4 h-4 mr-2" />
-                  Novo Item
+                  {businessType === 'confeitaria' ? 'Novo Ingrediente' : 'Novo Item'}
                 </Button>
               </DialogTrigger>
-              <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+              <DialogContent className="sm:max-w-[500px] w-[95vw] max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                   <DialogTitle>
-                    {editingItem ? 'Editar Item' : 'Novo Item'}
+                    {editingItem
+                      ? (businessType === 'confeitaria' ? 'Editar Ingrediente' : 'Editar Item')
+                      : (businessType === 'confeitaria' ? 'Novo Ingrediente' : 'Novo Item')}
                   </DialogTitle>
                 </DialogHeader>
                 <form onSubmit={handleSubmit} className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="name">Nome *</Label>
+                    <Label htmlFor="name">
+                      {businessType === 'confeitaria' ? 'Nome do Ingrediente *' : 'Nome *'}
+                    </Label>
                     <Input
                       id="name"
                       value={formData.name}
                       onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                      placeholder="Nome do item"
+                      placeholder={businessType === 'confeitaria' ? 'Ex: Farinha de Trigo' : 'Nome do item'}
                       required
                     />
                   </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="category_id">Categoria *</Label>
-                    <Select
-                      value={formData.category_id}
-                      onValueChange={(value) => setFormData({ ...formData, category_id: value })}
-                      required
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Selecione uma categoria..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {stockCategories.map(category => (
-                          <SelectItem key={category.id} value={category.id}>
-                            {category.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                  {businessType !== 'confeitaria' && (
+                    <div className="space-y-2">
+                      <Label htmlFor="category_id">Categoria *</Label>
+                      <Select
+                        value={formData.category_id}
+                        onValueChange={(value) => setFormData({ ...formData, category_id: value })}
+                        required
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecione uma categoria..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {stockCategories.map(category => (
+                            <SelectItem key={category.id} value={category.id}>
+                              {category.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
 
                   <div className="space-y-2">
                     <Label htmlFor="description">Descrição</Label>
@@ -696,7 +825,7 @@ const Estoque = () => {
                     />
                   </div>
 
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="quantity">Quantidade *</Label>
                       <Input
@@ -725,7 +854,7 @@ const Estoque = () => {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     <div className="space-y-2">
                       <Label htmlFor="minimum_stock">Estoque Mínimo</Label>
                       <Input
@@ -783,7 +912,9 @@ const Estoque = () => {
         <Dialog open={isCategoriesListOpen} onOpenChange={setIsCategoriesListOpen}>
           <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle>Categorias de Estoque</DialogTitle>
+              <DialogTitle>
+                {businessType === 'confeitaria' ? 'Categorias de Ingredientes' : 'Categorias de Estoque'}
+              </DialogTitle>
             </DialogHeader>
 
             {loadingCategories ? (
@@ -853,42 +984,44 @@ const Estoque = () => {
         </Dialog>
 
         {/* Alertas de estoque baixo */}
-        {(lowStockItems.length > 0 || lowStockProducts.length > 0) && (
-          <Card className="border-red-200 bg-red-50">
-            <CardHeader>
-              <CardTitle className="flex items-center text-red-800">
-                <AlertTriangle className="w-5 h-5 mr-2" />
-                Alertas de Estoque Baixo ({lowStockItems.length + lowStockProducts.length})
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                {lowStockItems.map(item => (
-                  <div key={item.id} className="flex justify-between items-center p-2 bg-white rounded border shadow-sm">
-                    <div className="flex items-center">
-                      <Package className="w-4 h-4 mr-2 text-muted-foreground" />
-                      <span className="font-medium">{item.name}</span>
+        {
+          (lowStockItems.length > 0 || lowStockProducts.length > 0) && (
+            <Card className="border-red-200 bg-red-50">
+              <CardHeader>
+                <CardTitle className="flex items-center text-red-800">
+                  <AlertTriangle className="w-5 h-5 mr-2" />
+                  Alertas de Estoque Baixo ({lowStockItems.length + lowStockProducts.length})
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  {lowStockItems.map(item => (
+                    <div key={item.id} className="flex justify-between items-center p-2 bg-white rounded border shadow-sm">
+                      <div className="flex items-center">
+                        <Package className="w-4 h-4 mr-2 text-muted-foreground" />
+                        <span className="font-medium">{item.name}</span>
+                      </div>
+                      <span className="text-red-600 font-semibold">
+                        {item.quantity} {item.unit} (mín: {item.minimum_stock})
+                      </span>
                     </div>
-                    <span className="text-red-600 font-semibold">
-                      {item.quantity} {item.unit} (mín: {item.minimum_stock})
-                    </span>
-                  </div>
-                ))}
-                {lowStockProducts.map(product => (
-                  <div key={product.id} className="flex justify-between items-center p-2 bg-white rounded border shadow-sm">
-                    <div className="flex items-center">
-                      <ShoppingBag className="w-4 h-4 mr-2 text-primary" />
-                      <span className="font-medium">{product.name} (Produto Final)</span>
+                  ))}
+                  {lowStockProducts.map(product => (
+                    <div key={product.id} className="flex justify-between items-center p-2 bg-white rounded border shadow-sm">
+                      <div className="flex items-center">
+                        <ShoppingBag className="w-4 h-4 mr-2 text-primary" />
+                        <span className="font-medium">{product.name} (Produto Final)</span>
+                      </div>
+                      <span className="text-red-600 font-semibold">
+                        {product.stock_quantity} un (crítico: 5)
+                      </span>
                     </div>
-                    <span className="text-red-600 font-semibold">
-                      {product.stock_quantity} un (crítico: 5)
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        )}
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )
+        }
 
         {/* Search */}
         <Card>
@@ -994,7 +1127,7 @@ const Estoque = () => {
             <form onSubmit={handleMovement} className="space-y-4">
               <div className="space-y-2">
                 <Label>Tipo de Movimentação</Label>
-                <Select value={movementData.type} onValueChange={(value: 'entrada' | 'saida') => setMovementData({ ...movementData, type: value })}>
+                <Select value={movementData.type} onValueChange={(value: 'entrada' | 'saida' | 'perda') => setMovementData({ ...movementData, type: value })}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
@@ -1009,6 +1142,12 @@ const Estoque = () => {
                       <div className="flex items-center">
                         <TrendingDown className="w-4 h-4 mr-2 text-red-600" />
                         Saída
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="perda">
+                      <div className="flex items-center">
+                        <AlertTriangle className="w-4 h-4 mr-2 text-orange-600" />
+                        Perda / Quebra (Desperdício)
                       </div>
                     </SelectItem>
                   </SelectContent>
@@ -1068,9 +1207,146 @@ const Estoque = () => {
             </form>
           </DialogContent>
         </Dialog>
+
+        {/* Shopping List Modal */}
+        <Dialog open={isShoppingListOpen} onOpenChange={setIsShoppingListOpen}>
+          <DialogContent className="sm:max-w-2xl w-[95vw] max-h-[90vh] overflow-y-auto font-sans">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-xl">
+                <ClipboardList className="w-5 h-5 text-orange-600" />
+                O que preciso comprar?
+              </DialogTitle>
+            </DialogHeader>
+
+            <div className="space-y-4 pt-4">
+              <div className="bg-orange-50 border border-orange-100 p-4 rounded-xl text-sm text-orange-800 shadow-sm animate-in fade-in duration-500">
+                <p className="font-semibold mb-1 flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4" /> Planejamento de Produção
+                </p>
+                Calculamos os ingredientes necessários somando todos os pedidos <strong>"Confirmados"</strong> ou <strong>"Em Preparação"</strong>.
+              </div>
+
+              <div className="rounded-xl border border-gray-100 overflow-hidden shadow-sm">
+                <Table>
+                  <TableHeader className="bg-gray-50/50">
+                    <TableRow>
+                      <TableHead className="font-bold">Ingrediente</TableHead>
+                      <TableHead className="text-center font-bold">Necessário</TableHead>
+                      <TableHead className="text-center font-bold">No Estoque</TableHead>
+                      {businessType === 'confeitaria' && <TableHead className="text-center font-bold">Reservado</TableHead>}
+                      <TableHead className="text-right font-bold">A Comprar</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {(() => {
+                      const requirements: Record<string, { id: string, name: string, unit: string, needed: number, stock: number }> = {}
+
+                      orderItemsForShopping.forEach(orderItem => {
+                        const product = products.find(p => p.id === orderItem.product_id)
+                        if (product?.recipe) {
+                          const recipe: any[] = product.recipe as any[]
+                          const yieldVal = (product as any).recipe_yield || 1
+
+                          recipe.forEach(ing => {
+                            const quantityPerUnit = ing.quantity / yieldVal
+                            const totalNeeded = quantityPerUnit * orderItem.quantity
+
+                            if (!requirements[ing.stock_item_id]) {
+                              const stockItem = stockItems.find(si => si.id === ing.stock_item_id)
+                              requirements[ing.stock_item_id] = {
+                                id: ing.stock_item_id,
+                                name: stockItem?.name || 'Item Removido',
+                                unit: stockItem?.unit || '',
+                                needed: 0,
+                                stock: stockItem?.quantity || 0
+                              }
+                            }
+                            requirements[ing.stock_item_id].needed += totalNeeded
+                          })
+                        }
+                      })
+
+                      const items = Object.values(requirements).filter(item => item.needed > 0)
+
+                      if (items.length === 0) {
+                        return (
+                          <TableRow>
+                            <TableCell colSpan={4} className="text-center py-12 text-muted-foreground italic bg-white">
+                              <div className="flex flex-col items-center gap-2">
+                                <CheckCircle2 className="w-8 h-8 text-green-200" />
+                                <p>Nenhuma necessidade pendente para os pedidos atuais.</p>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        )
+                      }
+
+                      return items.map((item, idx) => {
+                        const missing = Math.max(0, item.needed - item.stock)
+                        return (
+                          <TableRow key={idx} className="hover:bg-gray-50/50 transition-colors">
+                            <TableCell className="font-semibold text-gray-700">{item.name}</TableCell>
+                            <TableCell className="text-center text-gray-600">
+                              {item.needed.toFixed(2)} {item.unit}
+                            </TableCell>
+                            <TableCell className="text-center">
+                              <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${item.stock < item.needed ? 'bg-red-50 text-red-700 border border-red-100' : 'bg-green-50 text-green-700 border border-green-100'}`}>
+                                {item.stock.toFixed(2)} {item.unit}
+                              </span>
+                            </TableCell>
+                            {businessType === 'confeitaria' && (
+                              <TableCell className="text-center">
+                                <span className="font-semibold text-orange-600">
+                                  {(() => {
+                                    let reserved = 0
+                                    orderItemsForShopping.forEach((oi: any) => {
+                                      const p = products.find(prod => prod.id === oi.product_id)
+                                      if (p && p.recipe) {
+                                        const rItem = p.recipe.find((ri: any) => ri.stock_item_id === item.id)
+                                        if (rItem) {
+                                          reserved += (oi.quantity * rItem.quantity) / (p.recipe_yield || 1)
+                                        }
+                                      }
+                                    })
+                                    return reserved > 0 ? reserved.toFixed(2) : '0'
+                                  })()} {item.unit}
+                                </span>
+                              </TableCell>
+                            )}
+                            <TableCell className="text-right">
+                              {missing > 0 ? (
+                                <span className="font-bold text-red-600 bg-red-50 px-3 py-1 rounded-lg border border-red-100">
+                                  + {missing.toFixed(2)} {item.unit}
+                                </span>
+                              ) : (
+                                <span className="text-green-600 font-bold flex items-center justify-end gap-1">
+                                  <CheckCircle2 className="w-4 h-4" /> Pronto
+                                </span>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        )
+                      })
+                    })()}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+
+            <DialogFooter className="mt-6 gap-2">
+              <Button onClick={() => window.print()} variant="outline" className="flex-1 sm:flex-none gap-2">
+                <List className="w-4 h-4" /> Imprimir
+              </Button>
+              <Button onClick={() => setIsShoppingListOpen(false)} className="flex-1 sm:flex-none bg-orange-600 hover:bg-orange-700">
+                Entendido
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </Layout>
   )
 }
 
 export default Estoque
+

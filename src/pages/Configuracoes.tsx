@@ -12,6 +12,14 @@ import { supabase } from '@/integrations/supabase/client'
 import { useAuth } from '@/components/auth/AuthProvider'
 import { showSuccess, showError } from '@/utils/toast'
 import { optimizeImage } from '@/utils/image-optimization'
+import { BUSINESS_TYPES } from '@/utils/business-types'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 
 interface BakerySettings {
   id?: string
@@ -30,6 +38,7 @@ interface BakerySettings {
   pix_key?: string | null
   presentation_message?: string | null
   vende_cnpj?: boolean
+  business_type?: string | null
   working_hours?: Record<number, { open: string; close: string; closed: boolean }>
   updated_at?: string
 }
@@ -584,6 +593,25 @@ const Configuracoes = () => {
                       className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
                     />
                     <Label htmlFor="vende_cnpj" className="cursor-pointer font-medium">Vende para CNPJ?</Label>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Ramo do negócio</Label>
+                    <Select
+                      value={bakerySettings.business_type}
+                      onValueChange={(value) => setBakerySettings(prev => ({ ...prev, business_type: value }))}
+                    >
+                      <SelectTrigger className="w-full bg-white border-2 border-gray-100 h-10 rounded-lg focus:ring-2 focus:ring-purple-100 transition-all">
+                        <SelectValue placeholder="Selecione o ramo do seu negócio" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {BUSINESS_TYPES.map((type) => (
+                          <SelectItem key={type.id} value={type.id}>
+                            {type.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
 
                 </div>

@@ -32,6 +32,7 @@ import {
 } from 'lucide-react'
 import { supabase } from '@/integrations/supabase/client'
 import { showSuccess, showError } from '@/utils/toast'
+import { getBusinessConfig } from '@/utils/business-types'
 
 interface Additional {
   id?: string
@@ -100,6 +101,7 @@ interface BakerySettings {
   banner_mobile_url?: string
   presentation_message?: string
   vende_cnpj?: boolean
+  business_type?: string
   working_hours?: Record<number, { open: string; close: string; closed: boolean }>
 }
 
@@ -611,6 +613,8 @@ const CatalogoPublico = () => {
 
 
 
+
+  const businessConfig = getBusinessConfig(bakerySettings.business_type)
 
   const handleWhatsApp = () => {
     const message = 'Olá, gostaria de tirar uma dúvida.'
@@ -1479,7 +1483,7 @@ const CatalogoPublico = () => {
                 {hasSizes(viewingProduct) && (
                   <div className="space-y-2">
                     <h4 className="font-semibold text-sm">
-                      Tamanho
+                      {businessConfig.sizeLabel}
                     </h4>
 
                     <div className="grid grid-cols-3 gap-2">
@@ -1523,7 +1527,7 @@ const CatalogoPublico = () => {
                 {viewingProduct.variations && viewingProduct.variations.length > 0 && (
                   <div className="space-y-3">
                     <h4 className="font-semibold text-sm">
-                      Opções
+                      {businessConfig.variationLabel}
                     </h4>
 
                     {viewingProduct.variations.map((group, gIndex) => (
@@ -1577,7 +1581,7 @@ const CatalogoPublico = () => {
                 {viewingProduct.adicionais && viewingProduct.adicionais.length > 0 && (
                   <div className="space-y-2">
                     <h4 className="font-semibold text-sm">
-                      Adicionais
+                      {businessConfig.additionalLabel}
                     </h4>
 
                     <div className="space-y-2">

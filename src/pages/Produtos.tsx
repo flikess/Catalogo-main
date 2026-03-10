@@ -9,14 +9,16 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog'
 import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { ResponsiveTable } from '@/components/ui/responsive-table'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Plus, Search, Edit, Trash2, Eye, EyeOff, Upload, X, Image as ImageIcon, Tag, List, Layers } from 'lucide-react'
+import { Plus, Search, Edit, Trash2, Eye, EyeOff, Upload, X, Image as ImageIcon, Tag, List, Layers, Package, Printer, FileText, AlertCircle } from 'lucide-react'
 import { supabase } from '@/integrations/supabase/client'
 import { useAuth } from '@/components/auth/AuthProvider'
 import { showSuccess, showError } from '@/utils/toast'
 import { optimizeImage } from '@/utils/image-optimization'
+import { getBusinessConfig } from '@/utils/business-types'
 
 interface Additional {
   id?: string
@@ -37,6 +39,12 @@ interface VariationOption {
 interface VariationGroup {
   name: string
   options: VariationOption[]
+}
+
+interface RecipeItem {
+  stock_item_id: string
+  quantity: number
+  unit: string
 }
 
 interface Product {
@@ -61,6 +69,16 @@ interface Product {
   variations?: VariationGroup[]
   track_stock: boolean
   stock_quantity?: number
+  recipe?: RecipeItem[]
+  recipe_yield?: number
+  operational_cost_percent?: number
+}
+
+interface StockItem {
+  id: string
+  name: string
+  unit: string
+  cost_per_unit: number
 }
 
 
@@ -105,6 +123,8 @@ const Produtos = () => {
   const [bulkNames, setBulkNames] = useState('')
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>('all')
   const [selectedSubCategoryId, setSelectedSubCategoryId] = useState<string>('all')
+  const [businessType, setBusinessType] = useState<string>('confeitaria')
+  const [stockItems, setStockItems] = useState<StockItem[]>([])
 
   const [categoryBannerDesktop, setCategoryBannerDesktop] = useState<File | null>(null)
   const [categoryBannerMobile, setCategoryBannerMobile] = useState<File | null>(null)
@@ -124,8 +144,13 @@ const Produtos = () => {
     sizes: [] as SizeOption[],
     variations: [] as VariationGroup[],
     track_stock: false,
-    stock_quantity: '0'
+    stock_quantity: '0',
+    recipe: [] as RecipeItem[],
+    recipe_yield: '1',
+    operational_cost_percent: '10'
   })
+
+  const [shopSettings, setShopSettings] = useState<any>(null)
 
   const [categoryFormData, setCategoryFormData] = useState({
     nome: '',
@@ -141,7 +166,24 @@ const Produtos = () => {
   useEffect(() => {
     fetchProducts()
     fetchCategories()
+    fetchStockItems()
+    fetchShopSettings()
   }, [])
+
+  const fetchStockItems = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('stock_items')
+        .select('id, name, unit, cost_per_unit')
+        .eq('user_id', user?.id)
+        .order('name')
+
+      if (error) throw error
+      setStockItems(data || [])
+    } catch (error) {
+      console.error('Error fetching stock items:', error)
+    }
+  }
 
   const fetchProducts = async () => {
     try {
@@ -176,6 +218,123 @@ const Produtos = () => {
     } finally {
       setLoading(false)
     }
+  }
+
+  const fetchShopSettings = async () => {
+    if (!user) return
+    try {
+      const { data, error } = await supabase
+        .from('bakery_settings')
+        .select('*')
+        .eq('id', user.id)
+        .single()
+
+      if (data) {
+        setShopSettings(data)
+        if (data.business_type) {
+          setBusinessType(data.business_type)
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching shop settings:', err)
+    }
+  }
+
+  const importRecipe = (sourceProductId: string) => {
+    const source = products.find(p => p.id === sourceProductId)
+    if (source && source.recipe) {
+      const sourceRecipe = source.recipe as RecipeItem[]
+      setFormData(prev => ({
+        ...prev,
+        recipe: [...prev.recipe, ...sourceRecipe]
+      }))
+      showSuccess(`Importados ${sourceRecipe.length} itens de "${source.name}"`)
+    }
+  }
+
+  const printProductionRecipe = async (product: Partial<Product>) => {
+    const isEditMode = !!editingProduct
+    const currentRecipe = isEditMode ? formData.recipe : product.recipe
+    const currentYield = isEditMode ? formData.recipe_yield : (product.recipe_yield || 1)
+
+    if (!currentRecipe || currentRecipe.length === 0) {
+      showError('Este produto não possui uma receita cadastrada.')
+      return
+    }
+
+    const printWindow = window.open('', '_blank')
+    if (!printWindow) return
+
+    const recipeHtml = `
+      <html>
+      <head>
+        <title>Ficha de Produção - ${product.name}</title>
+        <style>
+          body { font-family: 'Inter', sans-serif; padding: 40px; color: #333; line-height: 1.5; }
+          .header { text-align: center; border-bottom: 2px solid #f1f5f9; padding-bottom: 20px; margin-bottom: 30px; }
+          .logo { max-width: 80px; margin-bottom: 10px; border-radius: 50%; border: 2px solid #f1f5f9; }
+          h1 { margin: 0; color: #e67e22; font-size: 28px; }
+          .yield { font-style: italic; color: #64748b; margin-top: 5px; font-weight: 500; }
+          table { width: 100%; border-collapse: collapse; margin-top: 20px; border-radius: 8px; overflow: hidden; }
+          th, td { border: 1px solid #f1f5f9; padding: 14px; text-align: left; }
+          th { background-color: #f8fafc; color: #475569; font-weight: 600; text-transform: uppercase; font-size: 12px; }
+          .steps { margin-top: 35px; border-top: 1px solid #f1f5f9; padding-top: 20px; }
+          .steps h3 { color: #1e293b; margin-bottom: 15px; }
+          .steps p { color: #475569; white-space: pre-wrap; background: #f8fafc; padding: 20px; border-radius: 8px; }
+          .footer { margin-top: 60px; font-size: 11px; color: #94a3b8; text-align: center; border-top: 1px solid #f1f5f9; padding-top: 20px; }
+          @media print {
+            .no-print { display: none; }
+            body { padding: 20px; }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          ${shopSettings?.logo_url ? `<img src="${shopSettings.logo_url}" class="logo">` : ''}
+          <h1>${product.name}</h1>
+          <div class="yield">📦 Rendimento de Referência: ${currentYield}</div>
+        </div>
+        
+        <h3>🥣 Ingredientes Disponíveis</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>Ingrediente</th>
+              <th>Quantidade</th>
+              <th>Unidade</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${currentRecipe.map((item: any) => {
+      const stockItem = stockItems.find(si => si.id === item.stock_item_id)
+      return `
+                <tr>
+                  <td style="font-weight: 500; color: #1e293b;">${stockItem?.name || 'Item'}</td>
+                  <td style="color: #64748b;">${item.quantity}</td>
+                  <td style="color: #64748b;">${item.unit}</td>
+                </tr>
+              `
+    }).join('')}
+          </tbody>
+        </table>
+
+        ${product.description || formData.description ? `
+          <div class="steps">
+            <h3>📝 Modo de Preparo / Observações</h3>
+            <p>${(isEditMode ? formData.description : product.description).replace(/\n/g, '<br>')}</p>
+          </div>
+        ` : ''}
+
+        <div class="footer">
+          Ficha Técnica produzida por <strong>${shopSettings?.bakery_name || 'Cataloguei'}</strong> em ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}
+        </div>
+        <script>setTimeout(() => { window.print(); }, 500);</script>
+      </body>
+      </html>
+    `
+
+    printWindow.document.write(recipeHtml)
+    printWindow.document.close()
   }
 
   const fetchCategories = async () => {
@@ -465,6 +624,43 @@ const Produtos = () => {
     setFormData({ ...formData, variations: list })
   }
 
+  /* =======================
+     RECEITA (CONFEITARIA)
+  ======================= */
+
+  const addRecipeItem = () => {
+    setFormData({
+      ...formData,
+      recipe: [
+        ...formData.recipe,
+        { stock_item_id: '', quantity: 0, unit: '' }
+      ]
+    })
+  }
+
+  const removeRecipeItem = (index: number) => {
+    setFormData({
+      ...formData,
+      recipe: formData.recipe.filter((_, i) => i !== index)
+    })
+  }
+
+  const updateRecipeItem = (index: number, field: keyof RecipeItem, value: any) => {
+    const list = [...formData.recipe]
+    const updatedItem = { ...list[index], [field]: value }
+
+    // Se selecionou o ingrediente, tenta puxar a unidade padrão dele
+    if (field === 'stock_item_id') {
+      const item = stockItems.find(i => i.id === value)
+      if (item) {
+        updatedItem.unit = item.unit
+      }
+    }
+
+    list[index] = updatedItem
+    setFormData({ ...formData, recipe: list })
+  }
+
 
   const handlePriceChange = (value: string) => {
     // Remove tudo que não seja número
@@ -528,6 +724,9 @@ const Produtos = () => {
         variations: formData.variations.length ? formData.variations : null,
         track_stock: formData.track_stock,
         stock_quantity: formData.track_stock ? Number(formData.stock_quantity) : null,
+        recipe: formData.recipe.length ? formData.recipe : null,
+        recipe_yield: formData.recipe.length ? Number(formData.recipe_yield) : null,
+        operational_cost_percent: formData.recipe.length ? Number(formData.operational_cost_percent) : null,
         updated_at: new Date().toISOString()
       }
 
@@ -859,7 +1058,10 @@ const Produtos = () => {
       sizes: [],
       variations: [],
       track_stock: false,
-      stock_quantity: '0'
+      stock_quantity: '0',
+      recipe: [] as RecipeItem[],
+      recipe_yield: '1',
+      operational_cost_percent: '10'
     })
     setSelectedFiles([null, null, null])
     setImagePreviews([null, null, null])
@@ -881,7 +1083,10 @@ const Produtos = () => {
       sizes: product.sizes || [],
       variations: product.variations || [],
       track_stock: product.track_stock || false,
-      stock_quantity: product.stock_quantity?.toString() || '0'
+      stock_quantity: product.stock_quantity?.toString() || '0',
+      recipe: product.recipe || [],
+      recipe_yield: product.recipe_yield?.toString() || '1',
+      operational_cost_percent: product.operational_cost_percent?.toString() || '10'
     })
 
     const previews = [null, null, null] as (string | null)[]
@@ -961,6 +1166,43 @@ const Produtos = () => {
       )
     },
     {
+      key: 'profit_margin',
+      label: 'Margem %',
+      hideOnMobile: true,
+      render: (_: any, row: Product) => {
+        if (businessType !== 'confeitaria') return null
+
+        let totalIngredientCost = 0
+        row.recipe?.forEach(item => {
+          const stockItem = stockItems.find(si => si.id === item.stock_item_id)
+          if (stockItem) {
+            totalIngredientCost += stockItem.cost_per_unit * item.quantity
+          }
+        })
+
+        const yieldVal = row.recipe_yield || 1
+        const opCostPercent = row.operational_cost_percent || 0
+        const totalRecipeCost = totalIngredientCost * (1 + opCostPercent / 100)
+        const unitCost = totalRecipeCost / yieldVal
+        const sellingPrice = row.price || 0
+
+        if (unitCost <= 0 || sellingPrice <= 0) return '-'
+
+        const profit = sellingPrice - unitCost
+        const margin = (profit / sellingPrice) * 100
+
+        return (
+          <Badge
+            variant={margin < 30 ? 'destructive' : 'secondary'}
+            className={`px-2 py-0.5 rounded-full ${margin >= 30 ? 'bg-green-100 text-green-800 border-green-200' : 'animate-pulse'}`}
+          >
+            {margin < 30 && <AlertCircle className="w-3 h-3 mr-1" />}
+            {margin.toFixed(0)}%
+          </Badge>
+        )
+      }
+    },
+    {
       key: 'show_in_catalog',
       label: 'Catálogo',
       render: (v: boolean, row: Product) => (
@@ -986,6 +1228,8 @@ const Produtos = () => {
     }
   ]
 
+  const businessConfig = getBusinessConfig(businessType)
+
   return (
 
     <Layout>
@@ -996,6 +1240,7 @@ const Produtos = () => {
             <Button
               variant="outline"
               onClick={() => setIsCategoriesListOpen(true)}
+              className="w-full sm:w-auto"
             >
               <List className="w-4 h-4 mr-2" />
               Categorias
@@ -1363,13 +1608,16 @@ const Produtos = () => {
             </Dialog>
             <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
               <DialogTrigger asChild>
-                <Button onClick={() => { resetForm(); setEditingProduct(null) }}>
+                <Button
+                  onClick={() => { resetForm(); setEditingProduct(null) }}
+                  className="w-full sm:w-auto"
+                >
                   <Plus className="w-4 h-4 mr-2" />
                   Novo Produto
                 </Button>
               </DialogTrigger>
 
-              <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+              <DialogContent className="sm:max-w-[600px] w-[95vw] max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                   <DialogTitle>
                     {editingProduct ? 'Editar Produto' : 'Novo Produto'}
@@ -1384,12 +1632,12 @@ const Produtos = () => {
                       id="name"
                       value={formData.name}
                       onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                      placeholder="Nome do produto"
+                      placeholder={businessConfig.productNamePlaceholder}
                       required
                     />
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="categoria_id">Categoria *</Label>
                       <Select
@@ -1457,40 +1705,39 @@ const Produtos = () => {
 
                   </div>
                   <div className="space-y-2">
-                    <Label>Tamanhos / variações</Label>
+                    <Label>{businessConfig.sizeLabel}</Label>
 
                     {formData.sizes.map((s, i) => (
-                      <div key={i} className="flex gap-2">
+                      <div key={i} className="flex flex-col sm:flex-row gap-2 border-b sm:border-b-0 pb-3 sm:pb-0">
                         <Input
-                          placeholder="Ex: P, M, G"
+                          placeholder={businessConfig.sizePlaceholder}
                           value={s.name}
                           onChange={e => updateSize(i, 'name', e.target.value)}
+                          className="flex-1"
                         />
 
-                        <Input
-                          type="text"
-                          placeholder="Preço (opcional)"
-                          value={
-                            s.price === null || s.price === undefined
-                              ? ''
-                              : s.price.toFixed(2).replace('.', ',')
-                          }
-                          onChange={e => updateSize(i, 'price', e.target.value)}
-                          className="w-32"
-                        />
-
-
-
-
-                        <Button type="button" variant="outline" onClick={() => removeSize(i)}>
-                          <X className="w-4 h-4" />
-                        </Button>
+                        <div className="flex gap-2 w-full sm:w-auto">
+                          <Input
+                            type="text"
+                            placeholder="Preço (opcional)"
+                            value={
+                              s.price === null || s.price === undefined
+                                ? ''
+                                : s.price.toFixed(2).replace('.', ',')
+                            }
+                            onChange={e => updateSize(i, 'price', e.target.value)}
+                            className="w-full sm:w-32"
+                          />
+                          <Button type="button" variant="outline" onClick={() => removeSize(i)} className="shrink-0">
+                            <X className="w-4 h-4" />
+                          </Button>
+                        </div>
                       </div>
                     ))}
 
                     <Button type="button" variant="outline" onClick={addSize} className="w-full">
                       <Plus className="w-4 h-4 mr-2" />
-                      Adicionar tamanho
+                      Adicionar {businessConfig.sizeLabel.toLowerCase()}
                     </Button>
 
                     <p className="text-xs text-muted-foreground">
@@ -1499,7 +1746,7 @@ const Produtos = () => {
                   </div>
                   {/* Variações */}
                   <div className="space-y-2">
-                    <Label>Variações (ex: Cor, Acabamento, Recheio fixo)</Label>
+                    <Label>{businessConfig.variationLabel}</Label>
 
                     {formData.variations.map((group, gIndex) => (
                       <div
@@ -1508,7 +1755,7 @@ const Produtos = () => {
                       >
                         <div className="flex gap-2">
                           <Input
-                            placeholder="Nome da variação (ex: Cor)"
+                            placeholder={businessConfig.variationPlaceholder}
                             value={group.name}
                             onChange={e =>
                               updateVariationGroupName(gIndex, e.target.value)
@@ -1526,9 +1773,9 @@ const Produtos = () => {
 
                         <div className="space-y-2">
                           {group.options.map((opt, oIndex) => (
-                            <div key={oIndex} className="flex gap-2">
+                            <div key={oIndex} className="flex flex-col sm:flex-row gap-2 border-b sm:border-b-0 pb-2 sm:pb-0">
                               <Input
-                                placeholder="Opção (ex: Preta)"
+                                placeholder={businessConfig.variationOptionPlaceholder}
                                 value={opt.name}
                                 onChange={e =>
                                   updateVariationOption(
@@ -1538,36 +1785,40 @@ const Produtos = () => {
                                     e.target.value
                                   )
                                 }
+                                className="flex-1"
                               />
 
-                              <Input
-                                type="text"
-                                placeholder="Preço extra"
-                                value={
-                                  opt.price === null || opt.price === undefined
-                                    ? ''
-                                    : opt.price.toFixed(2).replace('.', ',')
-                                }
-                                onChange={e =>
-                                  updateVariationOption(
-                                    gIndex,
-                                    oIndex,
-                                    'price',
-                                    e.target.value
-                                  )
-                                }
-                                className="w-32"
-                              />
+                              <div className="flex gap-2 w-full sm:w-32">
+                                <Input
+                                  type="text"
+                                  placeholder="Preço extra"
+                                  value={
+                                    opt.price === null || opt.price === undefined
+                                      ? ''
+                                      : opt.price.toFixed(2).replace('.', ',')
+                                  }
+                                  onChange={e =>
+                                    updateVariationOption(
+                                      gIndex,
+                                      oIndex,
+                                      'price',
+                                      e.target.value
+                                    )
+                                  }
+                                  className="flex-1 sm:w-32 text-xs"
+                                />
 
-                              <Button
-                                type="button"
-                                variant="outline"
-                                onClick={() =>
-                                  removeVariationOption(gIndex, oIndex)
-                                }
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </Button>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  onClick={() =>
+                                    removeVariationOption(gIndex, oIndex)
+                                  }
+                                  className="shrink-0"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </Button>
+                              </div>
                             </div>
                           ))}
 
@@ -1599,6 +1850,242 @@ const Produtos = () => {
                     </p>
                   </div>
 
+                  {/* Receita (Visível apenas para Confeitaria) */}
+                  {businessType === 'confeitaria' && (
+                    <div className="space-y-2 p-4 bg-orange-50/20 rounded-xl border border-orange-100">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Label className="text-orange-700 font-bold flex items-center gap-2">
+                          <Package className="w-4 h-4" />
+                          Receita (Ficha Técnica / Custos)
+                        </Label>
+                      </div>
+
+                      <div className="space-y-3">
+                        {formData.recipe.map((item, index) => (
+                          <div key={index} className="grid grid-cols-12 gap-2 items-end bg-white/50 p-2 rounded-lg border border-orange-50">
+                            <div className="col-span-12 sm:col-span-5 space-y-1">
+                              <Label className="text-[10px] uppercase text-orange-600 font-bold italic">Ingrediente</Label>
+                              <Select
+                                value={item.stock_item_id}
+                                onValueChange={(val) => updateRecipeItem(index, 'stock_item_id', val)}
+                              >
+                                <SelectTrigger className="bg-white h-9">
+                                  <SelectValue placeholder="Selecione..." />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {stockItems.length > 0 ? (
+                                    stockItems.map(stockItem => (
+                                      <SelectItem key={stockItem.id} value={stockItem.id}>
+                                        {stockItem.name} ({stockItem.unit})
+                                      </SelectItem>
+                                    ))
+                                  ) : (
+                                    <div className="p-2 text-xs text-center text-muted-foreground">
+                                      Nenhum ingrediente no estoque
+                                    </div>
+                                  )}
+                                </SelectContent>
+                              </Select>
+                            </div>
+
+                            <div className="col-span-6 sm:col-span-3 space-y-1">
+                              <Label className="text-[10px] uppercase text-orange-600 font-bold italic">Quantidade</Label>
+                              <Input
+                                type="number"
+                                step="0.001"
+                                value={item.quantity || ''}
+                                onChange={(e) => updateRecipeItem(index, 'quantity', parseFloat(e.target.value))}
+                                className="bg-white h-9"
+                              />
+                            </div>
+
+                            <div className="col-span-4 sm:col-span-3 space-y-1">
+                              <Label className="text-[10px] uppercase text-orange-600 font-bold italic">Unid.</Label>
+                              <Input
+                                value={item.unit}
+                                onChange={(e) => updateRecipeItem(index, 'unit', e.target.value)}
+                                placeholder="g, ml..."
+                                className="bg-white h-9"
+                              />
+                            </div>
+
+                            <div className="col-span-2 sm:col-span-1 pb-0.5">
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => removeRecipeItem(index)}
+                                className="text-orange-400 hover:text-red-500 hover:bg-red-50 h-9 w-9"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={addRecipeItem}
+                            className="w-full border-dashed border-orange-200 text-orange-600 hover:bg-orange-50 hover:text-orange-700 hover:border-orange-300 h-auto py-2 whitespace-normal text-xs"
+                          >
+                            <Plus className="w-3 h-3 mr-1" />
+                            Novo Item
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => printProductionRecipe(editingProduct || {})}
+                            className="w-full border-orange-200 text-orange-700 hover:bg-orange-50 h-auto py-2 whitespace-normal text-xs"
+                          >
+                            <Printer className="w-3 h-3 mr-1" />
+                            Imprimir Ficha
+                          </Button>
+
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                className="w-full border-blue-200 text-blue-700 hover:bg-blue-50 h-auto py-2 whitespace-normal text-xs"
+                              >
+                                <Plus className="w-3 h-3 mr-1" />
+                                Importar Base
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent className="max-h-60 overflow-y-auto">
+                              {products.filter(p => p.recipe && p.recipe.length > 0 && p.id !== editingProduct?.id).length === 0 ? (
+                                <DropdownMenuItem disabled>Nenhuma receita encontrada</DropdownMenuItem>
+                              ) : (
+                                products.filter(p => p.recipe && p.recipe.length > 0 && p.id !== editingProduct?.id).map(p => (
+                                  <DropdownMenuItem key={p.id} onClick={() => importRecipe(p.id)}>
+                                    {p.name}
+                                  </DropdownMenuItem>
+                                ))
+                              )}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+                          <div className="space-y-1">
+                            <Label className="text-[10px] uppercase text-orange-600 font-bold italic">Rendimento (ex: 1 bolo, 50 un)</Label>
+                            <Input
+                              type="number"
+                              value={formData.recipe_yield}
+                              onChange={(e) => setFormData({ ...formData, recipe_yield: e.target.value })}
+                              placeholder="Ex: 1"
+                              className="bg-white h-9"
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <Label className="text-[10px] uppercase text-orange-600 font-bold italic">Custo Operacional % (Gás, luz...)</Label>
+                            <Input
+                              type="number"
+                              value={formData.operational_cost_percent}
+                              onChange={(e) => setFormData({ ...formData, operational_cost_percent: e.target.value })}
+                              placeholder="Ex: 10"
+                              className="bg-white h-9"
+                            />
+                          </div>
+                        </div>
+
+                        {formData.recipe.length > 0 && stockItems.length > 0 && (
+                          <div className="mt-4 space-y-3">
+                            <div className="p-4 bg-white rounded-xl border border-orange-100 shadow-sm space-y-4">
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div className="space-y-1">
+                                  <span className="text-[10px] uppercase text-gray-400 font-bold block">Custo Total Receita</span>
+                                  <span className="text-lg font-bold text-orange-700">
+                                    {(() => {
+                                      const totalIng = formData.recipe.reduce((acc, current) => {
+                                        const item = stockItems.find(i => i.id === current.stock_item_id)
+                                        if (!item) return acc
+                                        return acc + (item.cost_per_unit * current.quantity)
+                                      }, 0)
+                                      const operational = totalIng * (parseFloat(formData.operational_cost_percent) / 100)
+                                      return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalIng + operational)
+                                    })()}
+                                  </span>
+                                  <span className="text-[9px] text-gray-400 block">+ {formData.operational_cost_percent}% operacional</span>
+                                </div>
+                                <div className="space-y-1 text-right">
+                                  <span className="text-[10px] uppercase text-gray-400 font-bold block">Custo Unitário</span>
+                                  <span className="text-lg font-bold text-orange-900">
+                                    {(() => {
+                                      const totalIng = formData.recipe.reduce((acc, current) => {
+                                        const item = stockItems.find(i => i.id === current.stock_item_id)
+                                        if (!item) return acc
+                                        return acc + (item.cost_per_unit * current.quantity)
+                                      }, 0)
+                                      const operational = totalIng * (parseFloat(formData.operational_cost_percent) / 100)
+                                      const totalCost = totalIng + operational
+                                      const yieldVal = parseFloat(formData.recipe_yield) || 1
+                                      return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalCost / yieldVal)
+                                    })()}
+                                  </span>
+                                </div>
+                              </div>
+
+                              <div className="pt-3 border-t border-orange-50 grid grid-cols-2 gap-4">
+                                <div className="space-y-1">
+                                  <span className="text-[10px] uppercase text-gray-400 font-bold block">Lucro p/ Unid. Real</span>
+                                  <div className="text-lg font-bold text-green-600">
+                                    {(() => {
+                                      const totalIng = formData.recipe.reduce((acc, current) => {
+                                        const item = stockItems.find(i => i.id === current.stock_item_id)
+                                        if (!item) return acc
+                                        return acc + (item.cost_per_unit * current.quantity)
+                                      }, 0)
+                                      const operational = totalIng * (parseFloat(formData.operational_cost_percent) / 100)
+                                      const totalCost = totalIng + operational
+                                      const yieldVal = parseFloat(formData.recipe_yield) || 1
+                                      const unitCost = totalCost / yieldVal
+                                      const price = Number(formData.price.replace(',', '.')) || 0
+                                      const profit = price - unitCost
+                                      return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(profit)
+                                    })()}
+                                  </div>
+                                </div>
+                                <div className="space-y-1 text-right">
+                                  <span className="text-[10px] uppercase text-gray-400 font-bold block">Margem Real %</span>
+                                  <div className="inline-flex items-center px-2 py-0.5 rounded-full bg-green-50 text-green-700 text-sm font-bold border border-green-100">
+                                    {(() => {
+                                      const totalIng = formData.recipe.reduce((acc, current) => {
+                                        const item = stockItems.find(i => i.id === current.stock_item_id)
+                                        if (!item) return acc
+                                        return acc + (item.cost_per_unit * current.quantity)
+                                      }, 0)
+                                      const operational = totalIng * (parseFloat(formData.operational_cost_percent) / 100)
+                                      const totalCost = totalIng + operational
+                                      const yieldVal = parseFloat(formData.recipe_yield) || 1
+                                      const unitCost = totalCost / yieldVal
+                                      const price = Number(formData.price.replace(',', '.')) || 0
+
+                                      if (price <= 0) return '0%'
+                                      const margin = ((price - unitCost) / price) * 100
+                                      return `${margin.toFixed(1)}%`
+                                    })()}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+
+                            <p className="text-[10px] text-gray-500 italic text-center">
+                              * Agora incluindo custos operacionais estimados (gás, luz, mão de obra).
+                            </p>
+                          </div>
+                        )}
+
+                        {stockItems.length === 0 && (
+                          <p className="text-[10px] text-center text-orange-400 bg-orange-50 p-2 rounded">
+                            Cadastre seus ingredientes no menu <strong>Estoque</strong> para gerenciar receitas e custos.
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  )}
 
                   {/* Seção de Adicionais */}
                   <div className="space-y-2">

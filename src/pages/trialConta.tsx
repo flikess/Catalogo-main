@@ -7,6 +7,14 @@ import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { showSuccess, showError } from '@/utils/toast'
 import { Clock, ShieldCheck, Zap, ArrowLeft, UserPlus } from 'lucide-react'
+import { BUSINESS_TYPES } from '@/utils/business-types'
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select"
 
 const TrialConta = () => {
     const navigate = useNavigate()
@@ -16,7 +24,8 @@ const TrialConta = () => {
         password: '',
         fullName: '',
         businessName: '',
-        phone: ''
+        phone: '',
+        businessType: 'confeitaria'
     })
 
     const maskPhone = (value: string) => {
@@ -52,7 +61,8 @@ const TrialConta = () => {
                     password: formData.password,
                     full_name: formData.fullName,
                     business_name: formData.businessName,
-                    phone: formData.phone
+                    phone: formData.phone,
+                    business_type: formData.businessType
                 }
             })
 
@@ -192,6 +202,25 @@ const TrialConta = () => {
                                     onChange={handleChange}
                                     required
                                 />
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label>Ramo do seu negócio</Label>
+                                <Select
+                                    value={formData.businessType}
+                                    onValueChange={(value) => setFormData(prev => ({ ...prev, businessType: value }))}
+                                >
+                                    <SelectTrigger className="w-full bg-white border-2 border-gray-100 h-12 rounded-xl focus:ring-2 focus:ring-purple-100 transition-all">
+                                        <SelectValue placeholder="Selecione o ramo do seu negócio" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {BUSINESS_TYPES.map((type) => (
+                                            <SelectItem key={type.id} value={type.id}>
+                                                {type.label}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
                             </div>
 
                             <div className="space-y-2">
