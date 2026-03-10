@@ -19,15 +19,28 @@ import {
   Calendar,
   Mail,
   MessageCircle,
-  RefreshCw
+  RefreshCw,
+  Filter
 } from 'lucide-react'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 
 const Admin = () => {
   const {
     users,
+    allUsers,
     loading,
     searchTerm,
     setSearchTerm,
+    statusFilter,
+    setStatusFilter,
+    planFilter,
+    setPlanFilter,
     createUser,
     updateUser,
     deleteUser,
@@ -92,11 +105,18 @@ const Admin = () => {
   }
 
   // Estatísticas
-  const totalUsers = users.length
-  const activeUsers = users.filter(u => u.status === 'ativo').length
-  const inactiveUsers = users.filter(u => u.status === 'inativo').length
-  const annualUsers = users.filter(u => u.plano?.toLowerCase() === 'anual').length
-  const trialUsers = users.filter(u => u.plano?.toLowerCase() === 'trial').length
+  // Estatísticas (baseadas em todos os usuários, não apenas nos filtrados)
+  const statsUsers = allUsers || users
+  const totalUsers = statsUsers.length
+  const activeUsers = statsUsers.filter(u => u.status === 'ativo').length
+  const inactiveUsers = statsUsers.filter(u => u.status === 'inativo').length
+
+  // Normalização para as estatísticas
+  const getNormalizedPlan = (p: string) => (p || '').toLowerCase().replace('plano ', '').trim()
+
+  const annualUsers = statsUsers.filter(u => getNormalizedPlan(u.plano) === 'anual').length
+  const monthlyUsers = statsUsers.filter(u => getNormalizedPlan(u.plano) === 'mensal').length
+  const trialUsers = statsUsers.filter(u => getNormalizedPlan(u.plano) === 'trial').length
 
 
 
@@ -236,7 +256,7 @@ const Admin = () => {
         )}
 
         {/* Estatísticas */}
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
 
           <Card>
             <CardHeader className="pb-2">
@@ -289,6 +309,18 @@ const Admin = () => {
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium flex items-center gap-2">
+                <Calendar className="w-4 h-4 text-blue-600" />
+                Planos Mensais
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-blue-600">{monthlyUsers}</div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium flex items-center gap-2">
                 <RefreshCw className="w-4 h-4 text-amber-600" />
                 Usuários Trial
               </CardTitle>
@@ -299,17 +331,50 @@ const Admin = () => {
           </Card>
         </div>
 
-        {/* Busca */}
+        {/* Busca e Filtros */}
         <Card>
           <CardContent className="pt-6">
-            <div className="relative">
-              <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-              <Input
-                placeholder="Buscar por nome ou email..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
-              />
+            <div className="flex flex-col md:flex-row gap-4">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                <Input
+                  placeholder="Buscar por nome ou email..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+
+              <div className="flex flex-wrap gap-4">
+                <div className="flex items-center gap-2 min-w-[150px]">
+                  <Filter className="w-4 h-4 text-gray-400" />
+                  <Select value={statusFilter} onValueChange={setStatusFilter}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="todos">Todos os Status</SelectItem>
+                      <SelectItem value="ativo">Ativos</SelectItem>
+                      <SelectItem value="inativo">Inativos</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="flex items-center gap-2 min-w-[150px]">
+                  <Crown className="w-4 h-4 text-gray-400" />
+                  <Select value={planFilter} onValueChange={setPlanFilter}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Plano" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="todos">Todos os Planos</SelectItem>
+                      <SelectItem value="trial">Trial</SelectItem>
+                      <SelectItem value="mensal">Mensal</SelectItem>
+                      <SelectItem value="anual">Anual</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
             </div>
           </CardContent>
         </Card>

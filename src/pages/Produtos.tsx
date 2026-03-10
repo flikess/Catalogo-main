@@ -116,8 +116,8 @@ const Produtos = () => {
   const [uploading, setUploading] = useState(false)
   const [imagePreview, setImagePreview] = useState<string | null>(null)
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
-  const [selectedFiles, setSelectedFiles] = useState<(File | null)[]>([null, null, null])
-  const [imagePreviews, setImagePreviews] = useState<(string | null)[]>([null, null, null])
+  const [selectedFiles, setSelectedFiles] = useState<(File | null)[]>([])
+  const [imagePreviews, setImagePreviews] = useState<(string | null)[]>([])
   const [isBulkCategory, setIsBulkCategory] = useState(false)
   const [isBulkSubCategory, setIsBulkSubCategory] = useState(false)
   const [bulkNames, setBulkNames] = useState('')
@@ -426,15 +426,29 @@ const Produtos = () => {
     try {
       const optimized = await optimizeImage(file, 1080, 1080, 0.8)
 
-      const newFiles = [...selectedFiles]
-      newFiles[index] = optimized
-      setSelectedFiles(newFiles)
-
       const reader = new FileReader()
       reader.onload = e => {
-        const newPreviews = [...imagePreviews]
-        newPreviews[index] = e.target?.result as string
-        setImagePreviews(newPreviews)
+        const previewUrl = e.target?.result as string
+
+        setImagePreviews(prev => {
+          const newPreviews = [...prev]
+          if (index >= newPreviews.length) {
+            newPreviews.push(previewUrl)
+          } else {
+            newPreviews[index] = previewUrl
+          }
+          return newPreviews
+        })
+
+        setSelectedFiles(prev => {
+          const newFiles = [...prev]
+          if (index >= newFiles.length) {
+            newFiles.push(optimized)
+          } else {
+            newFiles[index] = optimized
+          }
+          return newFiles
+        })
       }
       reader.readAsDataURL(optimized)
     } catch (err) {
@@ -446,17 +460,15 @@ const Produtos = () => {
 
   const clearImageMulti = (index: number) => {
     const newFiles = [...selectedFiles]
-    newFiles[index] = null
+    newFiles.splice(index, 1)
     setSelectedFiles(newFiles)
 
     const newPreviews = [...imagePreviews]
-    newPreviews[index] = null
+    newPreviews.splice(index, 1)
     setImagePreviews(newPreviews)
 
     const newUrls = [...formData.image_urls]
-    if (newUrls[index]) {
-      newUrls[index] = ''
-    }
+    newUrls.splice(index, 1)
     setFormData({ ...formData, image_urls: newUrls })
   }
 
@@ -1063,8 +1075,8 @@ const Produtos = () => {
       recipe_yield: '1',
       operational_cost_percent: '10'
     })
-    setSelectedFiles([null, null, null])
-    setImagePreviews([null, null, null])
+    setSelectedFiles([])
+    setImagePreviews([])
   }
 
   const handleEdit = (product: Product) => {
@@ -1089,10 +1101,9 @@ const Produtos = () => {
       operational_cost_percent: product.operational_cost_percent?.toString() || '10'
     })
 
-    const previews = [null, null, null] as (string | null)[]
     const urls = product.image_urls || (product.image_url ? [product.image_url] : [])
-    urls.forEach((url, i) => { if (i < 3) previews[i] = url })
-    setImagePreviews(previews)
+    setImagePreviews([...urls])
+    setSelectedFiles(new Array(urls.length).fill(null))
     setIsDialogOpen(true)
   }
 
@@ -2131,44 +2142,54 @@ const Produtos = () => {
                   </div>
 
                   <div className="space-y-4">
-                    <Label>Imagens do Produto (Até 3)</Label>
-                    <div className="grid grid-cols-3 gap-2">
-                      {[0, 1, 2].map((index) => (
-                        <div key={index} className="space-y-2">
-                          {imagePreviews[index] ? (
-                            <div className="relative">
-                              <img
-                                src={imagePreviews[index]!}
-                                alt={`Preview ${index + 1}`}
-                                className="w-full h-24 object-cover rounded-md border"
-                              />
-                              <Button
-                                type="button"
-                                variant="destructive"
-                                size="icon"
-                                className="absolute -top-2 -right-2 h-6 w-6 rounded-full"
-                                onClick={() => clearImageMulti(index)}
-                              >
-                                <X className="h-3 w-3" />
-                              </Button>
-                            </div>
-                          ) : (
-                            <div className="border-2 border-dashed border-gray-300 rounded-md h-24 flex items-center justify-center">
-                              <Label htmlFor={`image-upload-${index}`} className="cursor-pointer flex flex-col items-center">
-                                <Plus className="h-6 w-6 text-gray-400" />
-                                <span className="text-[10px] text-gray-500">Add</span>
-                                <Input
-                                  id={`image-upload-${index}`}
-                                  type="file"
-                                  accept="image/*"
-                                  onChange={(e) => handleFileSelectMulti(e, index)}
-                                  className="hidden"
-                                />
-                              </Label>
-                            </div>
-                          )}
+                    <Label>Imagens do Produto</Label>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                      {imagePreviews.map((preview, index) => (
+                        <div key={index} className="relative aspect-square">
+                          <img
+                            src={preview!}
+                            alt={`Preview ${index + 1}`}
+                            className="w-full h-full object-cover rounded-md border"
+                          />
+                          <Button
+                            type="button"
+                            variant="destructive"
+                            size="icon"
+                            className="absolute -top-2 -right-2 h-6 w-6 rounded-full shadow-lg"
+                            onClick={() => clearImageMulti(index)}
+                          >
+                            <X className="h-3 w-3" />
+                          </Button>
                         </div>
                       ))}
+
+                      {/* Botão de adicionar nova imagem */}
+                      <div className="aspect-square">
+                        <div className="border-2 border-dashed border-gray-300 rounded-md h-full flex items-center justify-center hover:bg-gray-50 transition-colors">
+                          <Label htmlFor="image-upload-new" className="cursor-pointer flex flex-col items-center w-full h-full justify-center">
+                            <Plus className="h-8 w-8 text-gray-400" />
+                            <span className="text-xs text-gray-500 mt-2">Adicionar</span>
+                            <Input
+                              id="image-upload-new"
+                              type="file"
+                              accept="image/*"
+                              multiple
+                              onChange={(e) => {
+                                const files = Array.from(e.target.files || []);
+                                const currentLength = imagePreviews.length;
+                                files.forEach((file, i) => {
+                                  const mockEvent = {
+                                    target: { files: [file] }
+                                  } as any;
+                                  handleFileSelectMulti(mockEvent, currentLength + i);
+                                });
+                                e.target.value = '';
+                              }}
+                              className="hidden"
+                            />
+                          </Label>
+                        </div>
+                      </div>
                     </div>
                     <p className="text-xs text-gray-500">
                       A primeira imagem será a principal.

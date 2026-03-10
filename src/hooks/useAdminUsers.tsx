@@ -269,16 +269,32 @@ export const useAdminUsers = () => {
     }
   }
 
-  const filteredUsers = users.filter(user =>
-    user.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    user.email.toLowerCase().includes(searchTerm.toLowerCase())
-  )
+  const [statusFilter, setStatusFilter] = useState<string>('todos')
+  const [planFilter, setPlanFilter] = useState<string>('todos')
+
+  const filteredUsers = users.filter(user => {
+    const matchesSearch = user.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      user.email.toLowerCase().includes(searchTerm.toLowerCase())
+
+    const matchesStatus = statusFilter === 'todos' || user.status === statusFilter
+
+    // Normalizar o plano do usuário para comparação (remove 'plano ' se existir)
+    const normalizedUserPlan = user.plano?.toLowerCase().replace('plano ', '').trim()
+    const matchesPlan = planFilter === 'todos' || normalizedUserPlan === planFilter.toLowerCase()
+
+    return matchesSearch && matchesStatus && matchesPlan
+  })
 
   return {
     users: filteredUsers,
+    allUsers: users, // Retornar todos para estatísticas se necessário
     loading,
     searchTerm,
     setSearchTerm,
+    statusFilter,
+    setStatusFilter,
+    planFilter,
+    setPlanFilter,
     createUser,
     updateUser,
     deleteUser,
