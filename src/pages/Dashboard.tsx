@@ -9,6 +9,7 @@ import { supabase } from '@/integrations/supabase/client'
 import { useAuth } from '@/components/auth/AuthProvider'
 import { useSubscription } from '@/hooks/useSubscription'
 import { useNavigate } from 'react-router-dom'
+import { SetupChecklist } from '@/components/dashboard/SetupChecklist'
 
 
 
@@ -265,6 +266,9 @@ const Dashboard = () => {
             </CardContent>
           </Card>
         )}
+
+        {/* Global Onboarding Checklist */}
+        <SetupChecklist productCount={stats.totalProducts} />
 
         {/* Stats Cards */}
 

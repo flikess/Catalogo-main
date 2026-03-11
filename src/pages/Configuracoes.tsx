@@ -598,7 +598,7 @@ const Configuracoes = () => {
                   <div className="space-y-2">
                     <Label>Ramo do negócio</Label>
                     <Select
-                      value={bakerySettings.business_type}
+                      value={bakerySettings.business_type || undefined}
                       onValueChange={(value) => setBakerySettings(prev => ({ ...prev, business_type: value }))}
                     >
                       <SelectTrigger className="w-full bg-white border-2 border-gray-100 h-10 rounded-lg focus:ring-2 focus:ring-purple-100 transition-all">

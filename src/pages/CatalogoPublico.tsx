@@ -212,24 +212,37 @@ const CatalogoPublico = () => {
   const isStoreOpen = () => {
     if (!bakerySettings.working_hours) return true
 
-    // Usar o horário do sistema (o USER mandou o horário atual)
     const now = new Date()
     const dayOfWeek = now.getDay()
-    const hours = bakerySettings.working_hours[dayOfWeek]
+    const hours = (bakerySettings.working_hours as any)?.[dayOfWeek]
 
-    if (!hours || hours.closed) return false
+    // Se não houver configuração para o dia, assumimos que está aberto
+    // (ou poderíamos assumir fechado, mas o comportamento anterior sem working_hours era aberto)
+    if (!hours) return true
+    if (hours.closed) return false
 
-    const [openH, openM] = hours.open.split(':').map(Number)
-    const [closeH, closeM] = hours.close.split(':').map(Number)
+    try {
+      const nowH = now.getHours()
+      const nowM = now.getMinutes()
+      const nowInMinutes = nowH * 60 + nowM
 
-    const nowH = now.getHours()
-    const nowM = now.getMinutes()
+      const [openH, openM] = (hours.open || "00:00").split(':').map(Number)
+      const [closeH, closeM] = (hours.close || "23:59").split(':').map(Number)
 
-    const nowInMinutes = nowH * 60 + nowM
-    const openInMinutes = openH * 60 + openM
-    const closeInMinutes = closeH * 60 + closeM
+      const openInMinutes = openH * 60 + (openM || 0)
+      const closeInMinutes = closeH * 60 + (closeM || 0)
 
-    return nowInMinutes >= openInMinutes && nowInMinutes <= closeInMinutes
+      // Lógica para horário convencional (ex: 08:00 às 18:00)
+      if (openInMinutes <= closeInMinutes) {
+        return nowInMinutes >= openInMinutes && nowInMinutes <= closeInMinutes
+      } else {
+        // Lógica para horário que atravessa a meia-noite (ex: 18:00 às 02:00)
+        return nowInMinutes >= openInMinutes || nowInMinutes <= closeInMinutes
+      }
+    } catch (err) {
+      console.error("Erro ao calcular horário de funcionamento:", err)
+      return true // Em caso de erro, melhor deixar aberto
+    }
   }
 
   const storeIsOpen = isStoreOpen()

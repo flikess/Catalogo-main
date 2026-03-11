@@ -1144,7 +1144,7 @@ const Produtos = () => {
     const urls = product.image_urls || (product.image_url ? [product.image_url] : [])
     setImagePreviews([...urls])
     setSelectedFiles(new Array(urls.length).fill(null))
-    setIsRecipeMode(!product.show_in_catalog)
+    setIsRecipeMode(product.categorias_produtos?.nome?.toLowerCase() === 'receita')
     setIsDialogOpen(true)
   }
 
@@ -1166,9 +1166,9 @@ const Produtos = () => {
   }
 
   const filteredProducts = products.filter(p => {
-    // Se for aba de produtos, não mostrar o que tem categoria "Receita" ou show_in_catalog false (opcional, mas user pediu separação)
+    // Se for aba de produtos, não mostrar o que tem categoria "Receita" (independente de estar no catálogo ou não)
     const categoryName = p.categorias_produtos?.nome?.toLowerCase() || ''
-    const isActuallyRecipe = categoryName === 'receita' || !p.show_in_catalog
+    const isActuallyRecipe = categoryName === 'receita'
 
     if (viewTab === 'products' && isActuallyRecipe) return false
     if (viewTab === 'recipes' && !isActuallyRecipe) return false
@@ -1209,9 +1209,18 @@ const Produtos = () => {
             <div className="font-medium">{value}</div>
 
             {!row.show_in_catalog && (
-              <Badge variant="secondary" className="mt-1 text-[10px] bg-orange-100 text-orange-700 border-orange-200">
-                <FileText className="w-3 h-3 mr-1" />
-                Base de Receita
+              <Badge variant="secondary" className={`mt-1 text-[10px] ${row.categorias_produtos?.nome?.toLowerCase() === 'receita' ? 'bg-orange-100 text-orange-700 border-orange-200' : 'bg-gray-100 text-gray-700 border-gray-200'}`}>
+                {row.categorias_produtos?.nome?.toLowerCase() === 'receita' ? (
+                  <>
+                    <FileText className="w-3 h-3 mr-1" />
+                    Base de Receita
+                  </>
+                ) : (
+                  <>
+                    <EyeOff className="w-3 h-3 mr-1" />
+                    Oculto no Catálogo
+                  </>
+                )}
               </Badge>
             )}
 
