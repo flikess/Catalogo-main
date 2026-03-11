@@ -19,6 +19,7 @@ import { useAuth } from '@/components/auth/AuthProvider'
 import { showSuccess, showError } from '@/utils/toast'
 import { optimizeImage } from '@/utils/image-optimization'
 import { getBusinessConfig } from '@/utils/business-types'
+import { calculateIngredientCost } from '@/utils/unit-conversion'
 
 interface Additional {
   id?: string
@@ -42,7 +43,8 @@ interface VariationGroup {
 }
 
 interface RecipeItem {
-  stock_item_id: string
+  stock_item_id?: string
+  base_recipe_id?: string
   quantity: number
   unit: string
 }
@@ -113,6 +115,7 @@ const Produtos = () => {
   const [editingProduct, setEditingProduct] = useState<Product | null>(null)
   const [editingCategory, setEditingCategory] = useState<Category | null>(null)
   const [editingSubCategory, setEditingSubCategory] = useState<Subcategory | null>(null)
+  const [isRecipeMode, setIsRecipeMode] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [imagePreview, setImagePreview] = useState<string | null>(null)
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
@@ -123,8 +126,9 @@ const Produtos = () => {
   const [bulkNames, setBulkNames] = useState('')
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>('all')
   const [selectedSubCategoryId, setSelectedSubCategoryId] = useState<string>('all')
-  const [businessType, setBusinessType] = useState<string>('confeitaria')
+  const [businessType, setBusinessType] = useState<string>('')
   const [stockItems, setStockItems] = useState<StockItem[]>([])
+  const [viewTab, setViewTab] = useState<'products' | 'recipes'>('products')
 
   const [categoryBannerDesktop, setCategoryBannerDesktop] = useState<File | null>(null)
   const [categoryBannerMobile, setCategoryBannerMobile] = useState<File | null>(null)
@@ -231,9 +235,7 @@ const Produtos = () => {
 
       if (data) {
         setShopSettings(data)
-        if (data.business_type) {
-          setBusinessType(data.business_type)
-        }
+        setBusinessType(data.business_type || '')
       }
     } catch (err) {
       console.error('Error fetching shop settings:', err)
@@ -242,13 +244,19 @@ const Produtos = () => {
 
   const importRecipe = (sourceProductId: string) => {
     const source = products.find(p => p.id === sourceProductId)
-    if (source && source.recipe) {
-      const sourceRecipe = source.recipe as RecipeItem[]
+    if (source) {
       setFormData(prev => ({
         ...prev,
-        recipe: [...prev.recipe, ...sourceRecipe]
+        recipe: [
+          ...prev.recipe,
+          {
+            base_recipe_id: source.id,
+            quantity: 1,
+            unit: 'unid'
+          }
+        ]
       }))
-      showSuccess(`Importados ${sourceRecipe.length} itens de "${source.name}"`)
+      showSuccess(`Base "${source.name}" importada.`)
     }
   }
 
@@ -657,6 +665,31 @@ const Produtos = () => {
     })
   }
 
+  const getProductUnitCost = (productOrFormData: any): number => {
+    const recipe = productOrFormData.recipe as RecipeItem[] || []
+    const yieldVal = parseFloat(productOrFormData.recipe_yield) || 1
+    const opPercent = parseFloat(productOrFormData.operational_cost_percent) || 0
+
+    let totalIngCost = 0
+    recipe.forEach(item => {
+      if (item.stock_item_id) {
+        const stockItem = stockItems.find(si => si.id === item.stock_item_id)
+        if (stockItem) {
+          totalIngCost += calculateIngredientCost(item.quantity, item.unit, stockItem.cost_per_unit, stockItem.unit)
+        }
+      } else if (item.base_recipe_id) {
+        const base = products.find(p => p.id === item.base_recipe_id)
+        if (base) {
+          const baseUnitCost = getProductUnitCost(base)
+          totalIngCost += baseUnitCost * item.quantity
+        }
+      }
+    })
+
+    const operational = totalIngCost * (opPercent / 100)
+    return (totalIngCost + operational) / yieldVal
+  }
+
   const updateRecipeItem = (index: number, field: keyof RecipeItem, value: any) => {
     const list = [...formData.recipe]
     const updatedItem = { ...list[index], [field]: value }
@@ -666,6 +699,13 @@ const Produtos = () => {
       const item = stockItems.find(i => i.id === value)
       if (item) {
         updatedItem.unit = item.unit
+        delete updatedItem.base_recipe_id
+      }
+    } else if (field === 'base_recipe_id') {
+      const base = products.find(i => i.id === value)
+      if (base) {
+        updatedItem.unit = 'unid'
+        delete updatedItem.stock_item_id
       }
     }
 
@@ -1104,6 +1144,7 @@ const Produtos = () => {
     const urls = product.image_urls || (product.image_url ? [product.image_url] : [])
     setImagePreviews([...urls])
     setSelectedFiles(new Array(urls.length).fill(null))
+    setIsRecipeMode(!product.show_in_catalog)
     setIsDialogOpen(true)
   }
 
@@ -1125,6 +1166,13 @@ const Produtos = () => {
   }
 
   const filteredProducts = products.filter(p => {
+    // Se for aba de produtos, não mostrar o que tem categoria "Receita" ou show_in_catalog false (opcional, mas user pediu separação)
+    const categoryName = p.categorias_produtos?.nome?.toLowerCase() || ''
+    const isActuallyRecipe = categoryName === 'receita' || !p.show_in_catalog
+
+    if (viewTab === 'products' && isActuallyRecipe) return false
+    if (viewTab === 'recipes' && !isActuallyRecipe) return false
+
     const matchesSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase())
     const matchesCategory = selectedCategoryId === 'all' || p.categoria_id === selectedCategoryId
     const matchesSubCategory = selectedSubCategoryId === 'all' || p.sub_categoria_id === selectedSubCategoryId
@@ -1160,6 +1208,13 @@ const Produtos = () => {
             </div>
             <div className="font-medium">{value}</div>
 
+            {!row.show_in_catalog && (
+              <Badge variant="secondary" className="mt-1 text-[10px] bg-orange-100 text-orange-700 border-orange-200">
+                <FileText className="w-3 h-3 mr-1" />
+                Base de Receita
+              </Badge>
+            )}
+
             {row.sizes && row.sizes.length > 0 && (
               <div className="text-xs text-muted-foreground">
                 Tamanhos: {row.sizes.map(s => s.name).join(', ')}
@@ -1183,18 +1238,7 @@ const Produtos = () => {
       render: (_: any, row: Product) => {
         if (businessType !== 'confeitaria') return null
 
-        let totalIngredientCost = 0
-        row.recipe?.forEach(item => {
-          const stockItem = stockItems.find(si => si.id === item.stock_item_id)
-          if (stockItem) {
-            totalIngredientCost += stockItem.cost_per_unit * item.quantity
-          }
-        })
-
-        const yieldVal = row.recipe_yield || 1
-        const opCostPercent = row.operational_cost_percent || 0
-        const totalRecipeCost = totalIngredientCost * (1 + opCostPercent / 100)
-        const unitCost = totalRecipeCost / yieldVal
+        const unitCost = getProductUnitCost(row)
         const sellingPrice = row.price || 0
 
         if (unitCost <= 0 || sellingPrice <= 0) return '-'
@@ -1246,7 +1290,19 @@ const Produtos = () => {
     <Layout>
       <div className="space-y-6">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <h1 className="text-2xl font-bold text-gray-900">Produtos</h1>
+          <div className="flex items-center gap-4 flex-wrap">
+            <h1 className="text-2xl font-bold text-gray-900">
+              {businessType === 'confeitaria' ? 'Gerenciamento' : 'Produtos'}
+            </h1>
+            {businessType === 'confeitaria' && (
+              <Tabs value={viewTab} onValueChange={(val: any) => setViewTab(val)} className="w-auto">
+                <TabsList className="bg-gray-100">
+                  <TabsTrigger value="products">Lista de Produtos</TabsTrigger>
+                  <TabsTrigger value="recipes">Lista de Receitas</TabsTrigger>
+                </TabsList>
+              </Tabs>
+            )}
+          </div>
           <div className="flex flex-wrap gap-2 w-full sm:w-auto">
             <Button
               variant="outline"
@@ -1617,10 +1673,56 @@ const Produtos = () => {
                 </form>
               </DialogContent>
             </Dialog>
+            {businessType === 'confeitaria' && (
+              <Button
+                variant="outline"
+                onClick={async () => {
+                  resetForm()
+                  setEditingProduct(null)
+                  setIsRecipeMode(true)
+
+                  // Buscar ou criar categoria "Receita"
+                  let recipeCat = categories.find(c => c.nome.toLowerCase() === 'receita')
+                  if (!recipeCat) {
+                    try {
+                      const { data, error } = await supabase
+                        .from('categorias_produtos')
+                        .insert({ nome: 'Receita', user_id: (await supabase.auth.getUser()).data.user?.id })
+                        .select()
+                        .single()
+
+                      if (data) {
+                        setCategories(prev => [...prev, data])
+                        recipeCat = data
+                      }
+                    } catch (err) {
+                      console.error('Erro ao criar categoria Receita:', err)
+                    }
+                  }
+
+                  setFormData(prev => ({
+                    ...prev,
+                    show_in_catalog: false,
+                    price: '0',
+                    categoria_id: recipeCat?.id || ''
+                  }))
+                  setIsDialogOpen(true)
+                }}
+                className="w-full sm:w-auto border-orange-200 text-orange-700 hover:bg-orange-50"
+              >
+                <Package className="w-4 h-4 mr-2" />
+                Nova Receita
+              </Button>
+            )}
+
             <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
               <DialogTrigger asChild>
                 <Button
-                  onClick={() => { resetForm(); setEditingProduct(null) }}
+                  onClick={() => {
+                    resetForm()
+                    setEditingProduct(null)
+                    setIsRecipeMode(false)
+                  }}
                   className="w-full sm:w-auto"
                 >
                   <Plus className="w-4 h-4 mr-2" />
@@ -1631,7 +1733,7 @@ const Produtos = () => {
               <DialogContent className="sm:max-w-[600px] w-[95vw] max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                   <DialogTitle>
-                    {editingProduct ? 'Editar Produto' : 'Novo Produto'}
+                    {isRecipeMode ? 'Nova Receita Base' : (editingProduct ? 'Editar Produto' : 'Novo Produto')}
                   </DialogTitle>
                 </DialogHeader>
 
@@ -1656,8 +1758,8 @@ const Produtos = () => {
                         onValueChange={(value) => setFormData({ ...formData, categoria_id: value, sub_categoria_id: '' })}
                         required
                       >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Selecione..." />
+                        <SelectTrigger disabled={isRecipeMode}>
+                          <SelectValue placeholder={isRecipeMode ? "Receita" : "Selecione..."} />
                         </SelectTrigger>
                         <SelectContent>
                           {categories.map(category => (
@@ -1676,7 +1778,7 @@ const Produtos = () => {
                         onValueChange={(value) => setFormData({ ...formData, sub_categoria_id: value })}
                         disabled={!formData.categoria_id}
                       >
-                        <SelectTrigger>
+                        <SelectTrigger disabled={!formData.categoria_id}>
                           <SelectValue placeholder={formData.categoria_id ? "Selecione..." : "Selecione categoria primeiro"} />
                         </SelectTrigger>
                         <SelectContent>
@@ -1703,163 +1805,170 @@ const Produtos = () => {
                     />
                   </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="price">Preço *</Label>
-                    <Input
-                      id="price"
-                      type="text"
-                      placeholder="0,00"
-                      value={formData.price}
-                      onChange={(e) => handlePriceChange(e.target.value)}
-                      required
-                    />
+                  {!isRecipeMode && (
+                    <div className="space-y-2">
+                      <Label htmlFor="price">Preço *</Label>
+                      <Input
+                        id="price"
+                        type="text"
+                        placeholder="0,00"
+                        value={formData.price}
+                        onChange={(e) => handlePriceChange(e.target.value)}
+                        required
+                      />
+                    </div>
+                  )}
+                  {!isRecipeMode && (
+                    <>
+                      {/* Tamanhos */}
+                      <div className="space-y-2">
+                        <Label>{businessConfig.sizeLabel}</Label>
 
-                  </div>
-                  <div className="space-y-2">
-                    <Label>{businessConfig.sizeLabel}</Label>
+                        {formData.sizes.map((s, i) => (
+                          <div key={i} className="flex flex-col sm:flex-row gap-2 border-b sm:border-b-0 pb-3 sm:pb-0">
+                            <Input
+                              placeholder={businessConfig.sizePlaceholder}
+                              value={s.name}
+                              onChange={e => updateSize(i, 'name', e.target.value)}
+                              className="flex-1"
+                            />
 
-                    {formData.sizes.map((s, i) => (
-                      <div key={i} className="flex flex-col sm:flex-row gap-2 border-b sm:border-b-0 pb-3 sm:pb-0">
-                        <Input
-                          placeholder={businessConfig.sizePlaceholder}
-                          value={s.name}
-                          onChange={e => updateSize(i, 'name', e.target.value)}
-                          className="flex-1"
-                        />
-
-                        <div className="flex gap-2 w-full sm:w-auto">
-                          <Input
-                            type="text"
-                            placeholder="Preço (opcional)"
-                            value={
-                              s.price === null || s.price === undefined
-                                ? ''
-                                : s.price.toFixed(2).replace('.', ',')
-                            }
-                            onChange={e => updateSize(i, 'price', e.target.value)}
-                            className="w-full sm:w-32"
-                          />
-                          <Button type="button" variant="outline" onClick={() => removeSize(i)} className="shrink-0">
-                            <X className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
-
-                    <Button type="button" variant="outline" onClick={addSize} className="w-full">
-                      <Plus className="w-4 h-4 mr-2" />
-                      Adicionar {businessConfig.sizeLabel.toLowerCase()}
-                    </Button>
-
-                    <p className="text-xs text-muted-foreground">
-                      Se o preço ficar vazio, será usado o preço base.
-                    </p>
-                  </div>
-                  {/* Variações */}
-                  <div className="space-y-2">
-                    <Label>{businessConfig.variationLabel}</Label>
-
-                    {formData.variations.map((group, gIndex) => (
-                      <div
-                        key={gIndex}
-                        className="border rounded-md p-3 space-y-3"
-                      >
-                        <div className="flex gap-2">
-                          <Input
-                            placeholder={businessConfig.variationPlaceholder}
-                            value={group.name}
-                            onChange={e =>
-                              updateVariationGroupName(gIndex, e.target.value)
-                            }
-                          />
-
-                          <Button
-                            type="button"
-                            variant="outline"
-                            onClick={() => removeVariationGroup(gIndex)}
-                          >
-                            <X className="w-4 h-4" />
-                          </Button>
-                        </div>
-
-                        <div className="space-y-2">
-                          {group.options.map((opt, oIndex) => (
-                            <div key={oIndex} className="flex flex-col sm:flex-row gap-2 border-b sm:border-b-0 pb-2 sm:pb-0">
+                            <div className="flex gap-2 w-full sm:w-auto">
                               <Input
-                                placeholder={businessConfig.variationOptionPlaceholder}
-                                value={opt.name}
-                                onChange={e =>
-                                  updateVariationOption(
-                                    gIndex,
-                                    oIndex,
-                                    'name',
-                                    e.target.value
-                                  )
+                                type="text"
+                                placeholder="Preço (opcional)"
+                                value={
+                                  s.price === null || s.price === undefined
+                                    ? ''
+                                    : s.price.toFixed(2).replace('.', ',')
                                 }
-                                className="flex-1"
+                                onChange={e => updateSize(i, 'price', e.target.value)}
+                                className="w-full sm:w-32"
+                              />
+                              <Button type="button" variant="outline" onClick={() => removeSize(i)} className="shrink-0">
+                                <X className="w-4 h-4" />
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+
+                        <Button type="button" variant="outline" onClick={addSize} className="w-full">
+                          <Plus className="w-4 h-4 mr-2" />
+                          Adicionar {businessConfig.sizeLabel.toLowerCase()}
+                        </Button>
+
+                        <p className="text-xs text-muted-foreground">
+                          Se o preço ficar vazio, será usado o preço base.
+                        </p>
+                      </div>
+
+                      {/* Variações */}
+                      <div className="space-y-2">
+                        <Label>{businessConfig.variationLabel}</Label>
+
+                        {formData.variations.map((group, gIndex) => (
+                          <div
+                            key={gIndex}
+                            className="border rounded-md p-3 space-y-3"
+                          >
+                            <div className="flex gap-2">
+                              <Input
+                                placeholder={businessConfig.variationPlaceholder}
+                                value={group.name}
+                                onChange={e =>
+                                  updateVariationGroupName(gIndex, e.target.value)
+                                }
                               />
 
-                              <div className="flex gap-2 w-full sm:w-32">
-                                <Input
-                                  type="text"
-                                  placeholder="Preço extra"
-                                  value={
-                                    opt.price === null || opt.price === undefined
-                                      ? ''
-                                      : opt.price.toFixed(2).replace('.', ',')
-                                  }
-                                  onChange={e =>
-                                    updateVariationOption(
-                                      gIndex,
-                                      oIndex,
-                                      'price',
-                                      e.target.value
-                                    )
-                                  }
-                                  className="flex-1 sm:w-32 text-xs"
-                                />
-
-                                <Button
-                                  type="button"
-                                  variant="outline"
-                                  onClick={() =>
-                                    removeVariationOption(gIndex, oIndex)
-                                  }
-                                  className="shrink-0"
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </Button>
-                              </div>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => removeVariationGroup(gIndex)}
+                              >
+                                <X className="w-4 h-4" />
+                              </Button>
                             </div>
-                          ))}
 
-                          <Button
-                            type="button"
-                            variant="outline"
-                            onClick={() => addVariationOption(gIndex)}
-                            className="w-full"
-                          >
-                            <Plus className="w-4 h-4 mr-2" />
-                            Adicionar opção
-                          </Button>
-                        </div>
+                            <div className="space-y-2">
+                              {group.options.map((opt, oIndex) => (
+                                <div key={oIndex} className="flex flex-col sm:flex-row gap-2 border-b sm:border-b-0 pb-2 sm:pb-0">
+                                  <Input
+                                    placeholder={businessConfig.variationOptionPlaceholder}
+                                    value={opt.name}
+                                    onChange={e =>
+                                      updateVariationOption(
+                                        gIndex,
+                                        oIndex,
+                                        'name',
+                                        e.target.value
+                                      )
+                                    }
+                                    className="flex-1"
+                                  />
+
+                                  <div className="flex gap-2 w-full sm:w-32">
+                                    <Input
+                                      type="text"
+                                      placeholder="Preço extra"
+                                      value={
+                                        opt.price === null || opt.price === undefined
+                                          ? ''
+                                          : opt.price.toFixed(2).replace('.', ',')
+                                      }
+                                      onChange={e =>
+                                        updateVariationOption(
+                                          gIndex,
+                                          oIndex,
+                                          'price',
+                                          e.target.value
+                                        )
+                                      }
+                                      className="flex-1 sm:w-32 text-xs"
+                                    />
+
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      onClick={() =>
+                                        removeVariationOption(gIndex, oIndex)
+                                      }
+                                      className="shrink-0"
+                                    >
+                                      <Trash2 className="w-4 h-4" />
+                                    </Button>
+                                  </div>
+                                </div>
+                              ))}
+
+                              <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => addVariationOption(gIndex)}
+                                className="w-full"
+                              >
+                                <Plus className="w-4 h-4 mr-2" />
+                                Adicionar opção
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={addVariationGroup}
+                          className="w-full"
+                        >
+                          <Plus className="w-4 h-4 mr-2" />
+                          Adicionar variação
+                        </Button>
+
+                        <p className="text-xs text-muted-foreground">
+                          Cada variação pode ter preço adicional (ex: cor preta +10).
+                        </p>
                       </div>
-                    ))}
-
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={addVariationGroup}
-                      className="w-full"
-                    >
-                      <Plus className="w-4 h-4 mr-2" />
-                      Adicionar variação
-                    </Button>
-
-                    <p className="text-xs text-muted-foreground">
-                      Cada variação pode ter preço adicional (ex: cor preta +10).
-                    </p>
-                  </div>
+                    </>
+                  )}
 
                   {/* Receita (Visível apenas para Confeitaria) */}
                   {businessType === 'confeitaria' && (
@@ -1872,67 +1981,100 @@ const Produtos = () => {
                       </div>
 
                       <div className="space-y-3">
-                        {formData.recipe.map((item, index) => (
-                          <div key={index} className="grid grid-cols-12 gap-2 items-end bg-white/50 p-2 rounded-lg border border-orange-50">
-                            <div className="col-span-12 sm:col-span-5 space-y-1">
-                              <Label className="text-[10px] uppercase text-orange-600 font-bold italic">Ingrediente</Label>
-                              <Select
-                                value={item.stock_item_id}
-                                onValueChange={(val) => updateRecipeItem(index, 'stock_item_id', val)}
-                              >
-                                <SelectTrigger className="bg-white h-9">
-                                  <SelectValue placeholder="Selecione..." />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {stockItems.length > 0 ? (
-                                    stockItems.map(stockItem => (
-                                      <SelectItem key={stockItem.id} value={stockItem.id}>
-                                        {stockItem.name} ({stockItem.unit})
-                                      </SelectItem>
-                                    ))
-                                  ) : (
-                                    <div className="p-2 text-xs text-center text-muted-foreground">
-                                      Nenhum ingrediente no estoque
-                                    </div>
-                                  )}
-                                </SelectContent>
-                              </Select>
-                            </div>
+                        {formData.recipe.map((item, index) => {
+                          const isBase = !!item.base_recipe_id
+                          return (
+                            <div key={index} className="grid grid-cols-12 gap-2 items-end bg-white/50 p-2 rounded-lg border border-orange-50">
+                              <div className="col-span-12 sm:col-span-5 space-y-1">
+                                <Label className="text-[10px] uppercase text-orange-600 font-bold italic">
+                                  {isBase ? 'Base Importada' : 'Ingrediente'}
+                                </Label>
+                                <Select
+                                  value={isBase ? item.base_recipe_id : item.stock_item_id}
+                                  onValueChange={(val) => updateRecipeItem(index, isBase ? 'base_recipe_id' : 'stock_item_id', val)}
+                                >
+                                  <SelectTrigger className="bg-white h-9">
+                                    <SelectValue placeholder="Selecione..." />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {isBase ? (
+                                      products.filter(p => (p.recipe?.length || 0) > 0).map(p => (
+                                        <SelectItem key={p.id} value={p.id}>
+                                          {p.name}
+                                        </SelectItem>
+                                      ))
+                                    ) : (
+                                      stockItems.length > 0 ? (
+                                        stockItems.map(stockItem => (
+                                          <SelectItem key={stockItem.id} value={stockItem.id}>
+                                            {stockItem.name} ({stockItem.unit})
+                                          </SelectItem>
+                                        ))
+                                      ) : (
+                                        <div className="p-2 text-xs text-center text-muted-foreground">
+                                          Nenhum ingrediente no estoque
+                                        </div>
+                                      )
+                                    )}
+                                  </SelectContent>
+                                </Select>
+                              </div>
 
-                            <div className="col-span-6 sm:col-span-3 space-y-1">
-                              <Label className="text-[10px] uppercase text-orange-600 font-bold italic">Quantidade</Label>
-                              <Input
-                                type="number"
-                                step="0.001"
-                                value={item.quantity || ''}
-                                onChange={(e) => updateRecipeItem(index, 'quantity', parseFloat(e.target.value))}
-                                className="bg-white h-9"
-                              />
-                            </div>
+                              <div className="col-span-6 sm:col-span-2 space-y-1">
+                                <Label className="text-[10px] uppercase text-orange-600 font-bold italic">Quantidade</Label>
+                                <Input
+                                  type="number"
+                                  step="0.001"
+                                  value={item.quantity || ''}
+                                  onChange={(e) => updateRecipeItem(index, 'quantity', parseFloat(e.target.value))}
+                                  className="bg-white h-9"
+                                />
+                              </div>
 
-                            <div className="col-span-4 sm:col-span-3 space-y-1">
-                              <Label className="text-[10px] uppercase text-orange-600 font-bold italic">Unid.</Label>
-                              <Input
-                                value={item.unit}
-                                onChange={(e) => updateRecipeItem(index, 'unit', e.target.value)}
-                                placeholder="g, ml..."
-                                className="bg-white h-9"
-                              />
-                            </div>
+                              <div className="col-span-6 sm:col-span-2 space-y-1">
+                                <Label className="text-[10px] uppercase text-orange-600 font-bold italic">Unid.</Label>
+                                <Input
+                                  value={item.unit}
+                                  onChange={(e) => updateRecipeItem(index, 'unit', e.target.value)}
+                                  placeholder="g, ml..."
+                                  className="bg-white h-9"
+                                  disabled={isBase}
+                                />
+                              </div>
 
-                            <div className="col-span-2 sm:col-span-1 pb-0.5">
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => removeRecipeItem(index)}
-                                className="text-orange-400 hover:text-red-500 hover:bg-red-50 h-9 w-9"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </Button>
+                              <div className="col-span-10 sm:col-span-2 space-y-1">
+                                <Label className="text-[10px] uppercase text-orange-600 font-bold italic">Custo Item</Label>
+                                <div className="h-9 flex items-center px-2 bg-orange-100/30 border border-orange-100 rounded-md text-[11px] font-bold text-orange-800 whitespace-nowrap overflow-hidden">
+                                  {(() => {
+                                    if (item.stock_item_id) {
+                                      const si = stockItems.find(s => s.id === item.stock_item_id)
+                                      if (si) return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(calculateIngredientCost(item.quantity, item.unit, si.cost_per_unit, si.unit))
+                                    } else if (item.base_recipe_id) {
+                                      const base = products.find(p => p.id === item.base_recipe_id)
+                                      if (base) {
+                                        const cost = getProductUnitCost(base) * (item.quantity || 0)
+                                        return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(cost)
+                                      }
+                                    }
+                                    return 'R$ 0,00'
+                                  })()}
+                                </div>
+                              </div>
+
+                              <div className="col-span-2 sm:col-span-1 pb-0.5">
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => removeRecipeItem(index)}
+                                  className="text-orange-400 hover:text-red-500 hover:bg-red-50 h-9 w-9"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </Button>
+                              </div>
                             </div>
-                          </div>
-                        ))}
+                          )
+                        })}
 
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                           <Button
@@ -2009,32 +2151,18 @@ const Produtos = () => {
                                 <div className="space-y-1">
                                   <span className="text-[10px] uppercase text-gray-400 font-bold block">Custo Total Receita</span>
                                   <span className="text-lg font-bold text-orange-700">
-                                    {(() => {
-                                      const totalIng = formData.recipe.reduce((acc, current) => {
-                                        const item = stockItems.find(i => i.id === current.stock_item_id)
-                                        if (!item) return acc
-                                        return acc + (item.cost_per_unit * current.quantity)
-                                      }, 0)
-                                      const operational = totalIng * (parseFloat(formData.operational_cost_percent) / 100)
-                                      return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalIng + operational)
-                                    })()}
+                                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
+                                      getProductUnitCost(formData) * (parseFloat(formData.recipe_yield) || 1)
+                                    )}
                                   </span>
                                   <span className="text-[9px] text-gray-400 block">+ {formData.operational_cost_percent}% operacional</span>
                                 </div>
                                 <div className="space-y-1 text-right">
                                   <span className="text-[10px] uppercase text-gray-400 font-bold block">Custo Unitário</span>
                                   <span className="text-lg font-bold text-orange-900">
-                                    {(() => {
-                                      const totalIng = formData.recipe.reduce((acc, current) => {
-                                        const item = stockItems.find(i => i.id === current.stock_item_id)
-                                        if (!item) return acc
-                                        return acc + (item.cost_per_unit * current.quantity)
-                                      }, 0)
-                                      const operational = totalIng * (parseFloat(formData.operational_cost_percent) / 100)
-                                      const totalCost = totalIng + operational
-                                      const yieldVal = parseFloat(formData.recipe_yield) || 1
-                                      return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalCost / yieldVal)
-                                    })()}
+                                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
+                                      getProductUnitCost(formData)
+                                    )}
                                   </span>
                                 </div>
                               </div>
@@ -2044,15 +2172,7 @@ const Produtos = () => {
                                   <span className="text-[10px] uppercase text-gray-400 font-bold block">Lucro p/ Unid. Real</span>
                                   <div className="text-lg font-bold text-green-600">
                                     {(() => {
-                                      const totalIng = formData.recipe.reduce((acc, current) => {
-                                        const item = stockItems.find(i => i.id === current.stock_item_id)
-                                        if (!item) return acc
-                                        return acc + (item.cost_per_unit * current.quantity)
-                                      }, 0)
-                                      const operational = totalIng * (parseFloat(formData.operational_cost_percent) / 100)
-                                      const totalCost = totalIng + operational
-                                      const yieldVal = parseFloat(formData.recipe_yield) || 1
-                                      const unitCost = totalCost / yieldVal
+                                      const unitCost = getProductUnitCost(formData)
                                       const price = Number(formData.price.replace(',', '.')) || 0
                                       const profit = price - unitCost
                                       return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(profit)
@@ -2063,15 +2183,7 @@ const Produtos = () => {
                                   <span className="text-[10px] uppercase text-gray-400 font-bold block">Margem Real %</span>
                                   <div className="inline-flex items-center px-2 py-0.5 rounded-full bg-green-50 text-green-700 text-sm font-bold border border-green-100">
                                     {(() => {
-                                      const totalIng = formData.recipe.reduce((acc, current) => {
-                                        const item = stockItems.find(i => i.id === current.stock_item_id)
-                                        if (!item) return acc
-                                        return acc + (item.cost_per_unit * current.quantity)
-                                      }, 0)
-                                      const operational = totalIng * (parseFloat(formData.operational_cost_percent) / 100)
-                                      const totalCost = totalIng + operational
-                                      const yieldVal = parseFloat(formData.recipe_yield) || 1
-                                      const unitCost = totalCost / yieldVal
+                                      const unitCost = getProductUnitCost(formData)
                                       const price = Number(formData.price.replace(',', '.')) || 0
 
                                       if (price <= 0) return '0%'
@@ -2099,137 +2211,145 @@ const Produtos = () => {
                   )}
 
                   {/* Seção de Adicionais */}
-                  <div className="space-y-2">
-                    <Label>Adicionais</Label>
-                    <div className="space-y-3">
-                      {formData.adicionais.map((additional, index) => (
-                        <div key={index} className="flex gap-2">
-                          <Input
-                            placeholder="Nome do adicional"
-                            value={additional.name}
-                            onChange={(e) => handleAdditionalChange(index, 'name', e.target.value)}
-                            className="flex-1"
-                          />
-                          <Input
-                            type="text"
-                            placeholder="Preço"
-                            value={additional.price === 0 ? '' : additional.price.toFixed(2).replace('.', ',')}
-                            onChange={(e) => handleAdditionalChange(index, 'price', e.target.value)}
-                            className="w-32"
-                          />
-
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            onClick={() => removeAdditional(index)}
-                            className="text-destructive hover:text-destructive"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      ))}
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={addAdditional}
-                        className="w-full"
-                      >
-                        <Plus className="w-4 h-4 mr-2" />
-                        Adicionar Opcional
-                      </Button>
-                    </div>
-                  </div>
-
-                  <div className="space-y-4">
-                    <Label>Imagens do Produto</Label>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-                      {imagePreviews.map((preview, index) => (
-                        <div key={index} className="relative aspect-square">
-                          <img
-                            src={preview!}
-                            alt={`Preview ${index + 1}`}
-                            className="w-full h-full object-cover rounded-md border"
-                          />
-                          <Button
-                            type="button"
-                            variant="destructive"
-                            size="icon"
-                            className="absolute -top-2 -right-2 h-6 w-6 rounded-full shadow-lg"
-                            onClick={() => clearImageMulti(index)}
-                          >
-                            <X className="h-3 w-3" />
-                          </Button>
-                        </div>
-                      ))}
-
-                      {/* Botão de adicionar nova imagem */}
-                      <div className="aspect-square">
-                        <div className="border-2 border-dashed border-gray-300 rounded-md h-full flex items-center justify-center hover:bg-gray-50 transition-colors">
-                          <Label htmlFor="image-upload-new" className="cursor-pointer flex flex-col items-center w-full h-full justify-center">
-                            <Plus className="h-8 w-8 text-gray-400" />
-                            <span className="text-xs text-gray-500 mt-2">Adicionar</span>
+                  {!isRecipeMode && (
+                    <div className="space-y-2">
+                      <Label>Adicionais</Label>
+                      <div className="space-y-3">
+                        {formData.adicionais.map((additional, index) => (
+                          <div key={index} className="flex gap-2">
                             <Input
-                              id="image-upload-new"
-                              type="file"
-                              accept="image/*"
-                              multiple
-                              onChange={(e) => {
-                                const files = Array.from(e.target.files || []);
-                                const currentLength = imagePreviews.length;
-                                files.forEach((file, i) => {
-                                  const mockEvent = {
-                                    target: { files: [file] }
-                                  } as any;
-                                  handleFileSelectMulti(mockEvent, currentLength + i);
-                                });
-                                e.target.value = '';
-                              }}
-                              className="hidden"
+                              placeholder="Nome do adicional"
+                              value={additional.name}
+                              onChange={(e) => handleAdditionalChange(index, 'name', e.target.value)}
+                              className="flex-1"
                             />
-                          </Label>
+                            <Input
+                              type="text"
+                              placeholder="Preço"
+                              value={additional.price === 0 ? '' : additional.price.toFixed(2).replace('.', ',')}
+                              onChange={(e) => handleAdditionalChange(index, 'price', e.target.value)}
+                              className="w-32"
+                            />
+
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => removeAdditional(index)}
+                              className="text-destructive hover:text-destructive"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        ))}
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={addAdditional}
+                          className="w-full"
+                        >
+                          <Plus className="w-4 h-4 mr-2" />
+                          Adicionar Opcional
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
+                  {!isRecipeMode && (
+                    <div className="space-y-4">
+                      <Label>Imagens do Produto</Label>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                        {imagePreviews.map((preview, index) => (
+                          <div key={index} className="relative aspect-square">
+                            <img
+                              src={preview!}
+                              alt={`Preview ${index + 1}`}
+                              className="w-full h-full object-cover rounded-md border"
+                            />
+                            <Button
+                              type="button"
+                              variant="destructive"
+                              size="icon"
+                              className="absolute -top-2 -right-2 h-6 w-6 rounded-full shadow-lg"
+                              onClick={() => clearImageMulti(index)}
+                            >
+                              <X className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        ))}
+
+                        {/* Botão de adicionar nova imagem */}
+                        <div className="aspect-square">
+                          <div className="border-2 border-dashed border-gray-300 rounded-md h-full flex items-center justify-center hover:bg-gray-50 transition-colors">
+                            <Label htmlFor="image-upload-new" className="cursor-pointer flex flex-col items-center w-full h-full justify-center">
+                              <Plus className="h-8 w-8 text-gray-400" />
+                              <span className="text-xs text-gray-500 mt-2">Adicionar</span>
+                              <Input
+                                id="image-upload-new"
+                                type="file"
+                                accept="image/*"
+                                multiple
+                                onChange={(e) => {
+                                  const files = Array.from(e.target.files || []);
+                                  const currentLength = imagePreviews.length;
+                                  files.forEach((file, i) => {
+                                    const mockEvent = {
+                                      target: { files: [file] }
+                                    } as any;
+                                    handleFileSelectMulti(mockEvent, currentLength + i);
+                                  });
+                                  e.target.value = '';
+                                }}
+                                className="hidden"
+                              />
+                            </Label>
+                          </div>
                         </div>
                       </div>
+                      <p className="text-xs text-gray-500">
+                        A primeira imagem será a principal.
+                      </p>
                     </div>
-                    <p className="text-xs text-gray-500">
-                      A primeira imagem será a principal.
-                    </p>
-                  </div>
+                  )}
 
-                  <div className="flex items-center space-x-2">
-                    <Switch
-                      id="show_in_catalog"
-                      checked={formData.show_in_catalog}
-                      onCheckedChange={(checked) => setFormData({ ...formData, show_in_catalog: checked })}
-                    />
-                    <Label htmlFor="show_in_catalog">Mostrar no catálogo</Label>
-                  </div>
-
-                  <div className="space-y-4 pt-2 border-t">
-                    <div className="flex items-center space-x-2">
-                      <Switch
-                        id="track_stock"
-                        checked={formData.track_stock}
-                        onCheckedChange={(checked) => setFormData({ ...formData, track_stock: checked })}
-                      />
-                      <Label htmlFor="track_stock">Controlar estoque deste produto</Label>
-                    </div>
-
-                    {formData.track_stock && (
-                      <div className="space-y-2 pl-7">
-                        <Label htmlFor="stock_quantity">Quantidade em estoque</Label>
-                        <Input
-                          id="stock_quantity"
-                          type="number"
-                          min="0"
-                          value={formData.stock_quantity}
-                          onChange={(e) => setFormData({ ...formData, stock_quantity: e.target.value })}
-                          placeholder="0"
-                          className="w-32"
+                  {!isRecipeMode && (
+                    <>
+                      <div className="flex items-center space-x-2">
+                        <Switch
+                          id="show_in_catalog"
+                          checked={formData.show_in_catalog}
+                          onCheckedChange={(checked) => setFormData({ ...formData, show_in_catalog: checked })}
                         />
+                        <Label htmlFor="show_in_catalog">Mostrar no catálogo</Label>
                       </div>
-                    )}
-                  </div>
+
+                      <div className="space-y-4 pt-2 border-t">
+                        <div className="flex items-center space-x-2">
+                          <Switch
+                            id="track_stock"
+                            checked={formData.track_stock}
+                            onCheckedChange={(checked) => setFormData({ ...formData, track_stock: checked })}
+                          />
+                          <Label htmlFor="track_stock">Controlar estoque deste produto</Label>
+                        </div>
+
+                        {formData.track_stock && (
+                          <div className="space-y-2 pl-7">
+                            <Label htmlFor="stock_quantity">Quantidade em estoque</Label>
+                            <Input
+                              id="stock_quantity"
+                              type="number"
+                              min="0"
+                              value={formData.stock_quantity}
+                              onChange={(e) => setFormData({ ...formData, stock_quantity: e.target.value })}
+                              placeholder="0"
+                              className="w-32"
+                            />
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  )}
 
 
 

@@ -337,7 +337,7 @@ const CatalogoPublico = () => {
         ...p,
         categorias_produtos: Array.isArray(p.categorias_produtos) ? p.categorias_produtos[0] : p.categorias_produtos,
         subcategorias_produtos: Array.isArray(p.subcategorias_produtos) ? p.subcategorias_produtos[0] : p.subcategorias_produtos
-      }))
+      })).filter(p => p.categorias_produtos?.nome?.toLowerCase() !== 'receita')
 
       const featured = formattedProducts.filter(p => p.is_featured)
       setFeaturedProducts(featured)

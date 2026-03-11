@@ -6,7 +6,8 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Badge } from '@/components/ui/badge';
+import { Badge } from '@/components/ui/badge'
+import { convertQuantity } from '@/utils/unit-conversion';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { ResponsiveTable } from '@/components/ui/responsive-table';
@@ -180,14 +181,15 @@ const Pedidos = () => {
   const [productSearch, setProductSearch] = useState('');
   const [clientType, setClientType] = useState<'registered' | 'guest'>('registered');
   const [isProductionPanelOpen, setIsProductionPanelOpen] = useState(false);
-  const [businessType, setBusinessType] = useState<string>('confeitaria');
+  const [businessType, setBusinessType] = useState<string>('');
 
   useEffect(() => {
     fetchOrders();
     fetchClients();
     fetchProducts();
     fetchCategories();
-  }, []);
+    fetchShopSettings();
+  }, [user]);
 
   const fetchOrders = async () => {
     try {
@@ -336,6 +338,23 @@ const Pedidos = () => {
       setSubcategories(subRes.data || []);
     } catch (error) {
       console.error('Error fetching categories:', error);
+    }
+  };
+
+  const fetchShopSettings = async () => {
+    if (!user) return;
+    try {
+      const { data, error } = await supabase
+        .from('bakery_settings')
+        .select('business_type')
+        .eq('id', user.id)
+        .single();
+
+      if (data) {
+        setBusinessType(data.business_type || '');
+      }
+    } catch (err) {
+      console.error('Error fetching shop settings:', err);
     }
   };
 
@@ -551,7 +570,7 @@ const Pedidos = () => {
       const stockDeducingStatuses = ['confirmado', 'producao', 'pronto', 'entregue'];
       const orderToDelete = orders.find(o => o.id === orderId);
       if (orderToDelete && stockDeducingStatuses.includes(orderToDelete.status)) {
-        await updateStock(orderId, 'return');
+        await updateStock(orderId, 'restore');
       }
 
       fetchOrders();
@@ -589,7 +608,7 @@ const Pedidos = () => {
         await updateStock(orderId, 'deduct');
       } else if (wasDeducted && !willBeDeducted) {
         // Saiu de confirmado+ para orcamento/cancelado -> VOLTAR ESTOQUE
-        await updateStock(orderId, 'return');
+        await updateStock(orderId, 'restore');
       }
       // -------------------------
 
@@ -609,85 +628,96 @@ const Pedidos = () => {
     }
   };
 
-  const updateStock = async (orderId: string, type: 'deduct' | 'return') => {
-    try {
-      // 1. Buscar os itens do pedido e seus produtos
-      const { data: orderItems, error: itemsError } = await supabase
-        .from('order_items')
-        .select(`
-          quantity,
-          product_id
-        `)
-        .eq('order_id', orderId);
-
-      if (itemsError) throw itemsError;
-      if (!orderItems || orderItems.length === 0) return;
-
-      // 2. Para cada item, verificar se o produto controla estoque e atualizar
-      for (const item of orderItems) {
-        if (!item.product_id) continue;
-
-        // Buscar dados atuais do produto (estoque e se controla)
-        const { data: product, error: prodError } = await supabase
-          .from('products')
-          .select('track_stock, stock_quantity, recipe')
-          .eq('id', item.product_id)
+  const processInventoryMovement = async (recipe: any[], multiplier: number, type: 'deduct' | 'restore', orderId: string) => {
+    for (const recipeItem of recipe) {
+      if (recipeItem.stock_item_id) {
+        const { data: stockItem, error: stError } = await supabase
+          .from('stock_items')
+          .select('quantity, unit')
+          .eq('id', recipeItem.stock_item_id)
           .single();
 
-        if (prodError || !product) continue;
+        if (stError || !stockItem) continue;
 
-        // A) Redução de estoque do PRODUTO (Estoque Final)
-        if (product.track_stock) {
-          const currentStock = product.stock_quantity || 0;
-          const quantity = item.quantity;
-          const newStock = type === 'deduct'
-            ? currentStock - quantity
-            : currentStock + quantity;
+        const convertedRecipeQty = convertQuantity(recipeItem.quantity || 0, recipeItem.unit, stockItem.unit);
+        const totalQtyToMove = convertedRecipeQty * multiplier;
 
-          await supabase
-            .from('products')
-            .update({ stock_quantity: Math.max(0, newStock) })
-            .eq('id', item.product_id);
-        }
+        const newStockItemQuantity = type === 'deduct'
+          ? stockItem.quantity - totalQtyToMove
+          : stockItem.quantity + totalQtyToMove;
 
-        // B) Redução de INGREDIENTES (Receita)
-        if (product.recipe && Array.isArray(product.recipe) && product.recipe.length > 0) {
-          for (const recipeItem of product.recipe) {
-            const { data: stockItem, error: stError } = await supabase
-              .from('stock_items')
-              .select('quantity')
-              .eq('id', recipeItem.stock_item_id)
-              .single();
+        await supabase
+          .from('stock_items')
+          .update({
+            quantity: Math.max(0, newStockItemQuantity),
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', recipeItem.stock_item_id);
 
-            if (stError || !stockItem) continue;
+        await supabase
+          .from('stock_movements')
+          .insert({
+            stock_item_id: recipeItem.stock_item_id,
+            type: type === 'deduct' ? 'saida' : 'entrada',
+            quantity: totalQtyToMove,
+            reason: type === 'deduct' ? `Venda Pedido #${orderId.slice(0, 8)}` : `Cancelamento Pedido #${orderId.slice(0, 8)}`,
+          });
+      } else if (recipeItem.base_recipe_id) {
+        // Buscar a receita da base
+        const { data: baseProduct } = await supabase
+          .from('products')
+          .select('recipe, recipe_yield')
+          .eq('id', recipeItem.base_recipe_id)
+          .single();
 
-            const quantityToMove = recipeItem.quantity * item.quantity;
-            const newStockItemQuantity = type === 'deduct'
-              ? stockItem.quantity - quantityToMove
-              : stockItem.quantity + quantityToMove;
-
-            await supabase
-              .from('stock_items')
-              .update({
-                quantity: Math.max(0, newStockItemQuantity),
-                updated_at: new Date().toISOString()
-              })
-              .eq('id', recipeItem.stock_item_id);
-
-            // Registrar movimentação de ingrediente
-            await supabase
-              .from('stock_movements')
-              .insert({
-                stock_item_id: recipeItem.stock_item_id,
-                type: type === 'deduct' ? 'saida' : 'entrada',
-                quantity: quantityToMove,
-                reason: type === 'deduct' ? `Venda Pedido #${orderId.slice(0, 8)}` : `Cancelamento Pedido #${orderId.slice(0, 8)}`,
-              });
-          }
+        if (baseProduct && baseProduct.recipe && Array.isArray(baseProduct.recipe)) {
+          const baseYield = baseProduct.recipe_yield || 1;
+          const baseMultiplier = (multiplier * (recipeItem.quantity || 0)) / baseYield;
+          await processInventoryMovement(baseProduct.recipe, baseMultiplier, type, orderId);
         }
       }
+    }
+  };
+
+  const updateInventory = async (orderId: string, type: 'deduct' | 'restore') => {
+    const { data: orderItems, error: itemsError } = await supabase
+      .from('order_items')
+      .select('product_id, quantity')
+      .eq('order_id', orderId);
+
+    if (itemsError || !orderItems) return;
+
+    for (const item of orderItems) {
+      const { data: product, error: prodError } = await supabase
+        .from('products')
+        .select('track_stock, stock_quantity, recipe')
+        .eq('id', item.product_id)
+        .single();
+
+      if (prodError || !product) continue;
+
+      if (product.track_stock) {
+        const currentStock = product.stock_quantity || 0;
+        const quantity = item.quantity;
+        const newStock = type === 'deduct' ? currentStock - quantity : currentStock + quantity;
+
+        await supabase
+          .from('products')
+          .update({ stock_quantity: Math.max(0, newStock) })
+          .eq('id', item.product_id);
+      }
+
+      if (product.recipe && Array.isArray(product.recipe) && product.recipe.length > 0) {
+        await processInventoryMovement(product.recipe, item.quantity, type, orderId);
+      }
+    }
+  };
+
+  const updateStock = async (orderId: string, type: 'deduct' | 'restore') => {
+    try {
+      await updateInventory(orderId, type);
     } catch (error) {
-      console.error('Erro ao processar movimentação de estoque:', error);
+      console.error('Erro ao atualizar estoque:', error);
     }
   };
 
