@@ -70,6 +70,12 @@ interface Product {
   subcategorias_produtos?: {
     nome: string
   }
+  track_stock?: boolean
+  stock_quantity?: number
+  variant_stock?: {
+    variation_key: string
+    quantity: number
+  }[]
 }
 
 interface Subcategory {
@@ -103,6 +109,7 @@ interface BakerySettings {
   vende_cnpj?: boolean
   business_type?: string
   working_hours?: Record<number, { open: string; close: string; closed: boolean }>
+  always_open?: boolean
 }
 
 interface Client {
@@ -210,7 +217,11 @@ const CatalogoPublico = () => {
   }
 
   const isStoreOpen = () => {
-    if (!bakerySettings.working_hours) return true
+    // Se explicitamente marcado como sempre aberto (com verificação de tipo para evitar erro de schema)
+    if ((bakerySettings as any).always_open === true) return true
+
+    // Se não houver configuração de horários ou estiver vazio, padrão é SEMPRE ABERTO
+    if (!bakerySettings.working_hours || Object.keys(bakerySettings.working_hours).length === 0) return true
 
     const now = new Date()
     const dayOfWeek = now.getDay()
@@ -331,7 +342,7 @@ const CatalogoPublico = () => {
       const { data: productsData, error: productsError } = await supabase
         .from('products')
         .select(`
-  id, name, description, price, image_url, image_urls, categoria_id, sub_categoria_id, adicionais, is_featured, sizes, variations,
+  id, name, description, price, image_url, image_urls, categoria_id, sub_categoria_id, adicionais, is_featured, sizes, variations, track_stock, stock_quantity, variant_stock,
   categorias_produtos (
     nome, banner_desktop_url, banner_mobile_url
   ),
@@ -489,12 +500,10 @@ const CatalogoPublico = () => {
 
     if (hasSizes(viewingProduct)) {
 
-      // só obriga escolher tamanho se existir algum tamanho com preço > 0
-      const hasPaidSize =
-        viewingProduct.sizes?.some(s => Number(s.price) > 0)
+      const hasSizes = viewingProduct.sizes && viewingProduct.sizes.length > 0;
 
-      if (hasPaidSize && !selectedSize) {
-        alert('Selecione um tamanho.')
+      if (hasSizes && !selectedSize) {
+        alert('Por favor, selecione um tamanho antes de adicionar ao carrinho.');
         return
       }
 
@@ -506,6 +515,18 @@ const CatalogoPublico = () => {
     if (!storeIsOpen) {
       alert('A loja está fechada no momento. Por favor, tente novamente durante o horário de funcionamento.')
       return
+    }
+
+    const availableStock = getVariantStock(
+      viewingProduct,
+      selectedSize?.name,
+      Object.values(selectedVariations).map(v => v.name)
+    );
+
+    if (quantity > availableStock) {
+      alert(`Desculpe, temos apenas ${availableStock} unidades disponíveis desta variação.`);
+      setQuantity(availableStock);
+      return;
     }
 
     let finalPrice = basePrice + variationsTotal
@@ -526,10 +547,23 @@ const CatalogoPublico = () => {
 
 
       if (existingIndex >= 0) {
+        const currentInCart = prevCart[existingIndex].quantity;
+        const totalNeeded = currentInCart + quantity;
+
+        if (totalNeeded > availableStock) {
+          alert(`Você já possui ${currentInCart} no carrinho. Só temos mais ${availableStock - currentInCart} disponíveis.`);
+          const newCart = [...prevCart];
+          newCart[existingIndex] = {
+            ...newCart[existingIndex],
+            quantity: availableStock
+          };
+          return newCart;
+        }
+
         const newCart = [...prevCart]
         newCart[existingIndex] = {
           ...newCart[existingIndex],
-          quantity: newCart[existingIndex].quantity + quantity
+          quantity: totalNeeded
         }
         return newCart
       }
@@ -562,9 +596,21 @@ const CatalogoPublico = () => {
 
   const updateQuantity = (index: number, newQuantity: number) => {
     setCart(prev =>
-      prev.map((item, i) =>
-        i === index ? { ...item, quantity: newQuantity } : item
-      )
+      prev.map((item, i) => {
+        if (i === index) {
+          const availableStock = getVariantStock(
+            item,
+            item.selectedSize?.name,
+            item.selectedVariations?.map(v => v.name)
+          );
+          const quantity = Math.min(newQuantity, availableStock);
+          if (newQuantity > availableStock) {
+            showError(`Estoque insuficiente! Apenas ${availableStock} disponíveis.`);
+          }
+          return { ...item, quantity };
+        }
+        return item;
+      })
     )
   }
 
@@ -596,6 +642,22 @@ const CatalogoPublico = () => {
 
 
   const cartItemCount = cart.reduce((sum, item) => sum + item.quantity, 0)
+
+  const getVariantStock = (product: Product, sizeName?: string, variationNames?: string[]) => {
+    if (!product.track_stock) return 9999;
+    if (!product.variant_stock || product.variant_stock.length === 0) return product.stock_quantity || 0;
+
+    const parts: string[] = [];
+    if (sizeName) parts.push(sizeName);
+    if (variationNames && variationNames.length > 0) {
+      variationNames.forEach(v => parts.push(v));
+    }
+    const key = parts.join(' - ');
+
+    const variant = product.variant_stock.find(v => v.variation_key === key);
+    return variant ? variant.quantity : 0;
+  };
+
   const getItemPreviewTotal = () => {
     if (!viewingProduct) return 0
 
@@ -1500,39 +1562,49 @@ const CatalogoPublico = () => {
                     </h4>
 
                     <div className="grid grid-cols-3 gap-2">
-                      {viewingProduct.sizes!.map((s, index) => (
-                        <button
-                          key={index}
-                          type="button"
-                          onClick={() => setSelectedSize(s)}
-                          className={`
-    border rounded-md px-3 py-2 text-sm
-    flex flex-col items-center justify-center
-    transition
-    ${selectedSize?.name === s.name
-                              ? 'border-blue-600 bg-blue-600 text-white ring-2 ring-blue-300'
-                              : 'border-gray-300 bg-white hover:bg-gray-50'
-                            }
-  `}
-                        >
-                          <div className="text-sm font-semibold">
-                            {s.name || 'Tamanho'}
-                          </div>
+                      {viewingProduct.sizes!.map((s, index) => {
+                        // Verificar se esse tamanho tem estoque em PELO MENOS UMA combinação de variações
+                        const hasAnyStock = !viewingProduct.track_stock ||
+                          (viewingProduct.variant_stock?.some(v => v.variation_key.includes(s.name) && v.quantity > 0) ?? (viewingProduct.stock_quantity ?? 0) > 0);
 
-                          {Number(s.price) > 0 && (
-                            <div
-                              className={`text-xs ${selectedSize?.name === s.name
-                                ? 'text-white/90'
-                                : 'text-gray-500'
-                                }`}
-                            >
-                              {formatPrice(Number(s.price))}
+                        return (
+                          <button
+                            key={index}
+                            type="button"
+                            disabled={!hasAnyStock}
+                            onClick={() => setSelectedSize(s)}
+                            className={`
+                              border rounded-md px-3 py-2 text-sm
+                              flex flex-col items-center justify-center
+                              transition relative
+                              ${selectedSize?.name === s.name
+                                ? 'border-blue-600 bg-blue-600 text-white ring-2 ring-blue-300'
+                                : hasAnyStock
+                                  ? 'border-gray-300 bg-white hover:bg-gray-50'
+                                  : 'border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed opacity-60'
+                              }
+                            `}
+                          >
+                            <div className="text-sm font-semibold">
+                              {s.name || 'Tamanho'}
                             </div>
-                          )}
 
-                        </button>
-
-                      ))}
+                            {Number(s.price) > 0 && (
+                              <div
+                                className={`text-xs ${selectedSize?.name === s.name
+                                  ? 'text-white/90'
+                                  : 'text-gray-500'
+                                  }`}
+                              >
+                                {formatPrice(Number(s.price))}
+                              </div>
+                            )}
+                            {!hasAnyStock && (
+                              <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[8px] px-1 rounded-full">Esgotado</span>
+                            )}
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
                 )}
@@ -1551,15 +1623,28 @@ const CatalogoPublico = () => {
 
                         <div className="flex flex-wrap gap-2">
                           {group.options.map((opt, oIndex) => {
-                            const key = `${group.name}-${opt.name}`
-
                             const selected =
                               selectedVariations[group.name]?.name === opt.name
+
+                            // Verificar estoque para esta opção específica dada a seleção atual (Tamanho + outras variações já escolhidas)
+                            // Para simplificar, verificamos se existe estoque com Tamanho selecionado + esta opção
+                            const otherSelectedVariations = Object.entries(selectedVariations)
+                              .filter(([g]) => g !== group.name)
+                              .map(([, v]) => v.name);
+
+                            const stockAvailable = getVariantStock(
+                              viewingProduct,
+                              selectedSize?.name,
+                              [opt.name, ...otherSelectedVariations]
+                            );
+
+                            const isDisabled = viewingProduct.track_stock && stockAvailable <= 0;
 
                             return (
                               <button
                                 key={oIndex}
                                 type="button"
+                                disabled={isDisabled}
                                 onClick={() =>
                                   setSelectedVariations(prev => ({
                                     ...prev,
@@ -1567,19 +1652,24 @@ const CatalogoPublico = () => {
                                   }))
                                 }
                                 className={`
-                  border rounded-md px-3 py-1.5 text-sm
-                  transition
-                  ${selected
+                                  border rounded-md px-3 py-1.5 text-sm
+                                  transition relative
+                                  ${selected
                                     ? 'border-blue-600 bg-blue-600 text-white'
-                                    : 'border-gray-300 bg-white hover:bg-gray-50'
+                                    : isDisabled
+                                      ? 'border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed opacity-60'
+                                      : 'border-gray-300 bg-white hover:bg-gray-50'
                                   }
-                `}
+                                `}
                               >
                                 {opt.name}
                                 {opt.price > 0 && (
                                   <span className="ml-1 text-xs opacity-80">
                                     (+{formatPrice(opt.price)})
                                   </span>
+                                )}
+                                {isDisabled && (
+                                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[8px] px-1 rounded-full">X</span>
                                 )}
                               </button>
                             )
@@ -1654,8 +1744,13 @@ const CatalogoPublico = () => {
                         return
                       }
 
+                      const availableStock = getVariantStock(
+                        viewingProduct,
+                        selectedSize?.name,
+                        Object.values(selectedVariations).map(v => v.name)
+                      );
                       const n = Number(v)
-                      if (!isNaN(n)) setQuantity(n)
+                      if (!isNaN(n)) setQuantity(Math.min(n, availableStock))
                     }}
                     onBlur={() => {
                       if (!quantity || quantity < 1) setQuantity(1)
@@ -1668,9 +1763,29 @@ const CatalogoPublico = () => {
                     size="icon"
                     variant="outline"
                     onClick={() => setQuantity(q => q + 1)}
+                    disabled={quantity >= getVariantStock(
+                      viewingProduct,
+                      selectedSize?.name,
+                      Object.values(selectedVariations).map(v => v.name)
+                    )}
                   >
                     <Plus className="w-4 h-4" />
                   </Button>
+
+                  {viewingProduct.track_stock && (
+                    <span className="text-[10px] text-muted-foreground ml-2">
+                      {(() => {
+                        const stock = getVariantStock(
+                          viewingProduct,
+                          selectedSize?.name,
+                          Object.values(selectedVariations).map(v => v.name)
+                        );
+                        if (stock <= 5 && stock > 0) return `Apenas ${stock} em estoque!`;
+                        if (stock > 0) return `${stock} disponíveis`;
+                        return '';
+                      })()}
+                    </span>
+                  )}
 
                 </div>
                 <div className="flex justify-between items-center border-t pt-3">
@@ -1697,11 +1812,25 @@ const CatalogoPublico = () => {
                     )
                     ||
                     (viewingProduct.variations?.some(v => !selectedVariations[v.name]))
+                    ||
+                    (getVariantStock(
+                      viewingProduct,
+                      selectedSize?.name,
+                      Object.values(selectedVariations).map(v => v.name)
+                    ) <= 0)
                   }
                   onClick={addToCartWithAdditionais}
                 >
                   <ShoppingCart className="w-4 h-4 mr-2" />
-                  {storeIsOpen ? 'Adicionar ao orçamento' : 'Loja fechada'}
+                  {!storeIsOpen
+                    ? 'Loja fechada'
+                    : (getVariantStock(
+                      viewingProduct,
+                      selectedSize?.name,
+                      Object.values(selectedVariations).map(v => v.name)
+                    ) <= 0
+                      ? 'Esgotado'
+                      : 'Adicionar ao orçamento')}
                 </Button>
 
               </div>

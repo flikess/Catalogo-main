@@ -52,6 +52,10 @@ interface Product {
   categorias_produtos?: {
     nome: string
   }
+  variant_stock?: {
+    variation_key: string
+    quantity: number
+  }[]
 }
 
 interface StockCategory {
@@ -215,6 +219,7 @@ const Estoque = () => {
           recipe,
           recipe_yield,
           price,
+          variant_stock,
           categorias_produtos (
             nome
           )
@@ -1091,9 +1096,25 @@ const Estoque = () => {
                         </Badge>
                       </TableCell>
                       <TableCell>
-                        <span className={`font-bold ${product.stock_quantity <= 5 ? 'text-red-600' : 'text-green-600'}`}>
-                          {product.stock_quantity} unidades
-                        </span>
+                        <div className="flex flex-col gap-1">
+                          <span className={`font-bold ${product.stock_quantity <= 5 ? 'text-red-600' : 'text-green-600'}`}>
+                            {product.stock_quantity} unidades
+                          </span>
+
+                          {product.variant_stock && product.variant_stock.length > 0 && (
+                            <div className="flex flex-wrap gap-1 mt-1">
+                              {product.variant_stock.map((variant, idx) => (
+                                <Badge
+                                  key={idx}
+                                  variant="outline"
+                                  className="text-[10px] py-0 px-1 bg-gray-50 border-gray-200"
+                                >
+                                  {variant.variation_key}: <span className="font-bold ml-1">{variant.quantity}</span>
+                                </Badge>
+                              ))}
+                            </div>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell className="text-right">
                         <Button

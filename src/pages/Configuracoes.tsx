@@ -40,6 +40,7 @@ interface BakerySettings {
   vende_cnpj?: boolean
   business_type?: string | null
   working_hours?: Record<number, { open: string; close: string; closed: boolean }>
+  always_open?: boolean
   updated_at?: string
 }
 
@@ -291,8 +292,11 @@ const Configuracoes = () => {
         bannerMobileUrl = null
       }
 
-      const settingsToSave: BakerySettings = {
-        ...bakerySettings,
+      // Removemos o always_open do objeto antes de salvar para evitar erro de coluna inexistente no banco
+      const { always_open, ...settingsWithoutAlwaysOpen } = bakerySettings;
+
+      const settingsToSave = {
+        ...settingsWithoutAlwaysOpen,
         id: user.id,
         logo_url: logoUrl,
         banner_url: bannerUrl,
@@ -359,7 +363,7 @@ const Configuracoes = () => {
 
         <Tabs defaultValue="bakery" className="space-y-6">
 
-          <TabsList className="grid w-full grid-cols-2">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="bakery" className="flex gap-2 items-center">
               <Store className="w-4 h-4" />
               Loja
@@ -766,6 +770,22 @@ const Configuracoes = () => {
                 <p className="text-sm text-muted-foreground">
                   Defina os horários em que sua loja está aberta para receber pedidos.
                 </p>
+                <div className="flex items-center justify-between p-4 rounded-lg border bg-blue-50/50 border-blue-100">
+                  <div className="space-y-1">
+                    <Label htmlFor="always_open" className="text-base font-bold text-blue-900 cursor-pointer">Sempre Aberto</Label>
+                    <p className="text-xs text-blue-700">Ative esta opção se sua loja funciona 24 horas por dia, 7 dias por semana.</p>
+                  </div>
+                  <input
+                    type="checkbox"
+                    id="always_open"
+                    checked={bakerySettings.always_open || false}
+                    onChange={(e) => setBakerySettings(prev => ({ ...prev, always_open: e.target.checked }))}
+                    className="w-5 h-5 accent-blue-600 cursor-pointer"
+                  />
+                </div>
+
+                <Separator />
+
                 <div className="space-y-4">
                   {[0, 1, 2, 3, 4, 5, 6].map((day) => {
                     const dayNames = [
@@ -775,10 +795,10 @@ const Configuracoes = () => {
                     const hours = (bakerySettings?.working_hours as any)?.[day] || { open: '08:00', close: '18:00', closed: false }
 
                     return (
-                      <div key={day} className="flex flex-wrap items-center gap-4 p-4 rounded-lg border bg-card">
+                      <div key={day} className={`flex flex-wrap items-center gap-4 p-4 rounded-lg border bg-card transition-opacity ${bakerySettings.always_open ? 'opacity-50 pointer-events-none' : ''}`}>
                         <div className="w-32 font-medium">{dayNames[day]}</div>
 
-                        <div className="flex flex-1 items-center gap-4 min-w-[200px]">
+                        <div className="flex flex-1 items-center gap-6 min-w-[200px]">
                           <div className="flex items-center gap-2">
                             <input
                               type="checkbox"
@@ -791,38 +811,59 @@ const Configuracoes = () => {
                               }}
                               className="w-4 h-4"
                             />
-                            <Label htmlFor={`closed-${day}`}>Fechado</Label>
+                            <Label htmlFor={`closed-${day}`} className="cursor-pointer">Fechado</Label>
                           </div>
 
                           {!hours.closed && (
-                            <div className="flex items-center gap-4 ml-auto">
+                            <>
                               <div className="flex items-center gap-2">
-                                <span className="text-sm">De:</span>
-                                <Input
-                                  type="time"
-                                  value={hours.open}
-                                  className="w-24"
+                                <input
+                                  type="checkbox"
+                                  id={`allday-${day}`}
+                                  checked={hours.open === '00:00' && hours.close === '23:59'}
                                   onChange={(e) => {
                                     const newHours = { ...(bakerySettings.working_hours || {}) }
-                                    newHours[day] = { ...hours, open: e.target.value }
+                                    if (e.target.checked) {
+                                      newHours[day] = { ...hours, open: '00:00', close: '23:59' }
+                                    } else {
+                                      newHours[day] = { ...hours, open: '08:00', close: '18:00' }
+                                    }
                                     setBakerySettings(prev => ({ ...prev, working_hours: newHours }))
                                   }}
+                                  className="w-4 h-4"
                                 />
+                                <Label htmlFor={`allday-${day}`} className="cursor-pointer whitespace-nowrap">Aberto 24h</Label>
                               </div>
-                              <div className="flex items-center gap-2">
-                                <span className="text-sm">Até:</span>
-                                <Input
-                                  type="time"
-                                  value={hours.close}
-                                  className="w-24"
-                                  onChange={(e) => {
-                                    const newHours = { ...(bakerySettings.working_hours || {}) }
-                                    newHours[day] = { ...hours, close: e.target.value }
-                                    setBakerySettings(prev => ({ ...prev, working_hours: newHours }))
-                                  }}
-                                />
+
+                              <div className={`flex items-center gap-4 ml-auto transition-opacity ${(hours.open === '00:00' && hours.close === '23:59') ? 'opacity-30 pointer-events-none' : ''}`}>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-sm">De:</span>
+                                  <Input
+                                    type="time"
+                                    value={hours.open}
+                                    className="w-24"
+                                    onChange={(e) => {
+                                      const newHours = { ...(bakerySettings.working_hours || {}) }
+                                      newHours[day] = { ...hours, open: e.target.value }
+                                      setBakerySettings(prev => ({ ...prev, working_hours: newHours }))
+                                    }}
+                                  />
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-sm">Até:</span>
+                                  <Input
+                                    type="time"
+                                    value={hours.close}
+                                    className="w-24"
+                                    onChange={(e) => {
+                                      const newHours = { ...(bakerySettings.working_hours || {}) }
+                                      newHours[day] = { ...hours, close: e.target.value }
+                                      setBakerySettings(prev => ({ ...prev, working_hours: newHours }))
+                                    }}
+                                  />
+                                </div>
                               </div>
-                            </div>
+                            </>
                           )}
                         </div>
                       </div>
@@ -846,7 +887,7 @@ const Configuracoes = () => {
 
         </Tabs>
       </div>
-    </Layout>
+    </Layout >
   )
 }
 

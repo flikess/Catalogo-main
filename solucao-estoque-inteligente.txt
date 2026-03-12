@@ -1,0 +1,47 @@
+# Proposta de Solução: Estoque Inteligente por Variação
+
+Para resolver o problema de estoque em lojas de roupas (onde um mesmo produto como "Camisa" possui unidades diferentes para cada combinação de Cor e Tamanho), propomos a seguinte arquitetura:
+
+## 1. Mudança no Banco de Dados
+Atualmente, o estoque é controlado por uma única coluna `stock_quantity` na tabela `products`. Para suportar variações, precisamos de uma nova tabela:
+
+**Tabela: `product_variant_stock`**
+- `id`: UUID (PK)
+- `product_id`: UUID (FK para products)
+- `variation_key`: Texto (Ex: "G-Preta", "PP-Branca", "M-Azul") - Gerado pela combinação de Tamanho + Varições.
+- `quantity`: Inteiro (Quantidade em estoque desta combinação específica)
+- `sku`: Texto (Opcional, para códigos de barras específicos)
+- `user_id`: UUID (FK para users/loja)
+
+## 2. Atualização no Cadastro de Produtos (Produtos.tsx)
+- Quando o usuário ativar "Controlar Estoque", o sistema deve verificar se existem variações (Tamanhos ou Grupos de Variação).
+- Se existirem, em vez de um único campo de quantidade, o sistema deve gerar automaticamente uma tabela com todas as combinações possíveis.
+- **Exemplo:** Se houver Tamanhos [P, G] e Cores [Preta, Branca], o sistema gera:
+  - P - Preta: [campo para quantidade]
+  - P - Branca: [campo para quantidade]
+  - G - Preta: [campo para quantidade]
+  - G - Branca: [campo para quantidade]
+
+## 3. Lógica de Baixa de Estoque (Pedidos.tsx / Estoque.tsx)
+- A função `updateInventory` em `Pedidos.tsx` deve ser modificada.
+- Ao confirmar um pedido, o sistema deve:
+  1. Identificar o `product_id`.
+  2. Montar a `variation_key` baseada no `size` e `variations` salvos no item do pedido.
+  3. Buscar na tabela `product_variant_stock` o registro que bate com `product_id` + `variation_key`.
+  4. Subtrair a quantidade vendida.
+
+## 4. Experiência no Catálogo (CatalogoPublico.tsx)
+- No catálogo, ao selecionar um tamanho e uma cor, o sistema deve consultar em tempo real a tabela de variantes.
+- Se a combinação "G-Preta" estiver com estoque 0, o botão "Adicionar" deve ficar desabilitado ou exibir "Esgotado" para aquela seleção específica.
+
+## 5. Gestão de Estoque (Estoque.tsx)
+- Na tela de Estoque, os produtos que possuem variações devem ser exibidos com um ícone de "expandir".
+- Ao expandir, o lojista vê e edita a quantidade de cada SKU (cada combinação) individualmente.
+
+---
+**Resumo técnico dos passos para implementação:**
+1. Criar a migração no Supabase para a tabela `product_variant_stock`.
+2. Criar uma função RPC no Supabase `decrement_variant_stock` para garantir atomicidade.
+3. Modificar o formulário de `Produtos.tsx` para gerar a grade de estoque.
+4. Atualizar a lógica de checkout para enviar a combinação exata.
+5. Atualizar a tela de pedidos para processar a baixa por variante.

@@ -206,11 +206,13 @@ const Pedidos = () => {
         ),
         order_items (
           id,
+          product_id,
           product_name,
           quantity,
           unit_price,
           total_price,
           adicionais,
+          size,
           variations
         )
       `)
@@ -238,27 +240,27 @@ const Pedidos = () => {
               adicionais: typeof item.adicionais === 'string'
                 ? JSON.parse(item.adicionais)
                 : item.adicionais || [],
-              size: typeof (item as any).size === 'string'
-                ? JSON.parse((item as any).size)
-                : (item as any).size || null,
-              variations: (() => {
+              size: (() => {
+                const rawSize = (item as any).size;
+                if (!rawSize) return null;
+                if (typeof rawSize === 'object') return rawSize;
                 try {
-                  if (Array.isArray(item.variations)) {
-                    console.log('    ✅ Variations is array:', item.variations);
-                    return item.variations;
-                  }
-                  if (typeof item.variations === 'string') {
-                    const parsed = JSON.parse(item.variations);
-                    console.log('    ✅ Parsed variations from string:', parsed);
-                    return parsed;
-                  }
-                  console.log('    ⚠️ No variations found, returning []');
-                  return [];
+                  return JSON.parse(rawSize);
                 } catch (e) {
-                  console.error('    ❌ Error parsing variations:', e, 'Value:', item.variations);
+                  return { name: rawSize }; // Caso seja apenas a string "M"
+                }
+              })(),
+              variations: (() => {
+                const rawVars = item.variations;
+                if (!rawVars) return [];
+                if (Array.isArray(rawVars)) return rawVars;
+                try {
+                  return typeof rawVars === 'string' ? JSON.parse(rawVars) : [];
+                } catch (e) {
+                  console.error('Error parsing variations:', e);
                   return [];
                 }
-              })()
+              })(),
             };
           })
         };
@@ -364,11 +366,28 @@ const Pedidos = () => {
       return;
     }
 
+    const product = products.find(p => p.id === newItem.product_id);
+
+    if (product && product.sizes && product.sizes.length > 0 && !newItem.size) {
+      showError(`Selecione um tamanho para o produto ${product.name}`);
+      return;
+    }
+
+    if (product && product.variations && product.variations.length > 0) {
+      const selectedGroups = newItem.variations?.map(v => v.group) || [];
+      const missingGroups = product.variations.filter(g => !selectedGroups.includes(g.name));
+      if (missingGroups.length > 0) {
+        showError(`Selecione as variações: ${missingGroups.map(g => g.name).join(', ')}`);
+        return;
+      }
+    }
+
     const item: OrderItemForm = {
       ...newItem,
       product_id: newItem.product_id || '',
       adicionais: newItem.adicionais || [],
-      size: newItem.size || null
+      size: newItem.size || null,
+      variations: newItem.variations || []
     };
 
     setOrderItems([...orderItems, item]);
@@ -605,9 +624,11 @@ const Pedidos = () => {
 
       if (!wasDeducted && willBeDeducted) {
         // Saiu de orcamento/cancelado para confirmado+ -> DIMINUIR ESTOQUE
+        console.log(`📉 Baixando estoque para pedido ${orderId}`);
         await updateStock(orderId, 'deduct');
       } else if (wasDeducted && !willBeDeducted) {
         // Saiu de confirmado+ para orcamento/cancelado -> VOLTAR ESTOQUE
+        console.log(`📈 Repondo estoque para pedido ${orderId}`);
         await updateStock(orderId, 'restore');
       }
       // -------------------------
@@ -679,10 +700,10 @@ const Pedidos = () => {
     }
   };
 
-  const updateInventory = async (orderId: string, type: 'deduct' | 'restore') => {
+  const updateStock = async (orderId: string, type: 'deduct' | 'restore') => {
     const { data: orderItems, error: itemsError } = await supabase
       .from('order_items')
-      .select('product_id, quantity')
+      .select('product_id, quantity, size, variations')
       .eq('order_id', orderId);
 
     if (itemsError || !orderItems) return;
@@ -690,21 +711,102 @@ const Pedidos = () => {
     for (const item of orderItems) {
       const { data: product, error: prodError } = await supabase
         .from('products')
-        .select('track_stock, stock_quantity, recipe')
+        .select('name, track_stock, stock_quantity, variant_stock, recipe')
         .eq('id', item.product_id)
         .single();
 
       if (prodError || !product) continue;
 
       if (product.track_stock) {
-        const currentStock = product.stock_quantity || 0;
-        const quantity = item.quantity;
-        const newStock = type === 'deduct' ? currentStock - quantity : currentStock + quantity;
+        try {
+          const quantity = Number(item.quantity) || 0;
 
-        await supabase
-          .from('products')
-          .update({ stock_quantity: Math.max(0, newStock) })
-          .eq('id', item.product_id);
+          // Robustez: Tentar parsear se vier como string do banco
+          const parsedSize = (() => {
+            if (!item.size) return null;
+            if (typeof item.size === 'object') return item.size;
+            try { return JSON.parse(item.size); } catch (e) { return { name: item.size }; }
+          })();
+
+          const parsedVariations = (() => {
+            if (!item.variations) return [];
+            if (Array.isArray(item.variations)) return item.variations;
+            try { return JSON.parse(item.variations); } catch (e) { return []; }
+          })();
+
+          // Gerar variation_key do item se houver tamanho ou variações
+          let itemVariationKey = '';
+          const hasSize = parsedSize && parsedSize.name;
+          const hasVariations = Array.isArray(parsedVariations) && parsedVariations.length > 0;
+
+          if (hasSize || hasVariations) {
+            const parts: string[] = [];
+            if (hasSize) parts.push(parsedSize.name.toString().trim());
+            if (hasVariations) {
+              parsedVariations.forEach((v: any) => {
+                if (v && v.name) parts.push(v.name.toString().trim());
+              });
+            }
+            itemVariationKey = parts.join(' - ');
+          }
+
+          console.log(`📦 Processando estoque para "${product.name || item.product_id}" (${itemVariationKey || 'Simples'}). Tipo: ${type}`);
+
+          // Se tem chave de variante e o produto tem variant_stock cadastrado
+          if (itemVariationKey && product.variant_stock && Array.isArray(product.variant_stock)) {
+            let matched = false;
+            const newVariantStock = product.variant_stock.map((v: any) => {
+              // Comparação robusta: ignora espaços e diferença de maiúsculas/minúsculas
+              const dbKey = (v.variation_key || '').toString().trim().toLowerCase();
+              const targetKey = itemVariationKey.trim().toLowerCase();
+
+              if (dbKey === targetKey) {
+                matched = true;
+                const currentQty = Number(v.quantity) || 0;
+                const newQty = type === 'deduct' ? Math.max(0, currentQty - quantity) : currentQty + quantity;
+                console.log(`✅ MATCH! Variante: "${v.variation_key}". De ${currentQty} para ${newQty}`);
+                return { ...v, quantity: newQty };
+              }
+              return v;
+            });
+
+            if (!matched) {
+              console.warn(`⚠️ Variação "${itemVariationKey}" não encontrada no produto. Chaves disponíveis:`, product.variant_stock.map((v: any) => v.variation_key));
+            }
+
+            const totalStock = newVariantStock.reduce((acc: number, v: any) => acc + (Number(v.quantity) || 0), 0);
+
+            const { error: updError } = await supabase
+              .from('products')
+              .update({
+                variant_stock: newVariantStock,
+                stock_quantity: totalStock,
+                updated_at: new Date().toISOString()
+              })
+              .eq('id', item.product_id);
+
+            if (updError) throw updError;
+            console.log(`📊 Estoque total atualizado: ${totalStock}`);
+          } else {
+            // Estoque simples
+            const currentStock = Number(product.stock_quantity) || 0;
+            const newStock = type === 'deduct' ? currentStock - quantity : currentStock + quantity;
+
+            console.log(`📋 Estoque simples: De ${currentStock} para ${Math.max(0, newStock)}`);
+
+            const { error: updError } = await supabase
+              .from('products')
+              .update({
+                stock_quantity: Math.max(0, newStock),
+                updated_at: new Date().toISOString()
+              })
+              .eq('id', item.product_id);
+
+            if (updError) throw updError;
+          }
+        } catch (err) {
+          console.error(`❌ Erro técnico no estoque do item ${item.product_id}:`, err);
+        }
       }
 
       if (product.recipe && Array.isArray(product.recipe) && product.recipe.length > 0) {
@@ -713,13 +815,7 @@ const Pedidos = () => {
     }
   };
 
-  const updateStock = async (orderId: string, type: 'deduct' | 'restore') => {
-    try {
-      await updateInventory(orderId, type);
-    } catch (error) {
-      console.error('Erro ao atualizar estoque:', error);
-    }
-  };
+
 
   const handleQuickFilter = (filterKey: string) => {
     setQuickFilter(filterKey);

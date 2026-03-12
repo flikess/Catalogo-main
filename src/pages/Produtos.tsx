@@ -42,6 +42,11 @@ interface VariationGroup {
   options: VariationOption[]
 }
 
+interface VariantStock {
+  variation_key: string
+  quantity: number
+}
+
 interface RecipeItem {
   stock_item_id?: string
   base_recipe_id?: string
@@ -71,6 +76,7 @@ interface Product {
   variations?: VariationGroup[]
   track_stock: boolean
   stock_quantity?: number
+  variant_stock?: VariantStock[]
   recipe?: RecipeItem[]
   recipe_yield?: number
   operational_cost_percent?: number
@@ -149,6 +155,7 @@ const Produtos = () => {
     variations: [] as VariationGroup[],
     track_stock: false,
     stock_quantity: '0',
+    variant_stock: [] as VariantStock[],
     recipe: [] as RecipeItem[],
     recipe_yield: '1',
     operational_cost_percent: '10'
@@ -644,6 +651,60 @@ const Produtos = () => {
     setFormData({ ...formData, variations: list })
   }
 
+  const generateVariantCombinations = () => {
+    const hasSizes = formData.sizes.length > 0;
+    const hasVariations = formData.variations.length > 0;
+
+    if (!hasSizes && !hasVariations) return [];
+
+    let combinations: string[] = [];
+
+    if (hasSizes) {
+      combinations = formData.sizes.map(s => s.name);
+    }
+
+    if (hasVariations) {
+      formData.variations.forEach(group => {
+        const options = group.options.map(o => o.name);
+        if (combinations.length === 0) {
+          combinations = options;
+        } else {
+          const newCombinations: string[] = [];
+          combinations.forEach(combo => {
+            options.forEach(opt => {
+              newCombinations.push(`${combo} - ${opt}`);
+            });
+          });
+          combinations = newCombinations;
+        }
+      });
+    }
+
+    return combinations;
+  };
+
+  const syncVariantStock = () => {
+    const combinations = generateVariantCombinations();
+    const currentVariants = [...formData.variant_stock];
+
+    const newVariantStock = combinations.map(key => {
+      const existing = currentVariants.find(v => v.variation_key === key);
+      return {
+        variation_key: key,
+        quantity: existing ? existing.quantity : 0
+      };
+    });
+
+    setFormData(prev => ({ ...prev, variant_stock: newVariantStock }));
+  };
+
+  const updateVariantQuantity = (key: string, quantity: number) => {
+    const newList = formData.variant_stock.map(v =>
+      v.variation_key === key ? { ...v, quantity } : v
+    );
+    setFormData({ ...formData, variant_stock: newList });
+  }
+
   /* =======================
      RECEITA (CONFEITARIA)
   ======================= */
@@ -775,7 +836,8 @@ const Produtos = () => {
         sizes: formData.sizes.length ? formData.sizes : null,
         variations: formData.variations.length ? formData.variations : null,
         track_stock: formData.track_stock,
-        stock_quantity: formData.track_stock ? Number(formData.stock_quantity) : null,
+        stock_quantity: formData.track_stock ? (formData.variant_stock.length > 0 ? formData.variant_stock.reduce((acc, v) => acc + v.quantity, 0) : Number(formData.stock_quantity)) : null,
+        variant_stock: formData.track_stock && formData.variant_stock.length > 0 ? formData.variant_stock : null,
         recipe: formData.recipe.length ? formData.recipe : null,
         recipe_yield: formData.recipe.length ? Number(formData.recipe_yield) : null,
         operational_cost_percent: formData.recipe.length ? Number(formData.operational_cost_percent) : null,
@@ -1111,6 +1173,7 @@ const Produtos = () => {
       variations: [],
       track_stock: false,
       stock_quantity: '0',
+      variant_stock: [],
       recipe: [] as RecipeItem[],
       recipe_yield: '1',
       operational_cost_percent: '10'
@@ -1136,6 +1199,7 @@ const Produtos = () => {
       variations: product.variations || [],
       track_stock: product.track_stock || false,
       stock_quantity: product.stock_quantity?.toString() || '0',
+      variant_stock: product.variant_stock || [],
       recipe: product.recipe || [],
       recipe_yield: product.recipe_yield?.toString() || '1',
       operational_cost_percent: product.operational_cost_percent?.toString() || '10'
@@ -2343,17 +2407,56 @@ const Produtos = () => {
                         </div>
 
                         {formData.track_stock && (
-                          <div className="space-y-2 pl-7">
-                            <Label htmlFor="stock_quantity">Quantidade em estoque</Label>
-                            <Input
-                              id="stock_quantity"
-                              type="number"
-                              min="0"
-                              value={formData.stock_quantity}
-                              onChange={(e) => setFormData({ ...formData, stock_quantity: e.target.value })}
-                              placeholder="0"
-                              className="w-32"
-                            />
+                          <div className="space-y-4 pl-7">
+                            {(formData.sizes.length > 0 || formData.variations.length > 0) ? (
+                              <div className="space-y-3">
+                                <div className="flex justify-between items-center">
+                                  <Label className="text-sm font-semibold">Estoque por Variante</Label>
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={syncVariantStock}
+                                    className="h-8 text-xs"
+                                  >
+                                    Gerar/Sincronizar Grade
+                                  </Button>
+                                </div>
+                                <div className="max-h-60 overflow-y-auto border rounded-md p-2 space-y-2">
+                                  {formData.variant_stock.length === 0 ? (
+                                    <p className="text-xs text-muted-foreground text-center py-4">
+                                      Clique em "Gerar Grade" para definir o estoque de cada combinação.
+                                    </p>
+                                  ) : (
+                                    formData.variant_stock.map((v) => (
+                                      <div key={v.variation_key} className="flex justify-between items-center gap-4 bg-muted/30 p-2 rounded-sm">
+                                        <span className="text-xs font-medium">{v.variation_key}</span>
+                                        <Input
+                                          type="number"
+                                          min="0"
+                                          className="w-20 h-8 text-right"
+                                          value={v.quantity}
+                                          onChange={(e) => updateVariantQuantity(v.variation_key, Number(e.target.value))}
+                                        />
+                                      </div>
+                                    ))
+                                  )}
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="space-y-2">
+                                <Label htmlFor="stock_quantity">Quantidade em estoque</Label>
+                                <Input
+                                  id="stock_quantity"
+                                  type="number"
+                                  min="0"
+                                  value={formData.stock_quantity}
+                                  onChange={(e) => setFormData({ ...formData, stock_quantity: e.target.value })}
+                                  placeholder="0"
+                                  className="w-32"
+                                />
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
