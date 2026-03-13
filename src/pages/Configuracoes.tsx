@@ -88,9 +88,9 @@ const Configuracoes = () => {
 
       if (data) {
         setBakerySettings(data)
-        setLogoPreview(data.logo_url || null)
-        setBannerPreview(data.banner_url || null)
-        setBannerMobilePreview(data.banner_mobile_url || null)
+        setLogoPreview(data.logo_url ? `${data.logo_url}?t=${new Date().getTime()}` : null)
+        setBannerPreview(data.banner_url ? `${data.banner_url}?t=${new Date().getTime()}` : null)
+        setBannerMobilePreview(data.banner_mobile_url ? `${data.banner_mobile_url}?t=${new Date().getTime()}` : null)
       } else {
         setBakerySettings({})
         setLogoPreview(null)

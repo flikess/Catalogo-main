@@ -112,6 +112,7 @@ interface BakerySettings {
   business_type?: string
   working_hours?: Record<number, { open: string; close: string; closed: boolean }>
   always_open?: boolean
+  updated_at?: string
 }
 
 interface Client {
@@ -1011,16 +1012,18 @@ const CatalogoPublico = () => {
               {bakerySettings.banner_url && (
                 <source
                   media="(min-width: 640px)"
-                  srcSet={bakerySettings.banner_url}
+                  srcSet={`${bakerySettings.banner_url}?t=${new Date(bakerySettings.updated_at || '').getTime()}`}
                 />
               )}
 
               {/* mobile (fallback) */}
               <img
                 src={
-                  bakerySettings.banner_mobile_url ||
-                  bakerySettings.banner_url ||
-                  ''
+                  bakerySettings.banner_mobile_url
+                    ? `${bakerySettings.banner_mobile_url}?t=${new Date(bakerySettings.updated_at || '').getTime()}`
+                    : bakerySettings.banner_url
+                      ? `${bakerySettings.banner_url}?t=${new Date(bakerySettings.updated_at || '').getTime()}`
+                      : ''
                 }
                 alt="Banner"
                 className="w-full h-full object-cover"
