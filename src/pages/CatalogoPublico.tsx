@@ -105,6 +105,8 @@ interface BakerySettings {
   logo_url?: string
   banner_url?: string
   banner_mobile_url?: string
+  banner_position?: string
+  banner_mobile_position?: string
   presentation_message?: string
   vende_cnpj?: boolean
   business_type?: string
@@ -1022,7 +1024,7 @@ const CatalogoPublico = () => {
                 }
                 alt="Banner"
                 className="w-full h-full object-cover"
-                style={{ objectPosition: 'center' }}
+                style={{ objectPosition: `center ${bakerySettings.banner_mobile_position || '50%'}` }}
               />
             </picture>
 

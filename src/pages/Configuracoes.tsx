@@ -20,6 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { Slider } from "@/components/ui/slider"
 
 interface BakerySettings {
   id?: string
@@ -35,6 +36,8 @@ interface BakerySettings {
   logo_url?: string | null
   banner_url?: string | null
   banner_mobile_url?: string | null
+  banner_position?: string | null
+  banner_mobile_position?: string | null
   pix_key?: string | null
   presentation_message?: string | null
   vende_cnpj?: boolean
@@ -292,15 +295,17 @@ const Configuracoes = () => {
         bannerMobileUrl = null
       }
 
-      // Removemos o always_open do objeto antes de salvar para evitar erro de coluna inexistente no banco
-      const { always_open, ...settingsWithoutAlwaysOpen } = bakerySettings;
+      // Removemos campos que podem não estar no banco ainda para evitar erro
+      const { always_open, banner_position, banner_mobile_position, ...settingsWithoutExtras } = bakerySettings;
 
       const settingsToSave = {
-        ...settingsWithoutAlwaysOpen,
+        ...settingsWithoutExtras,
         id: user.id,
         logo_url: logoUrl,
         banner_url: bannerUrl,
         banner_mobile_url: bannerMobileUrl,
+        banner_position: banner_position || '50%',
+        banner_mobile_position: banner_mobile_position || '50%',
         updated_at: new Date().toISOString()
       }
 
@@ -447,6 +452,22 @@ const Configuracoes = () => {
                       <img
                         src={bannerPreview}
                         className="w-full h-40 object-cover"
+                        style={{ objectPosition: `center ${bakerySettings.banner_position || '50%'}` }}
+                      />
+                    </div>
+                  )}
+
+                  {bannerPreview && (
+                    <div className="space-y-2 max-w-xl">
+                      <div className="flex justify-between text-xs text-gray-500">
+                        <span>Ajuste Vertical (Foco)</span>
+                        <span>{bakerySettings.banner_position || '50%'}</span>
+                      </div>
+                      <Slider
+                        value={[parseInt(bakerySettings.banner_position?.replace('%', '') || '50')]}
+                        onValueChange={(val) => setBakerySettings(prev => ({ ...prev, banner_position: `${val[0]}%` }))}
+                        max={100}
+                        step={1}
                       />
                     </div>
                   )}
@@ -500,6 +521,22 @@ const Configuracoes = () => {
                       <img
                         src={bannerMobilePreview}
                         className="w-full h-48 object-cover"
+                        style={{ objectPosition: `center ${bakerySettings.banner_mobile_position || '50%'}` }}
+                      />
+                    </div>
+                  )}
+
+                  {bannerMobilePreview && (
+                    <div className="space-y-2 max-w-xs">
+                      <div className="flex justify-between text-xs text-gray-500">
+                        <span>Ajuste Vertical (Foco)</span>
+                        <span>{bakerySettings.banner_mobile_position || '50%'}</span>
+                      </div>
+                      <Slider
+                        value={[parseInt(bakerySettings.banner_mobile_position?.replace('%', '') || '50')]}
+                        onValueChange={(val) => setBakerySettings(prev => ({ ...prev, banner_mobile_position: `${val[0]}%` }))}
+                        max={100}
+                        step={1}
                       />
                     </div>
                   )}
@@ -535,7 +572,7 @@ const Configuracoes = () => {
                   </div>
 
                   <p className="text-xs text-gray-500">
-                    Recomendado: 900x1200px (formato vertical)
+                    Recomendado: 1200x900px (formato horizontal)
                   </p>
                 </div>
 
