@@ -90,6 +90,7 @@ interface Category {
   nome: string
   banner_desktop_url?: string
   banner_mobile_url?: string
+  display_order?: number
   products: Product[]
 }
 
@@ -342,17 +343,42 @@ const CatalogoPublico = () => {
         setShowCnpjLogin(true)
       }
 
+      // 1. Buscar categorias ordenadas primeiro
+      const { data: catsData, error: catsError } = await supabase
+        .from('categorias_produtos')
+        .select('*')
+        .eq('user_id', activeUserId)
+        .order('display_order', { ascending: true })
+        .order('nome', { ascending: true })
+
+      if (catsError) throw catsError
+
+      const groupedProducts: { [key: string]: Category } = {}
+
+      // Inicializa o objeto com as categorias na ordem correta
+      catsData?.forEach(cat => {
+        groupedProducts[cat.id] = {
+          id: cat.id,
+          nome: cat.nome,
+          banner_desktop_url: cat.banner_desktop_url,
+          banner_mobile_url: cat.banner_mobile_url,
+          display_order: cat.display_order,
+          products: []
+        }
+      })
+
+      // 2. Buscar produtos e distribuir nas categorias já ordenadas
       const { data: productsData, error: productsError } = await supabase
         .from('products')
         .select(`
-  id, name, description, price, image_url, image_urls, categoria_id, sub_categoria_id, adicionais, is_featured, sizes, variations, track_stock, stock_quantity, variant_stock,
-  categorias_produtos (
-    nome, banner_desktop_url, banner_mobile_url
-  ),
-  subcategorias_produtos (
-    nome
-  )
-`)
+          id, name, description, price, image_url, image_urls, categoria_id, sub_categoria_id, adicionais, is_featured, sizes, variations, track_stock, stock_quantity, variant_stock,
+          categorias_produtos (
+            nome, banner_desktop_url, banner_mobile_url
+          ),
+          subcategorias_produtos (
+            nome
+          )
+        `)
         .eq('user_id', activeUserId)
         .eq('show_in_catalog', true)
         .order('display_order', { ascending: true })
@@ -369,30 +395,16 @@ const CatalogoPublico = () => {
       const featured = formattedProducts.filter(p => p.is_featured)
       setFeaturedProducts(featured)
 
-      // Buscar subcategorias do usuário
-      const { data: subsData } = await supabase
-        .from('subcategorias_produtos')
-        .select('id, nome, categoria_id')
-        .eq('user_id', activeUserId)
-
-      setAllSubcategories(subsData || [])
-
-      const groupedProducts: { [key: string]: Category } = {}
-
       formattedProducts
         ?.filter(p => !p.is_featured)
         .forEach(product => {
-          const categoryName = product.categorias_produtos?.nome || 'Outros'
           const categoryId = product.categoria_id || 'outros'
-          const bannerDesktop = product.categorias_produtos?.banner_desktop_url
-          const bannerMobile = product.categorias_produtos?.banner_mobile_url
 
           if (!groupedProducts[categoryId]) {
+            // Categoria "Outros" ou categoria que não foi encontrada no fetch inicial
             groupedProducts[categoryId] = {
               id: categoryId,
-              nome: categoryName,
-              banner_desktop_url: bannerDesktop,
-              banner_mobile_url: bannerMobile,
+              nome: product.categorias_produtos?.nome || 'Outros',
               products: []
             }
           }
@@ -400,7 +412,8 @@ const CatalogoPublico = () => {
           groupedProducts[categoryId].products.push(product)
         })
 
-      setCategories(Object.values(groupedProducts))
+      // Filtra apenas categorias que possuem produtos
+      setCategories(Object.values(groupedProducts).filter(cat => cat.products.length > 0))
     } catch (err) {
       console.error('Error fetching catalog data:', err)
       setError('Erro ao carregar catálogo.')

@@ -13,7 +13,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { ResponsiveTable } from '@/components/ui/responsive-table'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Plus, Search, Edit, Trash2, Eye, EyeOff, Upload, X, Image as ImageIcon, Tag, List, Layers, Package, Printer, FileText, AlertCircle } from 'lucide-react'
+import { Plus, Search, Edit, Trash2, Eye, EyeOff, Upload, X, Image as ImageIcon, Tag, List, Layers, Package, Printer, FileText, AlertCircle, ArrowUp, ArrowDown } from 'lucide-react'
 import { supabase } from '@/integrations/supabase/client'
 import { useAuth } from '@/components/auth/AuthProvider'
 import { showSuccess, showError } from '@/utils/toast'
@@ -95,6 +95,7 @@ interface Category {
   nome: string
   banner_desktop_url?: string
   banner_mobile_url?: string
+  display_order?: number
   created_at: string
 }
 
@@ -361,7 +362,8 @@ const Produtos = () => {
           .from('categorias_produtos')
           .select('*')
           .eq('user_id', user?.id)
-          .order('nome'),
+          .order('display_order', { ascending: true })
+          .order('nome', { ascending: true }),
         supabase
           .from('subcategorias_produtos')
           .select('*')
@@ -385,6 +387,42 @@ const Produtos = () => {
       showError('Erro ao carregar categorias')
     } finally {
       setLoadingCategories(false)
+    }
+  }
+
+  const handleUpdateCategoryOrder = async (categoryId: string, direction: 'up' | 'down') => {
+    const currentIndex = categories.findIndex(c => c.id === categoryId)
+    if (currentIndex === -1) return
+
+    const newCategories = [...categories]
+    const otherIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1
+
+    if (otherIndex < 0 || otherIndex >= newCategories.length) return
+
+    // Swap
+    const temp = newCategories[currentIndex]
+    newCategories[currentIndex] = newCategories[otherIndex]
+    newCategories[otherIndex] = temp
+
+    try {
+      // Atualiza o display_order baseado na nova posição na lista
+      const updates = newCategories.map((cat, index) => ({
+        id: cat.id,
+        user_id: user?.id,
+        nome: cat.nome,
+        display_order: index,
+        updated_at: new Date().toISOString()
+      }))
+
+      const { error } = await supabase
+        .from('categorias_produtos')
+        .upsert(updates)
+
+      if (error) throw error
+      fetchCategories()
+    } catch (error) {
+      console.error('Error updating order:', error)
+      showError('Erro ao atualizar ordem das categorias')
     }
   }
 
@@ -1417,7 +1455,26 @@ const Produtos = () => {
                             <TableRow key={category.id}>
                               <TableCell className="font-medium">{category.nome}</TableCell>
                               <TableCell className="text-right">
-                                <div className="flex gap-2 justify-end">
+                                <div className="flex gap-1 justify-end">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleUpdateCategoryOrder(category.id, 'up')}
+                                    disabled={categories.indexOf(category) === 0}
+                                    title="Subir"
+                                  >
+                                    <ArrowUp className="w-3 h-3" />
+                                  </Button>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleUpdateCategoryOrder(category.id, 'down')}
+                                    disabled={categories.indexOf(category) === categories.length - 1}
+                                    title="Descer"
+                                  >
+                                    <ArrowDown className="w-3 h-3" />
+                                  </Button>
+                                  <div className="w-2" />
                                   <Button
                                     variant="outline"
                                     size="sm"
