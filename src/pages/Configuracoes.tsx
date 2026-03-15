@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Layout } from '@/components/layout/Layout'
+import { useSearchParams } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -7,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Separator } from '@/components/ui/separator'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
-import { Store, User, MapPin, Phone, FileText, Upload, X, Image as ImageIcon } from 'lucide-react'
+import { Store, User, MapPin, Phone, FileText, Upload, X, Image as ImageIcon, Settings, Clock, CheckCircle2, AlertCircle, Link } from 'lucide-react'
 import { supabase } from '@/integrations/supabase/client'
 import { useAuth } from '@/components/auth/AuthProvider'
 import { showSuccess, showError } from '@/utils/toast'
@@ -44,11 +45,24 @@ interface BakerySettings {
   business_type?: string | null
   working_hours?: Record<number, { open: string; close: string; closed: boolean }>
   always_open?: boolean
+  checkout_enabled?: boolean
+  payment_enabled?: boolean
+  delivery_enabled?: boolean
   updated_at?: string
+}
+
+interface PaymentConfig {
+  gateway_name: string
+  access_token: string
+  public_key: string
+  status: boolean
 }
 
 const Configuracoes = () => {
   const { user } = useAuth()
+  const [searchParams, setSearchParams] = useSearchParams()
+
+  const isAdmin = user?.email === 'lucianderson.ads@gmail.com';
 
   const [loading, setLoading] = useState(false)
   const [bakerySettings, setBakerySettings] = useState<BakerySettings>({})
@@ -67,12 +81,98 @@ const Configuracoes = () => {
   const [bannerMobileFile, setBannerMobileFile] = useState<File | null>(null)
   const [bannerMobilePreview, setBannerMobilePreview] = useState<string | null>(null)
 
+  const [paymentConfig, setPaymentConfig] = useState<PaymentConfig>({
+    gateway_name: 'mercadopago',
+    access_token: '',
+    public_key: '',
+    status: false
+  })
+
   useEffect(() => {
     if (user) {
       fetchBakerySettings()
       fetchProfile()
+      fetchPaymentConfig()
     }
   }, [user])
+
+  useEffect(() => {
+    const code = searchParams.get('code')
+    if (code && user) {
+      handleOAuthReturn(code)
+    }
+  }, [searchParams, user])
+
+  const handleOAuthReturn = async (authCode: string) => {
+    setLoading(true)
+    try {
+      const { data, error } = await supabase.functions.invoke('mp-oauth', {
+        body: { code: authCode, redirect_uri: `${window.location.origin}/configuracoes` }
+      })
+
+      if (error) throw error
+
+      showSuccess('Mercado Pago conectado com sucesso!')
+      setSearchParams({}) // Limpa a URL
+      fetchPaymentConfig()
+    } catch (err: any) {
+      showError(err?.message || 'Erro ao conectar Mercado Pago. Verifique as chaves.')
+      setSearchParams({})
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleConnectMP = () => {
+    const clientId = import.meta.env.VITE_MP_CLIENT_ID
+    if (!clientId) {
+      showError('O dono do sistema ainda não configurou o VITE_MP_CLIENT_ID.')
+      return
+    }
+    const redirectUri = `${window.location.origin}/configuracoes`
+    const url = `https://auth.mercadopago.com/authorization?client_id=${clientId}&response_type=code&platform_id=mp&state=${user?.id}&redirect_uri=${encodeURIComponent(redirectUri)}`
+    window.location.href = url
+  }
+
+  const handleDisconnectMP = async () => {
+    if (!confirm('Deseja realmente desconectar sua conta do Mercado Pago?')) return
+    setLoading(true)
+    try {
+      const { error } = await supabase.from('payment_configs').delete().eq('user_id', user?.id).eq('gateway_name', 'mercadopago')
+      if (error) throw error
+      showSuccess('Mercado Pago desconectado')
+      setPaymentConfig({ gateway_name: 'mercadopago', access_token: '', public_key: '', status: false })
+    } catch (e) {
+      showError('Erro ao desconectar')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const fetchPaymentConfig = async () => {
+    if (!user) return
+    try {
+      const { data, error } = await supabase
+        .from('payment_configs')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('gateway_name', 'mercadopago')
+        .single()
+
+      if (error && error.code !== 'PGRST116') throw error
+
+      if (data) {
+        setPaymentConfig({
+          gateway_name: data.gateway_name,
+          access_token: data.access_token || '',
+          public_key: data.public_key || '',
+          status: data.status || false
+        })
+      }
+    } catch (err) {
+      console.error('Erro ao buscar configuração de pagamento', err)
+    }
+  }
 
   const fetchBakerySettings = async () => {
     if (!user) return
@@ -315,6 +415,18 @@ const Configuracoes = () => {
 
       if (error) throw error
 
+      // Salvar as configurações de pagamento se habilitado
+      if (bakerySettings.payment_enabled && paymentConfig.access_token) {
+        const { error: paymentError } = await supabase
+          .from('payment_configs')
+          .update({
+            status: paymentConfig.status,
+            updated_at: new Date().toISOString()
+          }).eq('user_id', user.id).eq('gateway_name', 'mercadopago')
+
+        if (paymentError) console.error("Erro ao salvar config pagamento", paymentError)
+      }
+
       showSuccess('Configurações salvas com sucesso!')
       setLogoFile(null)
       setBannerFile(null)
@@ -368,7 +480,7 @@ const Configuracoes = () => {
 
         <Tabs defaultValue="bakery" className="space-y-6">
 
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className={`grid w-full ${isAdmin ? 'grid-cols-4' : 'grid-cols-3'}`}>
             <TabsTrigger value="bakery" className="flex gap-2 items-center">
               <Store className="w-4 h-4" />
               Loja
@@ -378,9 +490,15 @@ const Configuracoes = () => {
               Perfil
             </TabsTrigger>
             <TabsTrigger value="hours" className="flex gap-2 items-center">
-              <Store className="w-4 h-4" />
+              <Clock className="w-4 h-4" />
               Horários
             </TabsTrigger>
+            {isAdmin && (
+              <TabsTrigger value="definitions" className="flex gap-2 items-center">
+                <Settings className="w-4 h-4" />
+                Definições
+              </TabsTrigger>
+            )}
           </TabsList>
 
           <TabsContent value="bakery">
@@ -921,6 +1039,146 @@ const Configuracoes = () => {
             </Card>
           </TabsContent>
 
+
+          {isAdmin && (
+            <TabsContent value="definitions">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Settings className="w-5 h-5" />
+                    Definições da Loja
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between p-4 rounded-lg border bg-card">
+                      <div className="space-y-1">
+                        <Label htmlFor="checkout_enabled" className="text-base font-bold cursor-pointer">Requerer Finalização de Compra (Checkout)</Label>
+                        <p className="text-xs text-muted-foreground">Ative se os clientes precisam passar por um processo de checkout para enviar o pedido.</p>
+                      </div>
+                      <input
+                        type="checkbox"
+                        id="checkout_enabled"
+                        checked={bakerySettings.checkout_enabled ?? true}
+                        onChange={(e) => {
+                          const isChecked = e.target.checked;
+                          setBakerySettings(prev => ({
+                            ...prev,
+                            checkout_enabled: isChecked,
+                            ...(isChecked ? {} : { payment_enabled: false, delivery_enabled: false })
+                          }))
+                        }}
+                        className="w-5 h-5 accent-purple-600 cursor-pointer"
+                      />
+                    </div>
+
+                    <div className={`flex items-center justify-between p-4 rounded-lg border bg-card transition-opacity ${!(bakerySettings.checkout_enabled ?? true) ? 'opacity-50 pointer-events-none' : ''}`}>
+                      <div className="space-y-1">
+                        <Label htmlFor="payment_enabled" className="text-base font-bold cursor-pointer">Processar Pagamentos Online</Label>
+                        <p className="text-xs text-muted-foreground">Ative se você quiser opções de pagamento online habilitadas na finalização.</p>
+                      </div>
+                      <input
+                        type="checkbox"
+                        id="payment_enabled"
+                        checked={bakerySettings.payment_enabled ?? false}
+                        disabled={!(bakerySettings.checkout_enabled ?? true)}
+                        onChange={(e) => setBakerySettings(prev => ({ ...prev, payment_enabled: e.target.checked }))}
+                        className="w-5 h-5 accent-purple-600 cursor-pointer"
+                      />
+                    </div>
+
+                    <div className={`flex items-center justify-between p-4 rounded-lg border bg-card transition-opacity ${!(bakerySettings.checkout_enabled ?? true) ? 'opacity-50 pointer-events-none' : ''}`}>
+                      <div className="space-y-1">
+                        <Label htmlFor="delivery_enabled" className="text-base font-bold cursor-pointer">Permitir Opções de Envio/Entrega</Label>
+                        <p className="text-xs text-muted-foreground">Ative se sua loja faz entregas ou envia produtos para o cliente (frete).</p>
+                      </div>
+                      <input
+                        type="checkbox"
+                        id="delivery_enabled"
+                        checked={bakerySettings.delivery_enabled ?? false}
+                        disabled={!(bakerySettings.checkout_enabled ?? true)}
+                        onChange={(e) => setBakerySettings(prev => ({ ...prev, delivery_enabled: e.target.checked }))}
+                        className="w-5 h-5 accent-purple-600 cursor-pointer"
+                      />
+                    </div>
+
+                    {/* Painel do Mercado Pago (Aparece apenas quando Pagamentos Online estão ativos) */}
+                    {bakerySettings.payment_enabled && (
+                      <div className="mt-8 p-6 rounded-xl border border-blue-200 bg-blue-50/30 shadow-sm animate-in fade-in slide-in-from-top-4">
+                        <div className="flex items-center gap-3 mb-4">
+                          <div className="bg-blue-600 p-2 rounded-lg">
+                            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-6 h-6 text-white"><path d="M12 2L2 7L12 12L22 7L12 2Z" fill="currentColor" /><path d="M2 17L12 22L22 17M2 12L12 17L22 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                          </div>
+                          <div>
+                            <h4 className="text-lg font-bold text-blue-900">Integração Mercado Pago</h4>
+                            <p className="text-sm text-blue-700">Insira suas credenciais de Produção para gerar Pix/Link na hora.</p>
+                          </div>
+                        </div>
+
+                        <div className="space-y-4 max-w-2xl bg-white p-4 rounded-lg border">
+
+                          {paymentConfig.access_token ? (
+                            <div className="flex flex-col sm:flex-row items-center justify-between p-4 border border-green-200 bg-green-50 rounded-lg gap-4">
+                              <div className="flex items-center gap-3">
+                                <CheckCircle2 className="w-8 h-8 text-green-500" />
+                                <div>
+                                  <h4 className="font-bold text-green-900">Conta Conectada</h4>
+                                  <p className="text-xs text-green-700">O Mercado Pago está pronto para processar vendas em seu nome.</p>
+                                </div>
+                              </div>
+                              <Button variant="outline" size="sm" onClick={handleDisconnectMP} className="text-red-600 border-red-200 hover:bg-red-50">
+                                Desconectar Conta
+                              </Button>
+                            </div>
+                          ) : (
+                            <div className="flex flex-col items-center justify-center p-6 border border-gray-200 bg-gray-50 rounded-lg text-center">
+                              <AlertCircle className="w-10 h-10 text-gray-400 mb-3" />
+                              <h4 className="font-bold text-gray-700 mb-1">Nenhuma conta conectada</h4>
+                              <p className="text-sm text-gray-500 mb-4 max-w-sm">Para receber pagamentos via Pix ou Cartão diretamente na sua conta, autorize o aplicativo.</p>
+                              <Button onClick={handleConnectMP} type="button" className="bg-[#009EE3] hover:bg-[#0089C5] text-white w-full sm:w-auto shadow-md">
+                                <Link className="w-4 h-4 mr-2" />
+                                Conectar com Mercado Pago
+                              </Button>
+                            </div>
+                          )}
+
+                          {paymentConfig.access_token && (
+                            <>
+                              <Separator />
+                              <div className="flex items-center justify-between">
+                                <div className="space-y-0.5">
+                                  <Label htmlFor="mp_status" className="text-sm font-medium cursor-pointer text-gray-900">Processar Pagamentos no Catálogo Público</Label>
+                                  <p className="text-xs text-gray-500">Se desmarcado, a opção de pagamento não será exibida no fechamento do carrinho e o pagamento será combinado no WhatsApp.</p>
+                                </div>
+                                <input
+                                  type="checkbox"
+                                  id="mp_status"
+                                  checked={paymentConfig.status}
+                                  onChange={(e) => setPaymentConfig(prev => ({ ...prev, status: e.target.checked }))}
+                                  className="w-5 h-5 accent-blue-600 cursor-pointer"
+                                />
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                  </div>
+
+                  <div className="pt-4 border-t">
+                    <Button
+                      className="w-full"
+                      onClick={handleSaveBakerySettings}
+                      disabled={loading}
+                    >
+                      {loading ? 'Salvando...' : 'Salvar definições'}
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+          )}
 
         </Tabs>
       </div>
