@@ -62,7 +62,7 @@ const Configuracoes = () => {
   const { user } = useAuth()
   const [searchParams, setSearchParams] = useSearchParams()
 
-  const isAdmin = user?.email === 'lucianderson.ads@gmail.com';
+  const isAdmin = user?.email?.toLowerCase().trim() === 'lucianderson.ads@gmail.com';
 
   const [loading, setLoading] = useState(false)
   const [bakerySettings, setBakerySettings] = useState<BakerySettings>({})
