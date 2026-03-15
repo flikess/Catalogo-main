@@ -29,12 +29,20 @@ export const useSubscription = () => {
   useEffect(() => {
     if (user?.user_metadata) {
       checkSubscriptionStatus()
+
+      // Verifica o status periodicamente (a cada 1 minuto) para garantir que
+      // se o tempo passar enquanto o usuário estiver online, ele seja redirecionado.
+      const interval = setInterval(() => {
+        checkSubscriptionStatus()
+      }, 60000)
+
+      return () => clearInterval(interval)
     }
   }, [user])
 
   const checkSubscriptionStatus = () => {
     const metadata = user?.user_metadata
-    
+
     // Se for super admin, sempre ativo
     if (metadata?.role === 'super_admin') {
       setSubscriptionStatus({
@@ -68,9 +76,13 @@ export const useSubscription = () => {
     const diffTime = vencimento.getTime() - hoje.getTime()
     const daysUntilExpiration = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
 
-    const isExpired = daysUntilExpiration < -2 // Vencido há mais de 2 dias
+    const isTrial = metadata.plano?.toLowerCase() === 'trial' || metadata.plano?.toLowerCase() === 'teste grátis'
+
+    // Para trial expira no exato minuto. Para assinaturas normais, dá 2 dias de carência.
+    const isExpired = isTrial ? diffTime < 0 : daysUntilExpiration < -2
+
     const isExpiringSoon = daysUntilExpiration <= 2 && daysUntilExpiration >= 0 // Vence em 2 dias ou menos
-    const isActive = daysUntilExpiration >= -2 // Ativo se não venceu há mais de 2 dias
+    const isActive = !isExpired // Ativo se não está expirado
 
     console.log('🔔 Verificação de assinatura:', {
       vencimento: vencimento.toLocaleDateString('pt-BR'),
