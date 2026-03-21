@@ -2,7 +2,7 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { useState } from 'react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
-import { MessageCircle, ArrowLeft, Phone, Mail, MapPin, Truck, Store, CreditCard, Banknote, QrCode, Link as LinkIcon } from 'lucide-react'
+import { MessageCircle, ArrowLeft, Phone, Mail, MapPin, Truck, Store, CreditCard, Banknote, QrCode, Link as LinkIcon, Copy, X } from 'lucide-react'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
@@ -51,8 +51,13 @@ const FinalizarPedido = () => {
     endereco: '',
     dataEntrega: '',
     querEntrega: true,
-    metodoPagamento: 'pix'
+    metodoPagamento: (bakerySettings?.payment_enabled) ? 'pix' : 'dinheiro'
   })
+
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [pixModalOpen, setPixModalOpen] = useState(false)
+  const [pixData, setPixData] = useState<{ qr_code?: string, qr_code_base64?: string, ticket_url?: string, payment_id?: string, init_point?: string, type?: string, external_reference?: string } | null>(null)
+  const [isPolling, setIsPolling] = useState(false);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setForm(prev => ({ ...prev, [e.target.name]: e.target.value }))
@@ -168,8 +173,75 @@ const FinalizarPedido = () => {
   }
 
 
+  const createOrderInDatabase = async (status: string, paymentMethod: string, userId: string) => {
+    // Verifica cliente existente
+    let clienteId: string | null = null
+    const { data: clienteExistente } = await supabase
+      .from('clients')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('name', form.nome)
+      .eq('phone', form.celular)
+      .maybeSingle()
+
+    if (clienteExistente) {
+      clienteId = clienteExistente.id
+    } else {
+      const { data: novoCliente, error: erroCliente } = await supabase
+        .from('clients')
+        .insert({
+          user_id: userId,
+          name: form.nome,
+          phone: form.celular,
+          address: form.endereco,
+          city: bakerySettings?.address_city || ''
+        })
+        .select()
+        .single()
+      if (erroCliente) throw erroCliente
+      clienteId = novoCliente.id
+    }
+
+    // Cria pedido
+    const { data: pedido, error: erroPedido } = await supabase
+      .from('orders')
+      .insert({
+        user_id: userId,
+        client_id: clienteId,
+        client_name: form.nome,
+        total_amount: finalTotal,
+        delivery_date: form.dataEntrega,
+        payment_method: paymentMethod,
+        notes: `Tipo: ${form.querEntrega ? 'Entrega' : 'Retirada'} | Pagamento: ${paymentMethod} | ${form.querEntrega ? 'Endereço: ' + form.endereco : ''}`,
+        status: status
+      })
+      .select()
+      .single()
+    if (erroPedido) throw erroPedido
+
+    // Cria itens do pedido
+    const itens = cart.map(item => ({
+      order_id: pedido.id,
+      product_id: item.id,
+      product_name: item.name,
+      quantity: item.quantity,
+      unit_price: getItemUnitWithAdditionals(item),
+      total_price: getTotalPrice(item),
+      adicionais: item.selectedAdditionais,
+      variations: item.selectedVariations,
+      size: getSizeName(item)
+    }))
+
+    const { error: erroItens } = await supabase.from('order_items').insert(itens)
+    if (erroItens) throw erroItens
+
+    return pedido;
+  }
+
   // --- SUBMIT PEDIDO ---
   const handleSubmit = async () => {
+    if (isSubmitting) return;
+
     const camposObrigatorios = ['nome', 'celular', 'dataEntrega']
     if (form.querEntrega) {
       camposObrigatorios.push('endereco')
@@ -187,77 +259,96 @@ const FinalizarPedido = () => {
       return
     }
 
+    setIsSubmitting(true)
     try {
-      // Verifica cliente existente
-      let clienteId: string | null = null
-      const { data: clienteExistente } = await supabase
-        .from('clients')
-        .select('id')
-        .eq('user_id', userId)
-        .eq('name', form.nome)
-        .eq('phone', form.celular)
-        .maybeSingle()
 
-      if (clienteExistente) {
-        clienteId = clienteExistente.id
-      } else {
-        const { data: novoCliente, error: erroCliente } = await supabase
-          .from('clients')
-          .insert({
-            user_id: userId,
-            name: form.nome,
-            phone: form.celular,
-            address: form.endereco,
-            city: bakerySettings?.address_city || ''
-          })
-          .select()
-          .single()
-        if (erroCliente) throw erroCliente
-        clienteId = novoCliente.id
+      // LÓGICA DE PAGAMENTO ONLINE (MERCADO PAGO) Se a loja ativou e o método é Pix/Cartão
+      if (bakerySettings?.payment_enabled && ['pix', 'cartao', 'link'].includes(form.metodoPagamento)) {
+
+        // AGORA NÓS SALVAMOS O PEDIDO DE FATO NO BANCO PRIMEIRO COMO ORCAMENTO
+        const pedido = await createOrderInDatabase('orcamento', form.metodoPagamento, userId);
+
+        const { data: payData, error: payError } = await supabase.functions.invoke('create-mp-preference', {
+          body: {
+            bakery_id: userId,
+            order_id: pedido.id,
+            cart_items: cart,
+            total_amount: finalTotal,
+            client_data: { nome: form.nome, telefone: form.celular },
+            payment_method: form.metodoPagamento
+          }
+        })
+
+        if (payError || !payData?.success) {
+          await supabase.from('orders').delete().eq('id', pedido.id); // Reverte caso a API falhe
+          throw new Error(payData?.error || 'Erro ao gerar link de pagamento')
+        }
+
+        if (payData.type === 'pix') {
+          setPixData({ ...payData, external_reference: pedido.id })
+          setPixModalOpen(true)
+          toast.success('Realize o pagamento para confirmar o pedido.', { duration: 3000 })
+        } else {
+          // Cartão de Crédito
+          setPixData({ ...payData, external_reference: pedido.id, type: 'cartao' })
+          setPixModalOpen(true)
+          window.open(payData.init_point, '_blank')
+          toast.success('Conclua o pagamento na nova aba para confirmar o pedido.', { duration: 3000 })
+        }
+
+        // --- POLLING LOOP (Checa o banco a cada 5s) ---
+        setIsPolling(true);
+        let tentativas = 0;
+        const pollInterval = setInterval(async () => {
+          tentativas++;
+          if (tentativas > 60) { // 5 minutos timeout
+            clearInterval(pollInterval);
+            setIsPolling(false);
+            setPixModalOpen(false);
+            await supabase.from('orders').delete().eq('id', pedido.id);
+            toast.error('O tempo de pagamento expirou. Pedido cancelado.', { duration: 5000 });
+            setIsSubmitting(false);
+            return;
+          }
+
+          const { data: statusData } = await supabase.functions.invoke('check-mp-payment', {
+            body: { bakery_id: userId, external_reference: pedido.id }
+          });
+
+          if (statusData?.approved) {
+            clearInterval(pollInterval);
+            setIsPolling(false);
+            setPixModalOpen(false);
+            toast.success('Pagamento confirmado! Abrindo comprovante...', { duration: 3000 });
+
+            // O PAGAMENTO APROVOU, MUDAMOS O STATUS E EXIBIMOS WHATSAPP COM CONFIRMAÇÃO
+            await supabase.from('orders').update({ status: 'confirmado' }).eq('id', pedido.id);
+
+            const message = generateWhatsAppMessage() + '\n\n✅ *PAGAMENTO ONLINE CONFIRMADO VIA SISTEMA!*';
+            const telefoneLoja = bakerySettings.phone?.replace(/\D/g, '')
+            const link = telefoneLoja
+              ? `https://wa.me/55${telefoneLoja}?text=${encodeURIComponent(message)}`
+              : `https://wa.me/?text=${encodeURIComponent(message)}`
+
+            window.open(link, '_blank')
+            setIsSubmitting(false);
+            navigate(`/catalogo/${userId}`);
+          } else if (statusData?.rejected) {
+            clearInterval(pollInterval);
+            setIsPolling(false);
+            setPixModalOpen(false);
+            await supabase.from('orders').delete().eq('id', pedido.id);
+            toast.error('O pagamento foi recusado ou cancelado.', { duration: 5000 });
+            setIsSubmitting(false);
+          }
+        }, 5000);
+
+        return; // não abre whatsapp e nem insere o pedido (aguarda o poll)
       }
 
+      // Se não for pagamento online, insere o orçamento e manda pro WhatsApp
+      await createOrderInDatabase('orcamento', form.metodoPagamento, userId);
 
-      // Cria pedido
-      const { data: pedido, error: erroPedido } = await supabase
-        .from('orders')
-        .insert({
-          user_id: userId,
-          client_id: clienteId,
-          client_name: form.nome,
-          total_amount: finalTotal,
-          delivery_date: form.dataEntrega,
-          payment_method: form.metodoPagamento,
-          notes: `Tipo: ${form.querEntrega ? 'Entrega' : 'Retirada'} | Pagamento: ${form.metodoPagamento} | ${form.querEntrega ? 'Endereço: ' + form.endereco : ''}`,
-          status: 'orcamento'
-        })
-        .select()
-        .single()
-      if (erroPedido) throw erroPedido
-
-      // Cria itens do pedido
-      const itens = cart.map(item => ({
-        order_id: pedido.id,
-        product_id: item.id,
-        product_name: item.name,
-        quantity: item.quantity,
-        unit_price: getItemUnitWithAdditionals(item),
-        total_price: getTotalPrice(item),
-
-
-        adicionais: item.selectedAdditionais,
-
-        variations: item.selectedVariations, // 👈 NOVO
-
-        size: getSizeName(item)
-      }))
-
-
-
-
-      const { error: erroItens } = await supabase.from('order_items').insert(itens)
-      if (erroItens) throw erroItens
-
-      // Abrir WhatsApp
       const message = generateWhatsAppMessage()
       const telefoneLoja = bakerySettings.phone?.replace(/\D/g, '')
       const link = telefoneLoja
@@ -273,9 +364,10 @@ const FinalizarPedido = () => {
         window.open(link, '_blank')
         navigate(`/catalogo/${userId}`)
       }, 1500)
-    } catch (error) {
+    } catch (error: any) {
       console.error(error)
-      toast.error('Erro ao processar pedido. Por favor, tente novamente.')
+      toast.error(error.message || 'Erro ao processar pedido. Por favor, tente novamente.')
+      setIsSubmitting(false)
     }
   }
 
@@ -367,9 +459,19 @@ const FinalizarPedido = () => {
             <Input name="dataEntrega" type="date" placeholder="Data de entrega" value={form.dataEntrega} onChange={handleChange} required />
           </div>
 
-          <Button onClick={handleSubmit} className="w-full mt-6 bg-green-600 hover:bg-green-700">
-            <MessageCircle className="w-4 h-4 mr-2" />
-            Enviar Pedido via WhatsApp
+          <Button onClick={handleSubmit} disabled={isSubmitting} className="w-full mt-6 bg-green-600 hover:bg-green-700">
+            {isSubmitting ? (
+              <span>Processando...</span>
+            ) : (bakerySettings?.payment_enabled && ['pix', 'cartao', 'link'].includes(form.metodoPagamento)) ? (
+              <span className="flex items-center">
+                <CreditCard className="w-4 h-4 mr-2" /> Pagar Online Agora
+              </span>
+            ) : (
+              <span className="flex items-center">
+                <MessageCircle className="w-4 h-4 mr-2" />
+                Enviar Pedido via WhatsApp
+              </span>
+            )}
           </Button>
 
           <Button variant="outline" className="w-full mt-3" onClick={() => navigate(-1)}>
@@ -450,6 +552,100 @@ const FinalizarPedido = () => {
           </div>
         </div>
       </div>
+
+      {/* Modal PIX */}
+      {pixModalOpen && pixData && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
+          <div className="bg-white rounded-xl p-6 max-w-sm w-full space-y-5 text-center shadow-2xl relative animate-in zoom-in-95 duration-200">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="absolute right-2 top-2 hover:bg-gray-100 rounded-full"
+              onClick={() => navigate(`/catalogo/${bakerySettings.id}`)}
+              title="Fechar"
+            >
+              <X className="w-5 h-5 text-gray-500" />
+            </Button>
+
+            <div className="space-y-1">
+              <h3 className="text-xl font-bold pt-2 text-gray-900">Aguardando Pagamento</h3>
+              <p className="text-sm text-gray-500">
+                {pixData.type === 'pix' ? 'Escaneie o QR Code abaixo no app do seu banco ou copie o código PIX.' : 'Complete o pagamento na nova aba que se abriu para prosseguir.'}
+              </p>
+            </div>
+
+            {pixData.type === 'pix' && pixData.qr_code_base64 && (
+              <img
+                src={`data:image/jpeg;base64,${pixData.qr_code_base64}`}
+                alt="QR Code Pix"
+                className="mx-auto w-56 h-56 border rounded-xl p-3 shadow-sm bg-white"
+              />
+            )}
+
+            {pixData.type === 'pix' && !pixData.qr_code_base64 && (
+              <QrCode className="mx-auto w-40 h-40 text-gray-300" />
+            )}
+
+            {pixData.type === 'cartao' && (
+              <CreditCard className="mx-auto w-24 h-24 text-blue-500 animate-pulse my-4" />
+            )}
+
+            {pixData.type === 'cartao' && pixData.init_point && (
+              <Button variant="outline" className="w-full mt-2 border-blue-200 text-blue-600 hover:bg-blue-50" onClick={() => window.open(pixData.init_point, '_blank')}>
+                <LinkIcon className="w-4 h-4 mr-2" /> Reabrir página de Pagamento
+              </Button>
+            )}
+
+            {pixData.type === 'pix' && pixData.qr_code && (
+              <div className="space-y-2 text-left">
+                <Label className="text-xs font-semibold text-gray-600 ml-1">PIX Copia e Cola:</Label>
+                <div className="bg-gray-50 p-3 rounded-lg border flex items-center gap-3 w-full group hover:border-blue-300 transition-colors">
+                  <span className="text-xs text-gray-600 truncate flex-1 font-mono">{pixData.qr_code}</span>
+                  <Button
+                    size="sm"
+                    className="shrink-0 bg-blue-600 hover:bg-blue-700 h-8"
+                    onClick={() => {
+                      navigator.clipboard.writeText(pixData.qr_code!);
+                      toast.success("Código PIX Copiado!");
+                    }}
+                  >
+                    <Copy className="w-3.5 h-3.5 mr-1" /> Copiar
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            <div className="flex items-center justify-center p-2 rounded-lg bg-orange-50 border border-orange-100 mt-2">
+              <span className="text-sm text-orange-600 font-medium flex items-center">
+                {isPolling ? (
+                  <span className="flex items-center text-left">
+                    <span className="animate-spin w-4 h-4 rounded-full border-2 border-orange-500 border-t-transparent mr-2 shrink-0" />
+                    Aguardando confirmação. O pedido ficará salvo em nosso sistema como pendente.
+                  </span>
+                ) : (
+                  "Processando..."
+                )}
+              </span>
+            </div>
+
+            <Button
+              variant="outline"
+              className="w-full mt-2"
+              onClick={async () => {
+                setPixModalOpen(false);
+                setIsSubmitting(false);
+                if (pixData?.external_reference) {
+                  await supabase.from('orders').delete().eq('id', pixData.external_reference);
+                  toast.info('Orçamento descartado.');
+                }
+              }}
+            >
+              Cancelar Pedido
+            </Button>
+          </div>
+        </div>
+      )}
+
     </div>
   )
 }
