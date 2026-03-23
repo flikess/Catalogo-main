@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { supabase } from '@/integrations/supabase/client'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -18,17 +18,11 @@ import {
 
 const TrialConta = () => {
     const navigate = useNavigate()
+    const [searchParams] = useSearchParams()
     const [loading, setLoading] = useState(false)
-    const [formData, setFormData] = useState({
-        email: '',
-        password: '',
-        fullName: '',
-        businessName: '',
-        phone: '',
-        businessType: 'confeitaria'
-    })
 
     const maskPhone = (value: string) => {
+        if (!value) return ''
         const rawValue = value.replace(/\D/g, '').slice(0, 11)
         if (rawValue.length <= 10) {
             return rawValue
@@ -39,6 +33,31 @@ const TrialConta = () => {
             .replace(/^(\d{2})(\d)/, '($1) $2')
             .replace(/(\d{5})(\d)/, '$1-$2')
     }
+
+    const [formData, setFormData] = useState({
+        email: searchParams.get('email') || '',
+        password: '',
+        fullName: searchParams.get('name') || searchParams.get('nome') || '',
+        businessName: '',
+        phone: maskPhone(searchParams.get('whatsapp') || searchParams.get('phone') || ''),
+        businessType: 'confeitaria'
+    })
+
+    // Atualiza se os parâmetros mudarem dinamicamente
+    useEffect(() => {
+        const email = searchParams.get('email')
+        const name = searchParams.get('name') || searchParams.get('nome')
+        const whatsapp = searchParams.get('whatsapp') || searchParams.get('phone')
+
+        if (email || name || whatsapp) {
+            setFormData(prev => ({
+                ...prev,
+                email: email || prev.email,
+                fullName: name || prev.fullName,
+                phone: whatsapp ? maskPhone(whatsapp) : prev.phone
+            }))
+        }
+    }, [searchParams])
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const { id, value } = e.target
