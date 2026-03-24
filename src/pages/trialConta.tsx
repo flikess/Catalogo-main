@@ -129,6 +129,21 @@ const TrialConta = () => {
 
             if (signInError) throw signInError
 
+            if (window.dataLayer) {
+                window.dataLayer.push({
+                    'event': 'start_trial',
+                    'user_data': {
+                        'email': formData.email,
+                        'name': formData.fullName,
+                        'phone': formData.phone
+                    },
+                    'custom_data': {
+                        'trial_duration': '2_days', // Período de trial configurado no sistema
+                        'product_name': 'Cataloguei'
+                    }
+                });
+            }
+
             showSuccess('Conta Trial criada com sucesso! Aproveite seus 2 dias de acesso.')
             navigate('/dashboard')
         } catch (error: any) {
