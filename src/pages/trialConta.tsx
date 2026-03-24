@@ -135,10 +135,12 @@ const TrialConta = () => {
                     'user_data': {
                         'email': formData.email,
                         'name': formData.fullName,
-                        'phone': formData.phone
+                        'phone': formData.phone,
+                        'business_name': formData.businessName,
+                        'business_type': formData.businessType
                     },
                     'custom_data': {
-                        'trial_duration': '2_days', // Período de trial configurado no sistema
+                        'trial_duration': '2_days',
                         'product_name': 'Cataloguei'
                     }
                 });
