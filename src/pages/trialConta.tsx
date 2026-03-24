@@ -290,6 +290,7 @@ const TrialConta = () => {
                             </div>
 
                             <Button
+                                id="trial_started"
                                 type="submit"
                                 className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-semibold py-6 shadow-lg shadow-purple-200 transition-all duration-200 hover:scale-[1.02]"
                                 disabled={loading}
