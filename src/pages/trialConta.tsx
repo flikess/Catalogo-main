@@ -46,20 +46,21 @@ const TrialConta = () => {
 
     // Efeito para preencher dados da URL
     useEffect(() => {
-        const email = searchParams.get('email') || searchParams.get('em')
+        const urlEmail = searchParams.get('email') || searchParams.get('em')
         const fn = searchParams.get('fn')
         const ln = searchParams.get('ln')
         const nameFromUrl = searchParams.get('name') || searchParams.get('nome')
-        const fullName = nameFromUrl || (fn ? `${fn} ${ln || ''}`.trim() : null)
-        const whatsapp = searchParams.get('whatsapp') || searchParams.get('phone') || searchParams.get('ph')
+        const urlFullName = nameFromUrl || (fn ? `${fn} ${ln || ''}`.trim() : null)
+        const urlWhatsapp = searchParams.get('whatsapp') || searchParams.get('phone') || searchParams.get('ph')
 
-        if (email || fullName || whatsapp) {
-            setFormData(prev => ({
-                ...prev,
-                email: email || prev.email,
-                fullName: fullName || prev.fullName,
-                phone: whatsapp ? maskPhone(whatsapp) : prev.phone
-            }))
+        if (urlEmail || urlFullName || urlWhatsapp) {
+            setFormData(prev => {
+                const newData = { ...prev }
+                if (urlEmail) newData.email = urlEmail
+                if (urlFullName) newData.fullName = urlFullName
+                if (urlWhatsapp) newData.phone = maskPhone(urlWhatsapp)
+                return newData
+            })
         }
     }, [searchParams])
 
