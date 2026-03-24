@@ -43,18 +43,8 @@ const TrialConta = () => {
         businessType: 'confeitaria'
     })
 
-    // Efeito para injetar GTM e preencher dados da URL
+    // Efeito para preencher dados da URL
     useEffect(() => {
-        // 1. Injetar GTM apenas nesta página
-        const gtmScriptId = 'gtm-script-special'
-        if (!document.getElementById(gtmScriptId)) {
-            const script = document.createElement('script')
-            script.id = gtmScriptId
-            script.innerHTML = `(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src='https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);})(window,document,'script','dataLayer','GTM-P55MPQKF');`
-            document.head.appendChild(script)
-        }
-
-        // 2. Preencher dados da URL
         const email = searchParams.get('email')
         const name = searchParams.get('name') || searchParams.get('nome')
         const whatsapp = searchParams.get('whatsapp') || searchParams.get('phone')
