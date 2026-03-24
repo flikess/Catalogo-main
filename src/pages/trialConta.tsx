@@ -35,25 +35,29 @@ const TrialConta = () => {
     }
 
     const [formData, setFormData] = useState({
-        email: searchParams.get('email') || '',
+        email: searchParams.get('email') || searchParams.get('em') || '',
         password: '',
-        fullName: searchParams.get('name') || searchParams.get('nome') || '',
+        fullName: searchParams.get('name') || searchParams.get('nome') || 
+                  (searchParams.get('fn') ? `${searchParams.get('fn')} ${searchParams.get('ln') || ''}`.trim() : ''),
         businessName: '',
-        phone: maskPhone(searchParams.get('whatsapp') || searchParams.get('phone') || ''),
+        phone: maskPhone(searchParams.get('whatsapp') || searchParams.get('phone') || searchParams.get('ph') || ''),
         businessType: 'confeitaria'
     })
 
     // Efeito para preencher dados da URL
     useEffect(() => {
-        const email = searchParams.get('email')
-        const name = searchParams.get('name') || searchParams.get('nome')
-        const whatsapp = searchParams.get('whatsapp') || searchParams.get('phone')
+        const email = searchParams.get('email') || searchParams.get('em')
+        const fn = searchParams.get('fn')
+        const ln = searchParams.get('ln')
+        const nameFromUrl = searchParams.get('name') || searchParams.get('nome')
+        const fullName = nameFromUrl || (fn ? `${fn} ${ln || ''}`.trim() : null)
+        const whatsapp = searchParams.get('whatsapp') || searchParams.get('phone') || searchParams.get('ph')
 
-        if (email || name || whatsapp) {
+        if (email || fullName || whatsapp) {
             setFormData(prev => ({
                 ...prev,
                 email: email || prev.email,
-                fullName: name || prev.fullName,
+                fullName: fullName || prev.fullName,
                 phone: whatsapp ? maskPhone(whatsapp) : prev.phone
             }))
         }
