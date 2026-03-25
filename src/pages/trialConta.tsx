@@ -121,21 +121,25 @@ const TrialConta = () => {
 
             if (signInError) throw signInError
 
-            if (window.dataLayer) {
-                window.dataLayer.push({
-                    'event': 'start_trial',
-                    'user_data': {
-                        'email': formData.email,
-                        'name': formData.fullName,
-                        'phone': formData.phone,
-                        'business_name': formData.businessName,
-                        'business_type': formData.businessType
-                    },
-                    'custom_data': {
-                        'trial_duration': '2_days',
-                        'product_name': 'Cataloguei'
-                    }
-                });
+            try {
+                if (window.dataLayer) {
+                    window.dataLayer.push({
+                        'event': 'start_trial',
+                        'user_data': {
+                            'email': formData.email,
+                            'name': formData.fullName,
+                            'phone': formData.phone,
+                            'business_name': formData.businessName,
+                            'business_type': formData.businessType
+                        },
+                        'custom_data': {
+                            'trial_duration': '2_days',
+                            'product_name': 'Cataloguei'
+                        }
+                    });
+                }
+            } catch (gtmError) {
+                console.error('Erro ao enviar evento para o GTM:', gtmError);
             }
 
             showSuccess('Conta Trial criada com sucesso! Aproveite seus 2 dias de acesso.')

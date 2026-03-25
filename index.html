@@ -4,17 +4,19 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Cataloguei</title>
-    <!-- GTM Dinâmico -->
-    <!-- GTM Dinâmico (SPA Aware) -->
+    <!-- GTM Dinâmico (SPA Aware + Server Side + Preview Support) -->
     <script>
       (function() {
         function loadGTM() {
-          if ((window.location.href.includes('/trial') || window.location.href.includes('/mofu')) && !window.gtmInitialized) {
+          const isTargetPage = window.location.href.includes('/trial') || window.location.href.includes('/mofu');
+          const isPreview = window.location.href.includes('gtm_debug=');
+
+          if ((isTargetPage || isPreview) && !window.gtmInitialized) {
             window.gtmInitialized = true;
             (function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
             new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
             j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
-            'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+            'https://api.catalogueii.com.br/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
             })(window,document,'script','dataLayer','GTM-P55MPQKF');
           }
         }
