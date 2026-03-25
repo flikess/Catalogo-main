@@ -44,7 +44,7 @@ const TrialConta = () => {
         businessType: 'confeitaria'
     })
 
-    // Efeito para preencher dados da URL
+    // Efeito para preencher dados da URL (somente na montagem inicial)
     useEffect(() => {
         const urlEmail = searchParams.get('email') || searchParams.get('em')
         const fn = searchParams.get('fn')
@@ -54,15 +54,14 @@ const TrialConta = () => {
         const urlWhatsapp = searchParams.get('whatsapp') || searchParams.get('phone') || searchParams.get('ph')
 
         if (urlEmail || urlFullName || urlWhatsapp) {
-            setFormData(prev => {
-                const newData = { ...prev }
-                if (urlEmail) newData.email = urlEmail
-                if (urlFullName) newData.fullName = urlFullName
-                if (urlWhatsapp) newData.phone = maskPhone(urlWhatsapp)
-                return newData
-            })
+            setFormData(prev => ({
+                ...prev,
+                email: urlEmail || prev.email,
+                fullName: urlFullName || prev.fullName,
+                phone: urlWhatsapp ? maskPhone(urlWhatsapp) : prev.phone
+            }))
         }
-    }, [searchParams])
+    }, []) // Excluímos searchParams para rodar apenas UMA vez no carregamento
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const { id, value } = e.target
@@ -93,27 +92,25 @@ const TrialConta = () => {
             if (functionError) {
                 console.error('Erro na Edge Function:', functionError)
 
-                // Tenta extrair a mensagem de erro real enviada pela função
-                let errorMsg = 'Erro ao criar conta trial'
+                let message = 'Ocorreu um erro ao criar sua conta. Tente novamente.'
 
-                // O Supabase SDK costuma colocar a resposta do erro em error.context
-                if (functionError instanceof Error && (functionError as any).context) {
-                    try {
-                        const response = (functionError as any).context
-                        const body = await response.json()
-                        errorMsg = body.error || errorMsg
-                    } catch (e) {
-                        console.error('Erro ao processar corpo do erro:', e)
-                    }
-                } else if (functionError.message) {
-                    if (functionError.message.includes('non-2xx status code')) {
-                        errorMsg = 'Este e-mail já está em uso ou os dados são inválidos.'
+                // Tenta buscar a mensagem de erro específica retornada pelo Supabase
+                try {
+                    // Algumas versões retornam erro no corpo da resposta
+                    if ((functionError as any).context) {
+                        const errorResponse = (functionError as any).context
+                        const errorJson = await errorResponse.json()
+                        message = errorJson.error || errorJson.message || message
                     } else {
-                        errorMsg = functionError.message
+                        // Outras versões retornam direto no objeto de erro
+                        message = functionError.message || message
                     }
+                } catch (e) {
+                    console.error('Erro ao extrair corpo da mensagem:', e)
+                    message = functionError.message || message
                 }
 
-                throw new Error(errorMsg)
+                throw new Error(message)
             }
 
             // 2. Fazer login automático após a criação
