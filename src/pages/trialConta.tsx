@@ -123,12 +123,20 @@ const TrialConta = () => {
 
             try {
                 if (window.dataLayer) {
+                    // Preparar os dados para o padrão do Meta Ads (Facebook)
+                    const nameParts = formData.fullName.trim().split(/\s+/);
+                    const firstName = nameParts[0] || '';
+                    const lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : '';
+                    const cleanPhone = formData.phone.replace(/\D/g, ''); // Apenas números para o Meta
+
                     window.dataLayer.push({
                         'event': 'form_trial_submit',
                         'user_data': {
-                            'email': formData.email,
+                            'email': formData.email.toLowerCase().trim(),
                             'name': formData.fullName,
-                            'phone': formData.phone,
+                            'first_name': firstName,
+                            'last_name': lastName,
+                            'phone': cleanPhone,
                             'business_name': formData.businessName,
                             'business_type': formData.businessType
                         },
