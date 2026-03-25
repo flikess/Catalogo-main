@@ -124,7 +124,7 @@ const TrialConta = () => {
             try {
                 if (window.dataLayer) {
                     window.dataLayer.push({
-                        'event': 'start_trial',
+                        'event': 'form_trial_submit',
                         'user_data': {
                             'email': formData.email,
                             'name': formData.fullName,
