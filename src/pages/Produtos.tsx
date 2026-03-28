@@ -19,7 +19,7 @@ import { useAuth } from '@/components/auth/AuthProvider'
 import { showSuccess, showError } from '@/utils/toast'
 import { optimizeImage } from '@/utils/image-optimization'
 import { getBusinessConfig } from '@/utils/business-types'
-import { calculateIngredientCost } from '@/utils/unit-conversion'
+import { calculateIngredientCost, convertQuantity } from '@/utils/unit-conversion'
 
 interface Additional {
   id?: string
@@ -50,7 +50,7 @@ interface VariantStock {
 interface RecipeItem {
   stock_item_id?: string
   base_recipe_id?: string
-  quantity: number
+  quantity: number | string
   unit: string
 }
 
@@ -774,13 +774,13 @@ const Produtos = () => {
       if (item.stock_item_id) {
         const stockItem = stockItems.find(si => si.id === item.stock_item_id)
         if (stockItem) {
-          totalIngCost += calculateIngredientCost(item.quantity, item.unit, stockItem.cost_per_unit, stockItem.unit)
+          totalIngCost += calculateIngredientCost(Number(item.quantity) || 0, item.unit, stockItem.cost_per_unit, stockItem.unit)
         }
       } else if (item.base_recipe_id) {
         const base = products.find(p => p.id === item.base_recipe_id)
         if (base) {
           const baseUnitCost = getProductUnitCost(base)
-          totalIngCost += baseUnitCost * item.quantity
+          totalIngCost += baseUnitCost * (Number(item.quantity) || 0)
         }
       }
     })
@@ -876,7 +876,7 @@ const Produtos = () => {
         track_stock: formData.track_stock,
         stock_quantity: formData.track_stock ? (formData.variant_stock.length > 0 ? formData.variant_stock.reduce((acc, v) => acc + v.quantity, 0) : Number(formData.stock_quantity)) : null,
         variant_stock: formData.track_stock && formData.variant_stock.length > 0 ? formData.variant_stock : null,
-        recipe: formData.recipe.length ? formData.recipe : null,
+        recipe: formData.recipe.length ? formData.recipe.map(item => ({ ...item, quantity: Number(item.quantity) || 0 })) : null,
         recipe_yield: formData.recipe.length ? Number(formData.recipe_yield) : null,
         operational_cost_percent: formData.recipe.length ? Number(formData.operational_cost_percent) : null,
         updated_at: new Date().toISOString()
@@ -2153,23 +2153,36 @@ const Produtos = () => {
                               <div className="col-span-6 sm:col-span-2 space-y-1">
                                 <Label className="text-[10px] uppercase text-orange-600 font-bold italic">Quantidade</Label>
                                 <Input
-                                  type="number"
-                                  step="0.001"
-                                  value={item.quantity || ''}
-                                  onChange={(e) => updateRecipeItem(index, 'quantity', parseFloat(e.target.value))}
+                                  type="text"
+                                  value={item.quantity?.toString().replace('.', ',')}
+                                  onChange={(e) => {
+                                    const rawValue = e.target.value.replace(',', '.')
+                                    updateRecipeItem(index, 'quantity', e.target.value.replace(',', '.'))
+                                  }}
+                                  placeholder="0,00"
                                   className="bg-white h-9"
                                 />
                               </div>
 
                               <div className="col-span-6 sm:col-span-2 space-y-1">
                                 <Label className="text-[10px] uppercase text-orange-600 font-bold italic">Unid.</Label>
-                                <Input
+                                <Select
                                   value={item.unit}
-                                  onChange={(e) => updateRecipeItem(index, 'unit', e.target.value)}
-                                  placeholder="g, ml..."
-                                  className="bg-white h-9"
+                                  onValueChange={(val) => updateRecipeItem(index, 'unit', val)}
                                   disabled={isBase}
-                                />
+                                >
+                                  <SelectTrigger className="bg-white h-9">
+                                    <SelectValue placeholder="Unid." />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {['g', 'kg', 'ml', 'l', 'unidade', 'pacote', 'caixa', 'dúzia'].map(u => (
+                                      <SelectItem key={u} value={u}>{u}</SelectItem>
+                                    ))}
+                                    {item.unit && !['g', 'kg', 'ml', 'l', 'unidade', 'pacote', 'caixa', 'dúzia'].includes(item.unit) && (
+                                      <SelectItem value={item.unit}>{item.unit}</SelectItem>
+                                    )}
+                                  </SelectContent>
+                                </Select>
                               </div>
 
                               <div className="col-span-10 sm:col-span-2 space-y-1">
@@ -2178,11 +2191,26 @@ const Produtos = () => {
                                   {(() => {
                                     if (item.stock_item_id) {
                                       const si = stockItems.find(s => s.id === item.stock_item_id)
-                                      if (si) return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(calculateIngredientCost(item.quantity, item.unit, si.cost_per_unit, si.unit))
+                                      if (si) {
+                                        const cost = calculateIngredientCost(Number(item.quantity) || 0, item.unit, si.cost_per_unit, si.unit)
+                                        const converted = convertQuantity(Number(item.quantity) || 0, item.unit, si.unit)
+                                        const isDifferentUnit = item.unit.toLowerCase() !== si.unit.toLowerCase()
+
+                                        return (
+                                          <div className="flex flex-col">
+                                            <span>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(cost)}</span>
+                                            {isDifferentUnit && (
+                                              <span className="text-[8px] text-orange-400 font-normal">
+                                                (= {converted.toFixed(3).replace('.', ',')} {si.unit})
+                                              </span>
+                                            )}
+                                          </div>
+                                        )
+                                      }
                                     } else if (item.base_recipe_id) {
                                       const base = products.find(p => p.id === item.base_recipe_id)
                                       if (base) {
-                                        const cost = getProductUnitCost(base) * (item.quantity || 0)
+                                        const cost = getProductUnitCost(base) * (Number(item.quantity) || 0)
                                         return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(cost)
                                       }
                                     }

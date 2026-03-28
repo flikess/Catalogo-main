@@ -11,20 +11,27 @@ export const convertQuantity = (quantity: number, fromUnit: string, toUnit: stri
     if (from === to) return quantity;
 
     // Peso
-    if ((from === 'g' || from === 'gramas') && (to === 'kg' || to === 'quilo' || to === 'quilograma')) {
-        return quantity / 1000;
-    }
-    if ((from === 'kg' || from === 'quilo' || from === 'quilograma') && (to === 'g' || to === 'gramas')) {
-        return quantity * 1000;
-    }
+    const isGram = from === 'g' || from === 'gramas' || from === 'grama';
+    const isKg = from === 'kg' || from === 'quilo' || from === 'quilograma' || from === 'quilogramas';
+    const toGram = to === 'g' || to === 'gramas' || to === 'grama';
+    const toKg = to === 'kg' || to === 'quilo' || to === 'quilograma' || to === 'quilogramas';
+
+    if (isGram && toKg) return quantity / 1000;
+    if (isKg && toGram) return quantity * 1000;
 
     // Volume
-    if ((from === 'ml' || from === 'mililitros') && (to === 'l' || to === 'litro')) {
-        return quantity / 1000;
-    }
-    if ((from === 'l' || from === 'litro') && (to === 'ml' || to === 'mililitros')) {
-        return quantity * 1000;
-    }
+    const isMl = from === 'ml' || from === 'mililitros' || from === 'mililitro';
+    const isL = from === 'l' || from === 'litro' || from === 'litros';
+    const toMl = to === 'ml' || to === 'mililitros' || to === 'mililitro';
+    const toL = to === 'l' || to === 'litro' || to === 'litros';
+
+    if (isMl && toL) return quantity / 1000;
+    if (isL && toMl) return quantity * 1000;
+
+    // Unidades
+    const isUnid = from === 'unid' || from === 'unidade' || from === 'unidades';
+    const toUnid = to === 'unid' || to === 'unidade' || to === 'unidades';
+    if (isUnid && toUnid) return quantity;
 
     // Se não souber converter, retorna o original (evita zerar o cálculo)
     return quantity;

@@ -274,10 +274,10 @@ const Estoque = () => {
       const itemData = {
         name: formData.name,
         description: formData.description || null,
-        quantity: parseFloat(formData.quantity),
+        quantity: parseFloat(formData.quantity.toString().replace(',', '.')),
         unit: formData.unit,
-        minimum_stock: parseFloat(formData.minimum_stock) || 0,
-        cost_per_unit: parseFloat(formData.cost_per_unit) || 0,
+        minimum_stock: parseFloat(formData.minimum_stock.toString().replace(',', '.')) || 0,
+        cost_per_unit: parseFloat(formData.cost_per_unit.toString().replace(',', '.')) || 0,
         supplier: formData.supplier || null,
         category_id: businessType === 'confeitaria' ? null : formData.category_id
       }
@@ -393,7 +393,7 @@ const Estoque = () => {
     if (!selectedItem) return
 
     try {
-      const quantity = parseFloat(movementData.quantity)
+      const quantity = parseFloat(movementData.quantity.toString().replace(',', '.'))
 
       // Registrar movimentação
       const { error: movementError } = await supabase
@@ -588,10 +588,10 @@ const Estoque = () => {
       label: 'Quantidade',
       render: (value: number, row: StockItem) => (
         <div>
-          <span className="font-medium">{value} {row.unit}</span>
+          <span className="font-medium">{value.toString().replace('.', ',')} {row.unit}</span>
           {row.minimum_stock > 0 && (
             <div className="text-xs text-muted-foreground">
-              Mín: {row.minimum_stock} {row.unit}
+              Mín: {row.minimum_stock.toString().replace('.', ',')} {row.unit}
             </div>
           )}
         </div>
@@ -623,7 +623,7 @@ const Estoque = () => {
         })
         return (
           <span className="font-semibold text-orange-600">
-            {reserved > 0 ? reserved.toFixed(2) : '0'} {row.unit}
+            {reserved > 0 ? reserved.toFixed(3).replace('.', ',') : '0'} {row.unit}
           </span>
         )
       }
@@ -632,7 +632,7 @@ const Estoque = () => {
       key: 'cost_per_unit',
       label: 'Custo Unit.',
       hideOnMobile: true,
-      render: (value: number) => (value > 0 ? formatPrice(value) : '-')
+      render: (value: number) => (value > 0 ? new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 4, style: 'currency', currency: 'BRL' }).format(value) : '-')
     },
     {
       key: 'supplier',
@@ -835,11 +835,10 @@ const Estoque = () => {
                       <Label htmlFor="quantity">Quantidade *</Label>
                       <Input
                         id="quantity"
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        value={formData.quantity}
+                        type="text"
+                        value={formData.quantity.toString().replace('.', ',')}
                         onChange={(e) => setFormData({ ...formData, quantity: e.target.value })}
+                        placeholder="0,00"
                         required
                       />
                     </div>
@@ -864,11 +863,10 @@ const Estoque = () => {
                       <Label htmlFor="minimum_stock">Estoque Mínimo</Label>
                       <Input
                         id="minimum_stock"
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        value={formData.minimum_stock}
+                        type="text"
+                        value={formData.minimum_stock.toString().replace('.', ',')}
                         onChange={(e) => setFormData({ ...formData, minimum_stock: e.target.value })}
+                        placeholder="0,00"
                       />
                     </div>
 
@@ -876,11 +874,10 @@ const Estoque = () => {
                       <Label htmlFor="cost_per_unit">Custo Unitário</Label>
                       <Input
                         id="cost_per_unit"
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        value={formData.cost_per_unit}
+                        type="text"
+                        value={formData.cost_per_unit.toString().replace('.', ',')}
                         onChange={(e) => setFormData({ ...formData, cost_per_unit: e.target.value })}
+                        placeholder="0,00"
                       />
                     </div>
                   </div>
@@ -1179,12 +1176,10 @@ const Estoque = () => {
                 <Label htmlFor="movement_quantity">Quantidade *</Label>
                 <Input
                   id="movement_quantity"
-                  type="number"
-                  step="0.01"
-                  min="0.01"
-                  value={movementData.quantity}
+                  type="text"
+                  value={movementData.quantity.toString().replace('.', ',')}
                   onChange={(e) => setMovementData({ ...movementData, quantity: e.target.value })}
-                  placeholder={`Quantidade em ${selectedItem?.unit}`}
+                  placeholder={`Mínimo 0,001`}
                   required
                 />
               </div>
